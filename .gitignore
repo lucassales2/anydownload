@@ -1,0 +1,52 @@
+# OS/editor files
+.DS_Store
+._*
+Thumbs.db
+*.swp
+*.swo
+.idea/
+*.iml
+.vscode/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+local.properties
+*.key
+*.pem
+*.p12
+*.p8
+*.mobileprovision
+*.keystore
+*.jks
+cookies*.txt
+*.cookies
+*.log
+
+# Downloaded media and runtime state (never publish these)
+/downloads/
+/data/
+/state/
+/tmp/
+
+# Obsidian: portable settings are tracked; local state and third-party code are not
+vault/.obsidian/workspace*.json
+vault/.obsidian/cache/
+vault/.obsidian/plugins/
+vault/.obsidian/themes/
+vault/.obsidian/hotkeys.json
+vault/.obsidian/bookmarks.json
+vault/.trash/
+vault/.stfolder/
+vault/.stversions/
+vault/private/
+
+# Future build outputs; no application scaffolding exists yet
+.gradle/
+.kotlin/
+**/build/
+node_modules/
+dist/
+Pods/
+DerivedData/

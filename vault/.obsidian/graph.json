@@ -1,0 +1,13 @@
+{
+  "search": "-path:99-templates",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": true,
+  "showOrphans": true,
+  "colorGroups": [
+    { "query": "path:01-product", "color": { "a": 1, "rgb": 5095280 } },
+    { "query": "path:02-architecture", "color": { "a": 1, "rgb": 4886754 } },
+    { "query": "path:03-decisions", "color": { "a": 1, "rgb": 10913775 } },
+    { "query": "path:06-tasks", "color": { "a": 1, "rgb": 15965202 } }
+  ]
+}
