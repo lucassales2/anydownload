@@ -34,7 +34,7 @@ tags: [project, board]
 
 ## In progress
 
-- [ ] [T-002 — Publish public GitHub repository](06-tasks/T-002-Public-GitHub-repository.md) #M0 #P0
+
 
 ## Blocked
 
@@ -47,6 +47,7 @@ tags: [project, board]
 ## Done
 
 - [x] [T-001 — Create the planning vault](06-tasks/T-001-Planning-vault.md) #M0 #P0
+- [x] [T-002 — Publish public GitHub repository](06-tasks/T-002-Public-GitHub-repository.md) #M0 #P0
 
 %% kanban:settings
 ```
