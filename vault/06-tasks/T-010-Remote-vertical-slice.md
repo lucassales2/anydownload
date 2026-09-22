@@ -6,13 +6,13 @@ milestone: M1
 tags: [task, integration, platforms]
 ---
 
-# T-010 — Demonstrate the remote flow on all targets
+# T-010 — Local flow on all four targets
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [User flows](../01-product/User-flows.md) · [Parity](../01-product/Feature-parity.md)
 
 ## Outcome
 
-Android, iOS, desktop and web can authenticate, submit a URL, monitor it and export an artifact. Initial F-01/F-07 evidence.
+iOS, Compose/Wasm, Android, and desktop each submit a URL, show progress, and keep the file on the device. Initial F-01/F-07 evidence. No login.
 
 ## Dependencies
 
@@ -21,11 +21,11 @@ Android, iOS, desktop and web can authenticate, submit a URL, monitor it and exp
 
 ## Acceptance criteria
 
-- [ ] Record end-to-end runs on every target family with exact OS/browser/build/engine versions and explicit desktop coverage.
-- [ ] Demonstrate server completion versus local export, authenticated streaming without whole-file buffering, and export cancellation/denial.
-- [ ] Demonstrate failed/unsupported URL, invalid credentials and client disconnect/reconnect while server work continues.
-- [ ] Link safe logs/screenshots/tests and document target-specific limitations; obtain M1 gate review.
+- [ ] Record end-to-end runs on every target family with exact OS/browser/build versions and which desktop OS was run.
+- [ ] Write the file as it arrives, without holding the whole media file in memory. Cancelling leaves no completed file.
+- [ ] Show a failed or unsupported URL. Closing the app interrupts active work and restores the queue.
+- [ ] Link safe logs, screenshots, and tests, and document target limitations.
 
 ## Evidence / notes
 
-Not started. This is a vertical slice, not an MVP or full MeTube parity claim.
+Not started. This is a vertical slice, not full yt-dlp or MeTube parity.

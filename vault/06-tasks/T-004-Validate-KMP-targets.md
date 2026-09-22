@@ -12,7 +12,7 @@ tags: [task, research, platforms]
 
 ## Outcome
 
-A time-bounded feasibility report for Kotlin/Compose, networking and file export on Android, iOS, desktop and web. Any prototype is explicitly experimental.
+Show that one local download can finish on iOS, Compose/Wasm, Android, and desktop, or record the target as blocked.
 
 ## Dependencies
 
@@ -20,12 +20,12 @@ A time-bounded feasibility report for Kotlin/Compose, networking and file export
 
 ## Acceptance criteria
 
-- [ ] Record exact compatible toolchain versions, target OS/browser/CPU coverage, build/run evidence and proposed minimum versions.
-- [ ] Demonstrate shared state/networking plus artifact export on each target, including physical iOS behavior and supported desktop OS coverage or explicit gaps.
-- [ ] Test browser accessibility/keyboard, Safari/Firefox/Chromium, loading cost, authenticated downloads and bounded-memory large-file export.
-- [ ] Document mobile suspension/background transfer, secure storage and sharing limitations.
-- [ ] Accept Compose/Wasm or document a Kotlin/JS/web-specific fallback with trade-offs in a new ADR.
+- [ ] Record exact toolchain versions, OS/browser/CPU coverage, build/run evidence, and proposed minimum versions.
+- [ ] Download one public URL to a device file on Android, iOS, desktop, and Compose/Wasm, or document the blocker. Name which desktop OS was actually run.
+- [ ] On the web, try Safari, Firefox, and Chromium, including a cross-origin media fetch and a large file written without holding it all in memory.
+- [ ] Document iOS suspension, browser tab close, and file-save limits.
+- [ ] Accept Compose/Wasm for the engine or document a Kotlin/JS fallback in a new ADR.
 
 ## Evidence / notes
 
-Not started. Framework upstream stability labels do not prove application support. This task does not approve store distribution or local yt-dlp execution.
+Not started. Framework upstream stability labels do not prove application support. After ADR-004 this task must show a **local** download on iOS, Compose/Wasm, Android, and desktop. Store distribution is out of scope. A JVM process wrapper around Python yt-dlp does not pass this task.

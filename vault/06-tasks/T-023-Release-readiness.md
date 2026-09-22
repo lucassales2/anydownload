@@ -6,13 +6,13 @@ milestone: M4
 tags: [task, release, testing]
 ---
 
-# T-023 — Release packaging and readiness
+# T-023 — Portfolio builds
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Roadmap](../00-project/Roadmap.md) · [Testing](../04-delivery/Testing-strategy.md)
 
 ## Outcome
 
-A reviewable release candidate for the approved targets/channels, with honest support/parity claims and user/admin guidance.
+Repeatable portfolio builds for iOS, Compose/Wasm, Android, and desktop, with license notices and honest support notes. Store submission is out of scope.
 
 ## Dependencies
 
@@ -20,12 +20,11 @@ A reviewable release candidate for the approved targets/channels, with honest su
 
 ## Acceptance criteria
 
-- [ ] Produce reproducible Android/iOS/desktop/web artifacts with required signing/provisioning/notarization and documented build environments.
-- [ ] Complete security/accessibility/performance/recovery tests and publish exact OS/browser/CPU coverage and known limitations.
-- [ ] Include approved project license, artifact-specific notices/SBOM/source obligations and distribution/content-authorization review.
-- [ ] Publish user setup/download/export/cookie troubleshooting and admin upgrade/backup/rollback/retention documentation.
-- [ ] Obtain release approval; distinguish successful iOS build/TestFlight from actual App Store approval.
+- [ ] Document how to build and run Android, iOS, desktop, and Compose/Wasm from a clean checkout.
+- [ ] Publish tested OS/browser coverage and known limitations, including suspension and browser save limits.
+- [ ] Include the project license and notices for ported or bundled code.
+- [ ] Publish user notes for download, save, cookies, and retention.
 
 ## Evidence / notes
 
-Not started. No release date or store acceptance is promised by this plan.
+Not started. A successful local build is the exit gate. App Store and Play submission are not.

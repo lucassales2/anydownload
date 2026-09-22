@@ -6,13 +6,13 @@ milestone: M3
 tags: [task, credentials, security]
 ---
 
-# T-018 — Authorized cookie lifecycle
+# T-018 — Local cookie lifecycle
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Security](../04-delivery/Security-and-licensing.md)
 
 ## Outcome
 
-F-18 cookie upload/replace/status/delete with scoped secrets and explicit user trust.
+F-18 local cookie import, replace, status, and delete. Cookies stay on this device.
 
 ## Dependencies
 
@@ -20,10 +20,10 @@ F-18 cookie upload/replace/status/delete with scoped secrets and explicit user t
 
 ## Acceptance criteria
 
-- [ ] Show trusted destination and consent; validate cookie format/size and store only protected owner-scoped references in jobs/subscriptions.
-- [ ] Implement agreed secret storage, permissions, transient worker copies, expiration/replacement/deletion and backup/retention behavior.
-- [ ] Expose configured/error state without secret contents; redact logs/events/errors and prevent credential artifact downloads.
-- [ ] Test expired/invalid credentials, cross-owner denial, deletion during active work and restart using synthetic fixtures.
+- [ ] Ask for consent, validate cookie format/size, and store the file only on this device.
+- [ ] Support replacement, deletion, and expiry. Jobs hold a reference, not the cookie text.
+- [ ] Show configured/error state without secret contents. Redact logs.
+- [ ] Test expired cookies, deletion during active work, and restart using synthetic fixtures.
 - [ ] Document platform import limits and that cookies do not guarantee access or authorize unpermitted downloads.
 
 ## Evidence / notes

@@ -3,7 +3,7 @@ id: T-011
 type: task
 priority: P0
 milestone: M2
-tags: [task, backend, reliability]
+tags: [task, queue, reliability]
 ---
 
 # T-011 — Durable queue, recovery and live events
@@ -22,7 +22,7 @@ Reliable F-06–F-10 queue, attempts, scheduling/waiting and progress semantics.
 
 - [ ] Persist pending/queued/active/terminal states, attempts/options and concurrency limits; implement individual/bulk start, cancel and failed retry.
 - [ ] Define complete transitions, idempotency, process-tree cancellation and deterministic cancel/complete races.
-- [ ] Recover interrupted jobs after server restart; reconcile missed/duplicate/out-of-order events from snapshot/revision without duplicate work.
+- [ ] Recover interrupted jobs after the app restarts without duplicating finished files.
 - [ ] Reproduce supported upcoming-source waiting/countdown behavior and bounded rechecks; do not promise arbitrary calendar scheduling or universal pause/resume.
 - [ ] Test unknown progress, disk/worker failure, retry limits and safely resumable partial files where supported.
 

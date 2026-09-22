@@ -1,6 +1,6 @@
 ---
 type: product-brief
-status: proposed
+status: accepted
 tags: [product, scope]
 ---
 
@@ -10,62 +10,62 @@ tags: [product, scope]
 
 ## Vision
 
-Give users a consistent way to save authorized video/audio from yt-dlp-supported social and video platforms, with MeTube-equivalent download workflows on **Android, iOS, Windows/macOS/Linux desktop, and web**.
+AnyDownload is a local downloader. It ports yt-dlp's media support and MeTube's download workflows into one app on **iOS, web (Compose/Wasm), Android, and desktop**. Everything runs on the device. There is no backend and no app login.
 
-**Working name:** AnyDownload. **Current deliverable:** a public planning repository and Obsidian vault. **Implementation status:** not started.
+**Name:** AnyDownload (`anydownload`). **Repository slug:** `anydownlod` until a rename is requested. **Purpose:** a portfolio project. Store publication is out of scope. **Implementation status:** a draft remote-client scaffold exists and does not match this direction.
 
-## Intended users — proposed
+Accepted by the owner on 2026-09-21. Record: [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md).
 
-- A person saving their own or permitted public media for offline use.
-- A self-hosting user who wants downloads to continue on a trusted server while their phone/browser is closed.
-- A user archiving authorized playlists/channels or following new uploads through subscriptions.
+## Intended use
 
-The initial recommendation is a **single-owner, self-hosted server**, not an anonymous public download service. Authentication remains required. Multi-tenant hosting and billing are not implied.
+The owner uses the app locally to save media from sites yt-dlp supports, with MeTube-style queue, format, playlist, and history workflows. There is no server owner, no multi-user mode, and no account.
 
 ## Product principles
 
-1. Share domain/networking code where Kotlin supports it; use platform-specific storage, sharing, accessibility, and lifecycle APIs where needed.
-2. Treat a source-media job and exporting its files to a device as separate operations.
-3. Make progress, errors, retries, and retention understandable; do not silently delete media or claim unsupported formats.
-4. Prefer a trusted remote engine for cross-platform reach. Local desktop/Android execution is a separate optional track.
-5. Match the reviewed MeTube workflows without copying its implementation or assuming its API is a stable public contract.
-6. Apply secure defaults to every server/API, including self-hosted installations.
+1. Share the engine, domain, and UI in Kotlin. Use platform adapters for HTTP, files, sharing, and lifecycle.
+2. Run extraction, download, queue, and history inside the app.
+3. Make progress, errors, retries, and retention understandable. Do not silently delete media.
+4. Track yt-dlp's site support as the coverage goal, and MeTube's reviewed workflows as the product surface. Match behavior, not MeTube's wire protocol.
+5. Ship local builds for the portfolio. Do not block features on store review.
 
 ## Scope by release
 
 ### M1 vertical slice
 
-A configured, authenticated client on every target can submit an authorized URL, monitor a server job, and export a completed artifact. Demonstrate disconnect/reconnect and a useful failure message. This proves architecture, not broad downloader coverage.
+On every target, the in-app engine accepts one public URL, shows progress, and writes a media file on the device. A failed URL shows a useful error. This proves the local engine, not full site coverage.
 
 ### M2 MVP
 
-Durable queue with concurrency limits, cancellation/retry, playlists/channels, batch links, useful video/audio quality profiles, completed history, and secure streaming file delivery. Device export works within each OS/browser's limitations.
+On-device queue with concurrency limits, cancellation/retry, playlists/channels, batch links, useful video/audio quality profiles, and completed history. Files stay on the device, within each OS/browser's storage limits.
 
 ### M3 parity candidate
 
-Complete the [feature matrix](Feature-parity.md), including captions/thumbnails, clips, chapter splitting, SponsorBlock, cookies, presets/options, subscriptions, integrations, self-host controls, and engine updates. Document every platform/security difference.
+Complete the [feature matrix](Feature-parity.md) locally: captions/thumbnails, clips, chapter splitting, SponsorBlock, cookies, presets/options, subscriptions, and sharing. Document every platform difference. Self-host server controls are dropped.
 
-### M4 release
+### M4 portfolio build
 
-Tested packages and browser deployment, license notices, support matrix, user/admin documentation, security/accessibility checks, and viable distribution channels. Store acceptance is not assumed.
+Repeatable local build instructions for iOS, Compose/Wasm, Android, and desktop, plus license notices for ported and bundled code. Store listing, signing for public release, and hosted deployment are out of scope.
 
 ## Non-goals and boundaries
 
-- A literal guarantee to download **any** media. yt-dlp site support is version-dependent and may break.
-- DRM removal, paywall circumvention, credential theft, or access to media without permission. Authorized cookie-based access is distinct from bypassing access controls.
-- Reimplementing yt-dlp's extractors in Kotlin or running an arbitrary native CLI inside a browser.
-- Standalone iOS execution, public multi-tenant hosting, billing, social feeds, or a full music/video library manager in the initial plan.
-- Unrestricted shell commands, third-party plugin execution, or arbitrary server filesystem access from download options.
+- A claim that the first build already downloads every site yt-dlp supports. That coverage is the goal of the port and moves with upstream.
+- DRM removal, paywall circumvention, or credential theft.
+- A required backend, app account, public multi-tenant host, or billing.
+- Shelling out to the Python yt-dlp CLI as the shared engine. The engine is Kotlin.
+- Unrestricted shell commands or third-party plugin execution from download options.
 - Guaranteed byte-level pause/resume or queue drag-reordering: these were not established as MeTube download controls in the reviewed baseline. Subscription pause/resume is in scope.
-- Automatic compatibility with every existing MeTube extension/client; equivalent integration workflows and compatibility requirements are separate decisions.
+- MeTube HTTP/Socket.IO compatibility, or compatibility with every existing MeTube extension. The target is the same workflows.
+- App Store or Play publication.
 
 ## Acceptance definition
 
-- All four target families pass the same core remote-mode journey.
-- Each parity row has reproducible evidence on the relevant targets and server, not just a checked implementation task.
-- Restart/reconnect do not lose durable jobs or create unintended duplicates.
-- Protected artifacts/cookies are inaccessible without authorization; errors and logs contain no secrets.
-- Large artifacts are streamed/exported without loading an entire media file into application memory.
-- Accessibility, offline/error states, minimum platform versions, quotas, and retention have explicit tested requirements before release.
+- All four target families pass the same local journey: submit a URL, watch progress, keep the file on the device.
+- Each parity row has reproducible evidence on the relevant targets, not just a checked implementation task.
+- Restarting the app does not lose the on-device queue or create unintended duplicates.
+- Errors and logs contain no cookies or other secrets.
+- Large files are written as they arrive, without holding the whole media file in memory.
+- Accessibility, error states, and minimum platform versions are explicit. Store approval is not a release criterion.
 
-No performance claims, dates, staffing assumptions, or store-approval guarantees have been made. Approve scope through [T-003](../06-tasks/T-003-Approve-product-scope.md).
+## Superseded proposal
+
+Until 2026-09-21 the brief recommended a single-owner authenticated server, with local desktop/Android engines as an optional later track, and treated a Kotlin reimplementation of yt-dlp as out of scope. That proposal is withdrawn. Original reasoning remains in [ADR-001](../03-decisions/ADR-001-Execution-model.md).

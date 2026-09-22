@@ -1,12 +1,16 @@
 ---
 id: ADR-001
 type: adr
-status: proposed
+status: superseded
 created: 2026-09-16
+superseded_by: ADR-004
 tags: [architecture, decisions]
 ---
 
 # ADR-001 — Remote-first execution
+
+> [!warning] Superseded on 2026-09-21
+> The owner rejected a required backend. The accepted direction is [ADR-004](ADR-004-Local-kotlin-engine.md): a local Kotlin port of yt-dlp on Android, iOS, desktop, and Compose/Wasm. The proposal below is kept as the original reasoning.
 
 [Decision log](Decision-log.md) · [Architecture](../02-architecture/Architecture.md) · [Platform matrix](../02-architecture/Platform-matrix.md)
 
@@ -18,7 +22,7 @@ The requested clients are Android, iOS, desktop, and web. yt-dlp is a Python/CLI
 
 Use a **trusted remote engine on all four targets** for the first release. Share domain/networking code in Kotlin; use platform adapters for storage, sharing and lifecycle. Keep extraction behind a capability-based engine boundary. Investigate local desktop/Android engines later without promising a standalone iOS/browser equivalent.
 
-This recommendation is **not accepted yet**; the owner must confirm that operating a server is acceptable.
+This recommendation was **not accepted**. On 2026-09-21 the owner required a local-only app.
 
 ## Alternatives
 

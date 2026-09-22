@@ -3,16 +3,16 @@ id: T-009
 type: task
 priority: P0
 milestone: M1
-tags: [task, backend, security]
+tags: [task, engine, security]
 ---
 
-# T-009 — Build the authenticated engine vertical slice
+# T-009 — Local engine vertical slice
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Architecture](../02-architecture/Architecture.md) · [Security](../04-delivery/Security-and-licensing.md)
 
 ## Outcome
 
-Chosen backend or MeTube adapter handles a single authorized job securely. Covers foundational F-01/F-07/F-26 behavior.
+One public URL downloads inside the app, with progress, a device file, and a clean failure. Covers foundational F-01/F-07/F-26 behavior. No server.
 
 ## Dependencies
 
@@ -20,11 +20,11 @@ Chosen backend or MeTube adapter handles a single authorized job securely. Cover
 
 ## Acceptance criteria
 
-- [ ] Implement selected auth/capabilities/job contract, minimal durable acceptance and progress/result/error delivery.
-- [ ] Package the tested engine/runtime set and stream an authorized finalized artifact; no secret or raw storage-path disclosure.
-- [ ] Enforce safe URL/options, worker egress, path isolation, bounded work and authorization on jobs/events/files from day one.
-- [ ] Demonstrate extraction, FFmpeg output, cancellation/failure and denied unauthenticated/unauthorized requests with integration tests.
+- [ ] Accept one public URL, report progress, and write a finalized file on the device.
+- [ ] Keep paths inside the app storage root. Do not log cookies or signed media URLs.
+- [ ] Bound work and reject unsafe option/path input.
+- [ ] Test extraction, cancellation, and failure with integration tests. Postprocessing uses the media toolkit chosen for that target.
 
 ## Evidence / notes
 
-Not started. Do not implement both a MeTube integration and a new backend without a revised decision.
+Not started. Do not add a server or shell out to the Python yt-dlp CLI from common code.

@@ -1,16 +1,38 @@
 ---
 type: architecture
-status: proposed
+status: accepted-direction
 tags: [architecture, kmp]
 ---
 
-# Proposed architecture
+# Architecture
 
 [Home](../Home.md) · [Platform matrix](Platform-matrix.md) · [Lifecycle](Download-lifecycle.md) · [API outline](API-outline.md) · [Decision log](../03-decisions/Decision-log.md)
 
-**Status: proposal, not implemented or approved.** The core architectural question is where extraction runs, not just which Kotlin wrapper to choose.
+**Accepted direction, not yet implemented.** Extraction runs inside the app. See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md).
 
-## Recommendation: remote-first clients with an engine boundary
+## Local engine
+
+```mermaid
+flowchart TD
+    UI[Compose UI on iOS, Wasm, Android, desktop] --> APP[Shared Kotlin app]
+    APP --> Q[On-device queue, history, settings]
+    APP --> E[Kotlin port of yt-dlp]
+    E --> HTTP[Platform HTTP adapter]
+    E --> MEDIA[Platform media toolkit]
+    APP --> FILES[Platform file storage]
+```
+
+- **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI.
+- **Platform adapters:** HTTP, file write, share/open, and lifecycle. Common code does not spawn a process or assume Python.
+- **Web:** Compose/Wasm. Cross-origin fetches and in-browser media processing are the feasibility risk in [T-004](../06-tasks/T-004-Validate-KMP-targets.md).
+- **iOS:** the same shared engine, with sandbox file export and no guarantee of work after suspension.
+
+The draft `shared/network` API client was built for a server. The engine replaces that path.
+
+## Superseded recommendation: remote-first clients
+
+> [!warning] Withdrawn on 2026-09-21
+> Kept so the original server design is still readable. Do not implement it.
 
 ```mermaid
 flowchart TD
@@ -82,8 +104,8 @@ worker/                Engine adapter, if building one
 vault/                 Planning and documentation
 ```
 
-## Consequences and approval gates
+## Consequences
 
-Remote mode needs a server, bandwidth, storage, authentication and user trust. Server location may affect site availability; passing cookies does not guarantee access. All clients require honest distinction between server jobs and device transfers. Optional local engines must implement equivalent capabilities without leaking platform APIs into common code.
+The port is the product. Site coverage grows with implemented extractors. Postprocessing needs a media toolkit on each target. Wasm and iOS feasibility is unproven. License obligations for yt-dlp-derived code stay in [T-006](../06-tasks/T-006-Review-security-licensing.md).
 
-See [ADR-001](../03-decisions/ADR-001-Execution-model.md), [ADR-002](../03-decisions/ADR-002-Kotlin-wrapper.md), and [security](../04-delivery/Security-and-licensing.md). Approval of these proposals is part of M0, not a consequence of creating this document.
+See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) and [ADR-002](../03-decisions/ADR-002-Kotlin-wrapper.md). The remote diagram above is historical.

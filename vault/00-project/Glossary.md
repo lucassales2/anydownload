@@ -11,13 +11,13 @@ tags: [project, glossary]
 | --- | --- |
 | KMP | Kotlin Multiplatform: shared Kotlin code compiled for multiple targets. It does not make native executables portable to every target. |
 | Compose Multiplatform | Proposed shared UI framework; platform support and browser behavior must be validated separately from core KMP. |
-| Engine | Component that resolves and downloads source media, proposed to use yt-dlp plus required runtimes/postprocessors. |
+| Engine | In-app Kotlin port of yt-dlp. It resolves and downloads media. It is not a call to the Python CLI. |
 | Extractor | yt-dlp's site-specific or generic implementation for discovering metadata/media URLs. Support varies by engine version and site behavior. |
-| Remote mode | A trusted server performs extraction, download, and conversion. Clients control jobs and fetch finished files. |
-| Local mode | A device executes a local engine. Optional feasibility work for desktop/Android, not assumed for iOS/web. |
-| Job | Durable server-side work request, distinct from a client's connection or a transfer to the device. |
+| Remote mode | Withdrawn product shape. A server performed extraction and clients fetched finished files. See ADR-001. |
+| Local mode | The app executes the Kotlin engine and stores files on the device. This is the product on every target. |
+| Job | On-device work request: a URL, options, progress, and output files. |
 | Artifact | Output file: video, audio, captions, thumbnail, chapter, or metadata sidecar. One job may produce many artifacts. |
-| Device transfer | Copy/export of an artifact from the server to local device storage; can fail independently of a successful job. |
+| Device transfer | Withdrawn as a separate server-to-device step. The download writes the artifact on the device. Sharing or exporting that file is a platform action. |
 | Postprocessing | Muxing, conversion, embedding metadata/subtitles/thumbnails, clipping, or splitting chapters after extraction. |
 | Preset | Named bundle of approved engine options, layered over global defaults. |
 | Subscription | Durable periodic scan of a channel/playlist that queues eligible unseen items. Not a paid membership or bypass mechanism. |

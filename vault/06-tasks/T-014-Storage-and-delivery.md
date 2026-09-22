@@ -12,7 +12,7 @@ tags: [task, storage, platforms]
 
 ## Outcome
 
-F-08/F-11–F-13 history, naming, folders, retention and device export with secure multi-artifact support.
+F-08/F-11–F-13 history, naming, folders, and retention for files saved on the device.
 
 ## Dependencies
 
@@ -21,12 +21,12 @@ F-08/F-11–F-13 history, naming, folders, retention and device export with secu
 
 ## Acceptance criteria
 
-- [ ] Implement history/errors/retry plus authorized streamed artifact open/download/export and separate device-transfer state.
+- [ ] Implement history, errors, retry, and open/share of the on-device file.
 - [ ] Define video/audio/temp/state roots, custom/default folders and suggestions/exclusions, safe prefixes/templates, collisions and long filenames.
-- [ ] Separate record removal, server file deletion and local deletion; implement quotas/disk checks and explicit auto-clear/retention semantics.
-- [ ] Test traversal/symlink/Unicode paths, multi-output jobs, Range/large-file memory, expired auth, disk full and per-platform export constraints.
+- [ ] Separate record removal from deleting the file; implement disk checks and explicit auto-clear/retention.
+- [ ] Test traversal, symlink, and Unicode paths, multi-output jobs, large-file memory, disk full, and per-platform save limits.
 - [ ] Document M2 MVP coverage and remaining parity work.
 
 ## Evidence / notes
 
-Not started. A server cannot generally delete an already downloaded file from a browser user's filesystem.
+Not started. A browser download cannot generally be deleted later by the page.

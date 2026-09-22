@@ -28,4 +28,4 @@ F-19/F-20 configurable options with an approved safety boundary, also supporting
 
 ## Evidence / notes
 
-Not started. Free-form upstream JSON options are not safe merely because the API caller is authenticated.
+Not started. Free-form yt-dlp options can execute commands. Q-09 decides allowlist versus a closer pass-through. Shell execution stays out.

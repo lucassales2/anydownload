@@ -12,7 +12,7 @@ tags: [task, operations, self-hosting]
 
 ## Outcome
 
-F-24–F-26 hosting/update controls and operational aspects of storage/configuration parity.
+Withdrawn. ADR-004 removed the self-host server. F-24 and F-25 are out of scope. Local path and log safety moved to T-009 and T-014.
 
 ## Dependencies
 
@@ -22,12 +22,8 @@ F-24–F-26 hosting/update controls and operational aspects of storage/configura
 
 ## Acceptance criteria
 
-- [ ] Package tested Linux amd64/arm64 runtime with persistent media/state/secrets separation, permissions/umask, quotas, temp paths and health/readiness.
-- [ ] Document/test host/port/IPv6, reverse proxy/TLS/base path, credential-aware CORS, event transport, artifact URL configuration, safe optional indexing and robots file.
-- [ ] Expose redacted logs/version/config diagnostics and validated config reload; operator-only unsafe exceptions with explicit warnings.
-- [ ] Pin/verify dependencies and support approved stable/nightly update policy, graceful jobs, rollback and backup/restore.
-- [ ] Test secure default egress, secret/state non-exposure, upgrades and recovery; write admin documentation.
+- [x] Record the withdrawal. Do not package a server.
 
 ## Evidence / notes
 
-Not started. Hosting location is undecided; this task is not permission to deploy anything during planning.
+Owner, 2026-09-21: the app does not require a backend. See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md).

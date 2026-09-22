@@ -12,7 +12,7 @@ tags: [task, research, android]
 
 ## Outcome
 
-A go/no-go ADR for local Android execution without assuming a desktop JVM wrapper solves native runtime packaging.
+Folded into the product. Android uses the same in-app Kotlin engine. Feasibility is [T-004](T-004-Validate-KMP-targets.md).
 
 ## Dependencies
 
@@ -23,11 +23,8 @@ A go/no-go ADR for local Android execution without assuming a desktop JVM wrappe
 
 ## Acceptance criteria
 
-- [ ] Evaluate maintained Android-compatible runtime approaches with yt-dlp/Python, FFmpeg and required JS components on target ABIs/OS versions.
-- [ ] Test execution restrictions, packaging size, battery/thermal/network impact, cancellation and foreground/background/notification requirements on devices.
-- [ ] Validate scoped storage, secret handling, updates and all redistributed dependency/store-policy obligations.
-- [ ] Document capabilities, maintenance costs, local/remote UX and owner decision; no claim of iOS/web standalone equivalence.
+- [x] Record that this spike is no longer a separate track.
 
 ## Evidence / notes
 
-Not started; optional and non-blocking for remote release. Any further runtime/library adoption requires a new reviewed decision.
+Owner, 2026-09-21, [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md). The engine is shared Kotlin, including on Android. Store policy is out of scope.

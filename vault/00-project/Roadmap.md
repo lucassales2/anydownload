@@ -11,35 +11,38 @@ Dates and effort estimates are intentionally unset until feasibility work is com
 
 | Milestone | Deliverable | Exit gate | Tasks |
 | --- | --- | --- | --- |
-| **M0 — Plan and de-risk** | Vault, public repository, approved scope, four-target feasibility, backend decision, security/license review, wireframes/API draft. | Owner accepts scope and architecture ADRs; target/toolchain evidence exists; distribution and license blockers have explicit decisions. No production scaffolding before this gate. | T-001–T-007 |
-| **M1 — Remote vertical slice** | Shared clients on Android, iOS, desktop, web; authenticated engine; submit one authorized URL, show progress, export a result. | Demonstrate the same workflow on all four target families, including a failed job and an unauthenticated request rejection. Record desktop OS/browser coverage. | T-008–T-010 |
-| **M2 — Reliable downloader core** | Durable queues, retries, playlists/channels, batch links, video/audio profiles, history, safe file delivery and storage. | Jobs recover after restart; reconnect does not duplicate work; files are not loaded wholly into memory; core acceptance tests pass. This is the usable MVP, not full MeTube parity. | T-011–T-014 |
-| **M3 — MeTube parity candidate** | Captions, thumbnails, clips, chapters, SponsorBlock, safe presets/options, cookies, subscriptions, sharing, self-host configuration and updates. | Every parity row has tested evidence or a specifically approved/documented difference. No blanket “full parity” claim while gaps remain. | T-015–T-022 |
-| **M4 — Release readiness** | Signed/distributable platform packages, accessibility and security audits, operations and user documentation. | Release checklist, dependency notices, supported-platform matrix, recovery tests, and distribution approvals complete. An iOS build is not App Store approval. | T-023 |
-| **M5 — Optional local engines** | Desktop and Android local-execution feasibility and subsequent scope proposal. | Separate ADRs approve runtime packaging, updates, licensing, and cancellation/background behavior; no local feature claim based on a wrapper alone. | T-024–T-025 |
+| **M0 — Plan and de-risk** | Vault, public repository, accepted local-only scope, four-target local-engine feasibility, license notes for a Kotlin port, local UX flows. | Owner scope is recorded in ADR-004. A local download is shown on iOS, Compose/Wasm, Android, and desktop, or a target is documented as blocked with the reason. | T-001–T-007 |
+| **M1 — Local vertical slice** | Shared Kotlin engine and UI shell. One public URL downloads on each target and the file stays on the device. | Same workflow on all four families, including a failed URL. Record desktop OS and browser coverage. | T-008–T-010 |
+| **M2 — On-device downloader core** | Durable local queue, retries, playlists/channels, batch links, video/audio profiles, history, on-device files. | Queue survives app restart; retries do not duplicate finished files; files are not loaded wholly into memory. This is the usable MVP, not full parity. | T-011–T-014 |
+| **M3 — yt-dlp and MeTube workflow parity** | Captions, thumbnails, clips, chapters, SponsorBlock, presets/options, local cookies, subscriptions, and sharing. | Every parity row has tested evidence or a documented platform gap. Self-host server operations are out of scope. | T-015–T-022, except T-021 |
+| **M4 — Portfolio builds** | Repeatable build/run instructions for all four targets and license notices. | A person can build each target from the README. Store submission is not required. | T-023 |
+
+Local execution is the product, not a later optional track. T-024 and T-025 fold into M0/M1 feasibility.
 
 ## Current priorities
 
-1. [Approve scope and naming](../06-tasks/T-003-Approve-product-scope.md).
-2. [Validate all four KMP targets](../06-tasks/T-004-Validate-KMP-targets.md).
-3. [Compare backend/engine approaches](../06-tasks/T-005-Choose-backend-engine.md).
-4. [Review security, licensing, and store constraints](../06-tasks/T-006-Review-security-licensing.md).
-5. Turn the results into [wireframes and a reviewed API contract](../06-tasks/T-007-Define-UX-and-contract.md).
+1. Prove a local download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), especially Compose/Wasm and iOS.
+2. Reshape the client scaffold around an in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)).
+3. Record license obligations for ported yt-dlp logic and any media toolkit ([T-006](../06-tasks/T-006-Review-security-licensing.md)).
+4. Sketch the local Add / Queue / History flows ([T-007](../06-tasks/T-007-Define-UX-and-contract.md)).
 
 ## Sequencing rules
 
-- M0 experiments may use throwaway prototypes only after the owner starts that task; they are not part of this initial documentation setup.
-- T-008/T-009 require the M0 gate. Android/iOS/web are not postponed to an unspecified “later” platform release.
-- M3 work can be developed in parallel once each task's dependencies are met; security is part of M1, not a final hardening add-on.
-- M5 is optional and does not block remote-mode parity or release. No standalone iOS/browser engine is promised.
-- Deployment location, hosting cost, storage quotas, and number of users remain [open questions](Open-questions.md); this plan does not authorize any deployment.
+- Android, iOS, Compose/Wasm, and desktop stay in the same milestone. A target that cannot run the engine is a recorded gap, not a silent cut.
+- The remote-client scaffold is not the engine. Do not add a server to unblock a target.
+- M3 work can proceed once its dependencies are met. Cookie storage is local and opt-in.
+- Store review, hosting, and multi-user auth are out of scope.
+
+## Previous plan
+
+Until 2026-09-21, M1 was an authenticated remote vertical slice, M5 was an optional desktop/Android local engine, and a server was required. That sequence is withdrawn. See [ADR-001](../03-decisions/ADR-001-Execution-model.md).
 
 ## Release definitions
 
-**Vertical slice:** proves architecture across platforms with one small end-to-end flow.
+**Vertical slice:** one local URL-to-file flow on every target family.
 
-**MVP:** remote-mode core downloader with durable state and useful video/audio workflows.
+**MVP:** on-device queue, history, and useful video/audio workflows.
 
-**Parity candidate:** all reviewed MeTube features are represented and ready for evidence-based audit.
+**Parity candidate:** reviewed yt-dlp and MeTube workflows are represented and ready for an evidence-based audit.
 
-**Release:** platform, security, licensing, and operations gates passed. If a feature differs for security or platform reasons, publish the difference rather than calling it identical.
+**Portfolio build:** each target builds and runs locally, with license notices. If a feature differs on a platform, document the difference.

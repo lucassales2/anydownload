@@ -8,26 +8,23 @@ tags: [delivery, security, licensing]
 
 [Home](../Home.md) · [Risk register](Risk-register.md) · [Architecture](../02-architecture/Architecture.md) · [Review task](../06-tasks/T-006-Review-security-licensing.md)
 
-Planning requirements, not a completed security or legal audit. Security applies to the first remote vertical slice, not only the final release.
+Planning requirements, not a completed security or legal audit. The app is local and has no login. These controls still apply to the first on-device download.
 
 ## Trust boundaries
 
-1. Untrusted pasted/shared URL and user options → authenticated API.
-2. API → durable jobs, credentials, worker IPC and artifact storage.
-3. Worker/yt-dlp/FFmpeg → third-party websites, manifests, redirects and media URLs.
-4. Client/device → server downloads and local export.
-5. Dependency/update source → packaged execution environment.
+1. Untrusted pasted/shared URL and user options → in-app engine.
+2. Engine → on-device queue, cookie store, and output files.
+3. Engine → third-party websites, manifests, redirects, and media URLs.
+4. Dependency source → code and any media toolkit linked into the app.
 
-A private/LAN installation is not automatically trusted. A public GitHub repository does not mean the application should expose an anonymous public download API.
+There is no server to authenticate. A public GitHub repository does not grant a license to copy upstream code.
 
 ## Required controls
 
-### Authentication and authorization
+### App access
 
-- Authenticate the API and protect jobs, artifacts, events, subscriptions, presets and credentials per owner.
-- Separate operator configuration/update capabilities from ordinary job submission.
-- Decide native pairing/token storage and browser secure HttpOnly session/CSRF design in M0. Prefer same-origin browser hosting where feasible; never treat CORS as authentication.
-- Avoid permanent bearer tokens in URLs, localStorage, log lines or exported URL lists. Revoke/rotate credentials and rate-limit abusive calls.
+- The app does not require an account. Jobs, files, and cookies are local to the device.
+- Do not put cookies, signed media URLs, or raw extractor diagnostics in logs, history exports, or bug reports.
 
 ### SSRF and worker egress
 
@@ -48,7 +45,7 @@ A private/LAN installation is not automatically trusted. A public GitHub reposit
 
 ### Cookies, private source URLs and logs
 
-- Cookies are bearer credentials and can expose an account. Upload only with explicit consent to a clearly identified trusted server.
+- Cookies are bearer credentials and can expose an account. Import only with explicit consent, and keep the file on this device.
 - Validate size/format, scope to owner/provider where feasible, restrict worker file permissions, keep values outside job/event payloads and remove transient copies after use.
 - Decide encryption-at-rest and key storage/backups; encryption without protected keys is not a complete control. Define replacement/deletion/expiry and treatment of jobs already using a credential snapshot.
 - Do not return raw cookies, Authorization headers, signed media URLs or unredacted engine diagnostics to clients/logs/support bundles.
@@ -79,10 +76,9 @@ Sources and pinned revisions: [upstream review](../05-research/Upstream-review.m
 ## Platform distribution and authorized use
 
 - Download only media owned by the user or explicitly permitted to be downloaded, subject to applicable law and site terms. No DRM/paywall bypass is planned.
-- Apple's [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) include **5.2.3 (Audio/Video Downloading)** and **2.5.2 (software execution/self-contained apps)**. Assess third-party authorization, positioning and runtime packaging early. Remote execution does not automatically make a downloader acceptable to the App Store.
-- Review [Google Play policies](https://play.google.com/about/developer-content-policy/) for intellectual property, user data, dynamic code and device/network behavior. Android sideloading does not eliminate legal/security responsibilities.
-- Native signing/notarization, iOS provisioning/TestFlight/App Store, Play distribution and desktop channels are decisions for T-006/T-023. Do not promise approval or a universal executable update method.
+- Store publication is out of scope. Portfolio builds do not include App Store or Play submission. Local signing needed to run on a device is a build detail, not a release channel.
+- Apple's [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) **5.2.3** and **2.5.2**, and [Google Play policies](https://play.google.com/about/developer-content-policy/), stay relevant only if distribution is reconsidered later.
 
 ## Approval gate
 
-T-006 produces a reviewed threat model, auth/cookie design, preliminary artifact/license inventory, chosen project license recommendation and distribution assessment. Any unresolved blocking issue must prevent the M0 gate rather than disappear into “later hardening.”
+T-006 records the threat model for a local engine, the cookie-storage decision, and the license inventory before extractor source is copied. Store review is not part of that gate.

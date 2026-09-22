@@ -12,7 +12,7 @@ tags: [task, subscriptions, scheduling]
 
 ## Outcome
 
-F-21 server-managed recurring scans and controls; subscription persistence completes F-09.
+F-21 on-device recurring scans and controls. Scans run while the app is open.
 
 ## Dependencies
 
@@ -30,4 +30,4 @@ F-21 server-managed recurring scans and controls; subscription persistence compl
 
 ## Evidence / notes
 
-Not started. The server is the scheduler; phone/tab background execution is not required to keep scans running.
+Not started. iOS and the browser will not keep scans running after the app is suspended. Say that in the UI.

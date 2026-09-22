@@ -1,12 +1,16 @@
 ---
 id: ADR-003
 type: adr
-status: proposed
+status: superseded
 created: 2026-09-16
+superseded_by: ADR-004
 tags: [architecture, decisions, backend]
 ---
 
 # ADR-003 — Backend and engine selection
+
+> [!warning] Superseded on 2026-09-21
+> The owner chose no backend. Engine work is a Kotlin port inside the app. See [ADR-004](ADR-004-Local-kotlin-engine.md). The comparison below was not executed.
 
 [Decision log](Decision-log.md) · [Architecture](../02-architecture/Architecture.md) · [API outline](../02-architecture/API-outline.md)
 
@@ -44,4 +48,4 @@ A new service buys contract control but cannot claim MeTube parity just because 
 
 ## Decision record
 
-**Pending [T-005](../06-tasks/T-005-Choose-backend-engine.md).** Add chosen alternative, rejected alternatives with evidence, approver/date and accepted constraints when the spike is complete. Update the architecture, API outline, roadmap and affected tasks together.
+**Closed without the spike.** Owner, 2026-09-21: no MeTube server, no Ktor API, and no Python worker. The accepted engine is the local Kotlin port in [ADR-004](ADR-004-Local-kotlin-engine.md).

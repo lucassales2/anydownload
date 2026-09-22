@@ -12,7 +12,7 @@ tags: [task, clients, kmp]
 
 ## Outcome
 
-The first production-oriented client skeleton, only after M0 approval.
+Shared app shell whose engine runs in-process. The current remote API client does not satisfy this.
 
 ## Dependencies
 
@@ -20,11 +20,15 @@ The first production-oriented client skeleton, only after M0 approval.
 
 ## Acceptance criteria
 
-- [ ] Pin approved toolchain/dependency versions and create Android/iOS/desktop/web entry points plus shared domain/networking and approved UI modules.
-- [ ] Add server configuration, platform credential/file adapters and capability-aware state flow; no JVM-only process APIs in common code.
-- [ ] Provide repeatable build/run instructions and CI/build evidence for each supported target with explicit signing limitations.
-- [ ] Add initial shared serialization/state tests and license/dependency inventory from the approved design.
+- [x] Pin toolchain versions and create Android, iOS, desktop, and Compose/Wasm entry points plus shared domain and UI modules.
+- [ ] Replace the server API client with an in-process engine boundary and platform file adapters. No JVM-only process APIs in common code.
+- [ ] Provide repeatable build/run instructions and CI evidence for each target. Signing for store release is out of scope.
+- [ ] Add shared engine/state tests and a dependency inventory. License sign-off stays in T-006.
 
 ## Evidence / notes
 
-Not started. This task is deliberately not part of the initial planning setup.
+Draft scaffold added ahead of the M0 gate at the owner's request on 2026-09-16. On 2026-09-21 the owner required a local Kotlin engine and no backend ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). This scaffold's API client and job DTOs target a server and are not the engine.
+
+- Pinned toolchain: Gradle 9.7.1 (checksum-pinned wrapper), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.4.0, Ktor 3.6.0, JDK 21.
+- Verified locally on 2026-09-16 (macOS 26, JDK 21.0.11, Xcode 26.5, Android SDK 37): `:shared:core:jvmTest`, `:shared:network:jvmTest`, `:apps:android:assembleDebug`, `:apps:desktop:compileKotlin`, `:apps:web:wasmJsBrowserDistribution`, `:shared:ui:linkDebugFrameworkIosArm64`, and an unsigned iOS Simulator `xcodebuild`.
+- Still open: in-process engine boundary, file adapters, CI evidence, dependency inventory.

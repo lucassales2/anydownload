@@ -12,7 +12,7 @@ tags: [task, research, backend]
 
 ## Outcome
 
-Evidence-based choice between a MeTube adapter, Ktor + isolated Python worker, and a smaller Python service; assess direct CLI versus Python hooks where relevant.
+Record where extraction runs. Closed by owner decision: in the app, as a Kotlin port of yt-dlp.
 
 ## Dependencies
 
@@ -20,12 +20,12 @@ Evidence-based choice between a MeTube adapter, Ktor + isolated Python worker, a
 
 ## Acceptance criteria
 
-- [ ] Compare the same authorized single-video/audio/playlist/error fixtures, progress, child-process cancellation, retries and restart behavior.
-- [ ] Evaluate Kotlin/native/browser transport and auth/artifact delivery; explicitly test Socket.IO compatibility if using MeTube.
-- [ ] Inventory yt-dlp, Python, FFmpeg/ffprobe, EJS/JS runtime and optional dependencies, with update/packaging implications.
-- [ ] Estimate relative parity implementation/maintenance cost, queue/persistence design and Linux amd64/arm64 feasibility without fabricated deadlines.
-- [ ] Record chosen approach, rejected alternatives, evidence and owner approval in ADR-002/ADR-003; update architecture/API/tasks.
+- [x] Record the chosen approach, rejected alternatives, and owner approval.
+- [x] Update architecture, roadmap, and affected tasks.
+- [x] Waive the MeTube / Ktor / Python fixture spike. The owner required a local Kotlin port without that comparison.
+
+License inventory for copied extractor code remains [T-006](T-006-Review-security-licensing.md).
 
 ## Evidence / notes
 
-Not started. No dependency has been adopted. Align license/security findings with T-006 before M0 sign-off.
+Owner waived this spike on 2026-09-21. There is no backend. The engine is a Kotlin port of yt-dlp inside the app. See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md). The fixture comparison in the acceptance criteria was not run. License inventory remains [T-006](T-006-Review-security-licensing.md).

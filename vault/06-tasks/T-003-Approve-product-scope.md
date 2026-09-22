@@ -12,7 +12,7 @@ tags: [task, planning, product]
 
 ## Outcome
 
-Owner-approved product boundaries and milestone definitions; confirm the remote-server assumption before implementation.
+Owner-approved product boundaries and milestone definitions, including whether the app is local-only.
 
 ## Dependencies
 
@@ -20,12 +20,20 @@ Owner-approved product boundaries and milestone definitions; confirm the remote-
 
 ## Acceptance criteria
 
-- [ ] Confirm working/final name and whether to retain the `anydownlod` repository spelling.
-- [ ] Decide target audience, server ownership/trust, single-owner versus multi-user scope, and whether standalone mobile operation is mandatory.
-- [ ] Approve MVP versus parity scope and pinned MeTube baseline; prioritize external integrations and clarify protocol compatibility.
+- [x] Confirm working/final name and whether to retain the `anydownlod` repository spelling.
+- [x] Decide target audience, server ownership/trust, single-owner versus multi-user scope, and whether standalone mobile operation is mandatory.
+- [x] Approve MVP versus parity scope and pinned MeTube baseline; prioritize external integrations and clarify protocol compatibility.
 - [ ] Explicitly approve or revise security-scoped option differences and “supported sites, not every media URL” product language.
-- [ ] Record approver/date and update the brief, open questions, roadmap and ADR-001 as applicable.
+- [x] Record approver/date and update the brief, open questions, roadmap and ADR-001 as applicable.
 
 ## Evidence / notes
 
-Not started. A written proposal is not approval. No owner response is assumed.
+Owner, 2026-09-21:
+
+- Product name is AnyDownload (`anydownload`). Repository slug stays `anydownlod` until a rename is requested.
+- The app is local-only on iOS, Compose/Wasm, Android, and desktop. No backend, no app login, no multi-user server.
+- Goal is a Kotlin port of yt-dlp's site support and MeTube's workflows. MeTube protocol compatibility is not required. The pinned 2026-09-16 MeTube review stays the workflow baseline.
+- Store publication is out of scope. Portfolio builds only.
+- Recorded in the product brief, open questions, roadmap, and [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md). ADR-001 and ADR-003 are superseded.
+
+Still open on this task: whether download options are an allowlist or a closer pass-through of yt-dlp options (Q-09).

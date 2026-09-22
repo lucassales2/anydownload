@@ -12,7 +12,7 @@ tags: [task, research, desktop]
 
 ## Outcome
 
-A go/no-go ADR for standalone desktop execution, separate from remote-mode parity.
+Folded into the product. Desktop local execution is required, not optional. Feasibility is [T-004](T-004-Validate-KMP-targets.md) and the engine work is [T-009](T-009-Backend-vertical-slice.md).
 
 ## Dependencies
 
@@ -22,11 +22,8 @@ A go/no-go ADR for standalone desktop execution, separate from remote-mode parit
 
 ## Acceptance criteria
 
-- [ ] Test owned typed CLI/worker adapter on approved Windows/macOS/Linux/CPU variants with complete runtime dependencies.
-- [ ] Prove safe argument handling, Unicode/spaced paths, progress, process-tree cancellation and resource cleanup.
-- [ ] Assess installation size, signing/notarization, engine updates/rollback, dependency licenses and secret storage.
-- [ ] Map capability differences and local/remote state/storage UX; record costs, evidence and owner decision before implementation backlog expansion.
+- [x] Record that this spike is no longer a separate track.
 
 ## Evidence / notes
 
-Not started; optional and non-blocking for remote release. Archived YtDlp-kt is not automatically selected.
+Owner, 2026-09-21, [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md). Do not shell out to Python yt-dlp. YtDlp-kt remains rejected as the shared engine.

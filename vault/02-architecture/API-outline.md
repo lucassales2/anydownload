@@ -8,7 +8,8 @@ tags: [architecture, api]
 
 [Home](../Home.md) · [Architecture](Architecture.md) · [Domain](Download-lifecycle.md) · [Security](../04-delivery/Security-and-licensing.md)
 
-**Design sketch only — no server or OpenAPI contract exists.** These paths apply if a new API is selected; they are not MeTube endpoints. [T-007](../06-tasks/T-007-Define-UX-and-contract.md) must resolve details after [T-005](../06-tasks/T-005-Choose-backend-engine.md).
+> [!warning] Withdrawn on 2026-09-21
+> ADR-004 removed the backend. These paths are a historical sketch of a server that will not be built. In-app use cases replace this contract. [T-007](../06-tasks/T-007-Define-UX-and-contract.md) specifies local screens and job state, not HTTP routes.
 
 ## Proposed surface
 

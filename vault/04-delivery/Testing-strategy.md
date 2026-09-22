@@ -8,20 +8,19 @@ tags: [delivery, testing]
 
 [Home](../Home.md) · [Feature parity](../01-product/Feature-parity.md) · [Lifecycle](../02-architecture/Download-lifecycle.md) · [Risk register](Risk-register.md)
 
-No application tests exist yet. This plan defines evidence needed before claiming platform support or feature parity.
+Shared unit tests exist for the draft client. This plan defines evidence needed before claiming a local engine works on a target or that a MeTube workflow is done.
 
 ## Layers
 
 | Layer | Required coverage |
 | --- | --- |
 | Shared Kotlin unit tests | Option validation/layering, state reducers, idempotency semantics, errors, serialization, event ordering, format/capability presentation. |
-| Contract tests | API version negotiation, auth/authorization, pagination, error schema, immutable attempt options, snapshot/event recovery, file headers/Range behavior. |
-| Worker integration | Authorized media fixtures; metadata, video/audio, FFmpeg, captions/artwork, playlists, clips/chapters; cancel process tree, engine crash, timeouts, bad output and disk full. |
-| Persistence/scheduler | Restart during every phase, orphan attempt recovery, duplicate submissions, subscription seen IDs/initial scan/overlapping checks, bounded retries and retention. |
-| Platform integration | Auth storage, incoming shares/deep links, file picker/export/cancellation, background artifact transfer, browser restrictions and large-file memory behavior. |
+| Engine tests | Metadata, video/audio, postprocessing, captions/artwork, playlists, clips/chapters; cancel, crash, timeouts, bad output, and disk full. |
+| Persistence | Restart during every phase, interrupted-attempt recovery, duplicate submissions, subscription seen IDs, bounded retries, and retention. |
+| Platform integration | Incoming shares/deep links, file save/open/cancellation, suspension, browser fetch limits, and large-file memory behavior. |
 | UI/accessibility | Keyboard-only and assistive tech, focus, contrast/themes, large text, narrow/wide layouts, meaningful unknown progress, error/offline states. |
-| Security | SSRF through redirects/DNS/IPv6, worker egress, path traversal/symlinks, option/command injection, credential redaction/deletion, authorization and browser CSRF/CORS. |
-| Packaging/operations | Reproducible dependencies and notices, Linux amd64/arm64 host images, per-OS client packages, upgrade/rollback, backup/restore and health/readiness. |
+| Security | Redirects to unexpected hosts, path traversal, option injection, cookie redaction/deletion. |
+| Packaging | Repeatable local builds for iOS, Compose/Wasm, Android, and desktop, plus license notices. |
 
 ## Fixture policy
 
@@ -38,20 +37,20 @@ No application tests exist yet. This plan defines evidence needed before claimin
 | Android | Emulator and representative physical device; scoped storage, share intent, credential storage, foreground/background constraints. |
 | iOS | Simulator plus physical device; Files/share export, Keychain, suspension/reconnection, background transfer boundaries, signing/distribution feasibility. |
 | Desktop | Windows, macOS, Linux; file paths with Unicode/spaces, cancellation, packaging and artifact open/reveal. CPU coverage must be stated explicitly. |
-| Web | Supported Chrome/Edge, Firefox, Safari versions and selected mobile browsers; feature detection, keyboard/screen reader, authenticated download, memory and tab suspension. |
+| Web | Chrome/Edge, Firefox, and Safari, including a mobile browser; keyboard/screen reader, memory, cross-origin fetch limits, and tab suspension. |
 
 Exact minimum versions and performance budgets are outputs of [T-004](../06-tasks/T-004-Validate-KMP-targets.md), not assumptions here. Use progressively large generated files to prove bounded memory for exports; choose size/time budgets from measurements.
 
 ## High-risk scenarios
 
 1. User double-taps Add while the network response is lost: exactly one intended job.
-2. Client reconnects after missing/duplicated events: authoritative final state without regressions.
-3. Server dies during FFmpeg: no fake completed artifact; recovery is deterministic.
+2. The app restarts mid-download: the queue reloads and the interrupted attempt is not marked completed.
+3. Postprocessing fails: no fake completed artifact; recovery is deterministic.
 4. Cancelling a playlist expansion or an active download leaves no runaway child processes.
 5. Removing history with file deletion disabled preserves media; file deletion enabled removes only the intended owned artifacts.
 6. Expired cookies, unsupported captions/profile, changing source formats, proxy/network failure and engine update all produce safe actionable errors.
 7. Repeated subscription scans do not redownload seen items unexpectedly; crash recovery does not lose new eligible items.
-8. Export to iOS/browser fails or is cancelled while server job remains completed.
+8. A save fails or is cancelled on iOS or in the browser: the history row matches the file that actually exists.
 
 ## Parity and release gates
 

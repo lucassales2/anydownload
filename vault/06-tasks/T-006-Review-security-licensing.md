@@ -6,13 +6,13 @@ milestone: M0
 tags: [task, security, licensing]
 ---
 
-# T-006 — Review security, licensing and distribution
+# T-006 — Review security and licensing
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Security plan](../04-delivery/Security-and-licensing.md) · [Risk register](../04-delivery/Risk-register.md)
 
 ## Outcome
 
-An approved trust/auth/credential model, dependency/license decision process and viable platform-distribution strategy before production scaffolding.
+License obligations and local threat controls before extractor source is copied into the app. Store distribution is out of scope.
 
 ## Dependencies
 
@@ -20,12 +20,12 @@ An approved trust/auth/credential model, dependency/license decision process and
 
 ## Acceptance criteria
 
-- [ ] Review threats for URL extraction, SSRF/egress, options/process execution, filesystem paths, artifacts, events and updates.
-- [ ] Decide native/browser authentication, owner authorization, cookie consent/storage/deletion, redaction and retention requirements.
-- [ ] Review exact candidate dependency/binary licenses with T-005; obtain owner decision on project license before adding a LICENSE or copying code.
-- [ ] Assess Apple 5.2.3/2.5.2, Play policies, third-party content permissions, signing and viable distribution channels; record unresolved blockers honestly.
-- [ ] Approve safe-option parity differences or revise scope; record approval and required security tests/ADRs.
+- [ ] Review threats for pasted URLs, option injection, filesystem paths, local cookies, and logs.
+- [ ] Specify on-device cookie consent, storage, deletion, and redaction. There is no app login.
+- [ ] Review yt-dlp, FFmpeg, and JS-runtime licenses; obtain an owner decision on the project license before adding a LICENSE or copying extractor code.
+- [x] Store publication is out of scope (owner, 2026-09-21).
+- [ ] Resolve Q-09: allowlisted options or a closer yt-dlp pass-through. Shell execution stays excluded.
 
 ## Evidence / notes
 
-Not started. Existing security/license documentation is a preliminary inventory, not a legal opinion or completed audit. Public visibility does not select a license.
+Store distribution was closed by the owner on 2026-09-21. License inventory and Q-09 are still open. Existing security notes are a preliminary inventory, not a legal opinion.

@@ -6,27 +6,27 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** planning · **Targets:** Android, iOS, desktop, web · **Working name:** AnyDownload
+**Phase:** planning · **Targets:** iOS, web (Compose/Wasm), Android, desktop · **Name:** AnyDownload
 
-A Kotlin Multiplatform downloader inspired by MeTube, with yt-dlp as the proposed media engine. This vault is the living project plan; **no application has been implemented**.
+A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
 **[Task board](Kanban.md)** · **[Roadmap](00-project/Roadmap.md)** · **[Open questions](00-project/Open-questions.md)** · **[Public repository](https://github.com/lucassales2/anydownlod)**
 
 ## Start here
 
 1. Read the [product brief](01-product/Product-brief.md) and [MeTube feature inventory](01-product/Feature-parity.md).
-2. Review the [platform constraints](02-architecture/Platform-matrix.md) before assuming yt-dlp can run on every device.
-3. Review the [proposed architecture](02-architecture/Architecture.md) and [decision records](03-decisions/Decision-log.md).
-4. Work through the ready tasks on [Kanban](Kanban.md); implementation begins only after the M0 exit gate is approved.
+2. Review the [platform constraints](02-architecture/Platform-matrix.md). Compose/Wasm and iOS are in scope and still unproven for a local engine.
+3. Review the [architecture](02-architecture/Architecture.md) and [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md).
+4. Work through the ready tasks on [Kanban](Kanban.md). The next engineering gate is a local download on each target.
 
-## Immediate decisions
+## Accepted direction — 2026-09-21
 
-- Confirm product/repository naming, intended users, and whether a user-managed remote server is acceptable.
-- Test the Kotlin/Compose toolchain on all four targets, especially browser accessibility and iOS file export.
-- Choose a backend strategy: a MeTube integration, a Kotlin API with an isolated yt-dlp worker, or a smaller Python service.
-- Resolve license, cookie trust, and store-distribution constraints before selecting native runtime dependencies.
+- Product name is AnyDownload. The app is local-only and does not require a backend or a user login.
+- Port yt-dlp to Kotlin and port MeTube's workflows into the app. Site coverage follows that port.
+- Targets are iOS, Compose/Wasm, Android, and desktop.
+- Store publication is out of scope; this is a portfolio project.
 
-These are recommendations and questions, **not decisions already made on the owner's behalf**.
+License notes for ported code, and proof that Wasm and iOS can complete a download, are still open.
 
 ## Documentation map
 
@@ -66,8 +66,7 @@ These are recommendations and questions, **not decisions already made on the own
 
 ## Scope reminders
 
-- Support follows the installed yt-dlp version; no promise to download every video or bypass DRM.
-- MeTube-equivalent workflows are the target, not a pixel-for-pixel copy or automatic wire-protocol compatibility.
-- “Downloaded on server” and “saved on this device” are different states.
-- Local desktop/Android execution is a later feasibility track; the remote-first proposal supports all four clients.
+- Site support follows the Kotlin port of yt-dlp. The goal is yt-dlp's coverage; the first build is one URL on each target.
+- MeTube-equivalent workflows are the target, not a pixel-for-pixel copy or MeTube protocol compatibility.
+- Downloads finish on the device. There is no server job.
 - This vault is public. Never paste real credentials or private-media links here.
