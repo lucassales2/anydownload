@@ -16,7 +16,7 @@ tags: [architecture, decisions, index]
 | [ADR-003](ADR-003-Backend-engine.md) | Compare MeTube integration, Ktor + worker, and Python service | Superseded by ADR-004 | Owner chose no backend on 2026-09-21. The fixture spike was not run. |
 | [ADR-004](ADR-004-Local-kotlin-engine.md) | Local Kotlin port of yt-dlp; no backend; no app login | Accepted | Owner, 2026-09-21. Target feasibility is still T-004. |
 
-Next records should capture the per-target media toolkit (FFmpeg or equivalent), the web/iOS feasibility result, and the project/dependency license. Use the [ADR template](../99-templates/ADR-template.md).
+The project license is MIT as of 2026-09-21. Next records should capture the per-target media toolkit (FFmpeg or equivalent), the web/iOS feasibility result, and dependency licenses for any copied extractor code. Use the [ADR template](../99-templates/ADR-template.md).
 
 ## Lifecycle
 

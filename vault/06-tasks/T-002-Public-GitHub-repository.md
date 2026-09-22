@@ -33,4 +33,4 @@ Initial publication: commit `64a0ebe141fc55261985039034745cea8c1c0a4e` (`docs: b
 
 Reviewed 58 tracked documentation/configuration files with whitespace, link, task/dependency, JSON and public-data checks. Third-party Kanban files and machine-specific state remain ignored; no parent-repository files/history were included. This completion record is a follow-up documentation update.
 
-No project license has been selected. Public visibility is not owner approval of the architecture proposals.
+At publication on 2026-09-16, no project license had been selected. On 2026-09-21 the owner added an MIT `LICENSE`. Public visibility was not owner approval of the architecture proposals.

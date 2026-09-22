@@ -129,4 +129,6 @@ The scaffold predates ADR-004 and still targets a server. Treat module names, th
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md). The Obsidian board is the task-status source of truth; GitHub Issues may be linked later, but are not automatically synchronized.
 
-**Project license: not selected yet.** Public visibility does not grant a general open-source license. Licensing is an explicit planning task before code reuse or distribution. No upstream implementation or application binaries are included. MeTube, yt-dlp, YtDlp-kt, and Obsidian are independent projects; this project is not affiliated with them.
+This project is licensed under the [MIT License](LICENSE). Copyright © 2026 Lucas Sales.
+
+MIT covers this repository. It does not relicense MeTube, yt-dlp, YtDlp-kt, FFmpeg, or other upstream projects. Do not copy their implementation into this tree until their obligations are recorded. This project is not affiliated with them.

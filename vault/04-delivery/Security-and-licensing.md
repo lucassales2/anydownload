@@ -61,7 +61,7 @@ Observed upstream metadata/source on **2026-09-16**; verify full license text an
 
 | Component | Observed license / important distinction | Planning implication |
 | --- | --- | --- |
-| AnyDownload | **Not selected.** No project LICENSE has been added. | Public visibility alone is not an open-source permission grant. Owner chooses license before code reuse/distribution. |
+| AnyDownload | **MIT**, chosen by the owner on 2026-09-21. See the repository `LICENSE`. | MIT applies to this project's own code and docs. It does not relicense copied upstream extractors, MeTube, or bundled media toolkits. |
 | yt-dlp source/PyPI source and wheel | Unlicense according to upstream. | Check exact dependency graph and notices; do not assume all distributed executables have the same license. |
 | yt-dlp bundled release executables | Upstream states PyInstaller bundles include GPLv3+ code; other artifacts also bundle MIT/ISC components. | Review chosen binary individually; preserve notices and satisfy applicable redistribution/source obligations. |
 | YtDlp-kt | GPL-3.0 metadata; archived JVM wrapper. | Review full obligations if adopted/forked; do not copy code on the assumption that “Kotlin wrapper” means permissive/KMP. |

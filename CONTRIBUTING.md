@@ -23,6 +23,6 @@ Templates and conventions are in the [documentation guide](vault/00-project/Docu
 
 ## Code reuse and license
 
-The project license is pending. Do not copy MeTube, yt-dlp, or YtDlp-kt implementation code into this repository until [T-006](vault/06-tasks/T-006-Review-security-licensing.md) records the license obligations. See [security and licensing](vault/04-delivery/Security-and-licensing.md).
+This project is [MIT licensed](LICENSE). Do not copy MeTube, yt-dlp, or YtDlp-kt implementation code into this repository until [T-006](vault/06-tasks/T-006-Review-security-licensing.md) records those projects' license obligations. MIT on this repository does not relicense upstream code. See [security and licensing](vault/04-delivery/Security-and-licensing.md).
 
 Client build commands and shared unit tests exist now; see the [README](README.md). Testing requirements remain documented in the [testing strategy](vault/04-delivery/Testing-strategy.md), and the scaffold's tests are not evidence that the M0 feasibility criteria are met.
