@@ -1,0 +1,175 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+# macos-latest is Apple Silicon. macos-15-intel is the last GitHub-hosted
+# Intel macOS image. Each job packages with jpackage for its own CPU.
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package Windows installer
+        shell: bash
+        run: ./gradlew :apps:desktop:packageExe
+
+      - name: Stage installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          shopt -s nullglob
+          files=(apps/desktop/build/compose/binaries/main/exe/*.exe)
+          if [[ ${#files[@]} -ne 1 ]]; then
+            echo "Expected one Windows installer, found ${#files[@]}"
+            ls -la apps/desktop/build/compose/binaries/main/exe || true
+            exit 1
+          fi
+          cp "${files[0]}" "dist/AnyDownload-${version}-windows-x64-setup.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*
+          if-no-files-found: error
+
+  macos-silicon:
+    name: macOS Apple Silicon
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = "arm64"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package Apple Silicon disk image
+        run: ./gradlew :apps:desktop:packageDmg
+
+      - name: Stage disk image
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          shopt -s nullglob
+          files=(apps/desktop/build/compose/binaries/main/dmg/*.dmg)
+          if [[ ${#files[@]} -ne 1 ]]; then
+            echo "Expected one disk image, found ${#files[@]}"
+            ls -la apps/desktop/build/compose/binaries/main/dmg || true
+            exit 1
+          fi
+          cp "${files[0]}" "dist/AnyDownload-${version}-macos-aarch64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64
+          path: dist/*
+          if-no-files-found: error
+
+  macos-intel:
+    name: macOS Intel
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Intel
+        run: test "$(uname -m)" = "x86_64"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package Intel disk image
+        run: ./gradlew :apps:desktop:packageDmg
+
+      - name: Stage disk image
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          shopt -s nullglob
+          files=(apps/desktop/build/compose/binaries/main/dmg/*.dmg)
+          if [[ ${#files[@]} -ne 1 ]]; then
+            echo "Expected one disk image, found ${#files[@]}"
+            ls -la apps/desktop/build/compose/binaries/main/dmg || true
+            exit 1
+          fi
+          cp "${files[0]}" "dist/AnyDownload-${version}-macos-x64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [windows, macos-silicon, macos-intel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          cd dist
+          windows="AnyDownload-${version}-windows-x64-setup.exe"
+          silicon="AnyDownload-${version}-macos-aarch64.dmg"
+          intel="AnyDownload-${version}-macos-x64.dmg"
+          test -f "$windows"
+          test -f "$silicon"
+          test -f "$intel"
+          sha256sum "$windows" "$silicon" "$intel" > SHA256SUMS
+          cat > release-notes.md <<EOF
+          Desktop installers for AnyDownload ${version}.
+
+          yt-dlp and ffmpeg are not included. Install both and leave them on PATH before downloading. A machine without yt-dlp still opens; Settings shows the tool as not found, and a download fails with that message instead of crashing.
+
+          - ${windows}: Windows 64-bit (Intel/AMD)
+          - ${silicon}: Mac Apple Silicon
+          - ${intel}: Mac Intel
+
+          These builds are not notarized or signed. macOS may ask you to open the app from Finder the first time. The Mac bundle version is 1.0.0 because macOS rejects an app version whose first number is 0.
+
+          Checksums are in SHA256SUMS.
+          EOF
+          # The workflow indent is not part of the note text.
+          sed -i 's/^          //' release-notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AnyDownload ${version}" \
+            --notes-file release-notes.md \
+            "$windows" "$silicon" "$intel" SHA256SUMS

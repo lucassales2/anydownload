@@ -278,18 +278,26 @@ private fun dropExpired(
 }
 
 /** `<user home>/Downloads/AnyDownload`, used when Settings has no folder yet. */
-fun defaultDownloadRootPath(): String =
-    Path.of(System.getProperty("user.home"), "Downloads", "AnyDownload").toString()
+fun defaultDownloadRootPath(home: Path = Path.of(System.getProperty("user.home"))): String =
+    home.resolve("Downloads").resolve("AnyDownload").toString()
 
-/** OS app-data folder; `~/Library/Application Support/AnyDownload` on macOS. */
-fun defaultStateDirectory(): Path {
-    val home = Path.of(System.getProperty("user.home"))
-    val os = System.getProperty("os.name").lowercase()
+/**
+ * OS app-data folder. macOS uses `~/Library/Application Support/AnyDownload`.
+ * Windows uses `%APPDATA%\AnyDownload` (Roaming), which is separate from a
+ * per-user install under `%LOCALAPPDATA%`.
+ */
+fun defaultStateDirectory(
+    osName: String = System.getProperty("os.name"),
+    home: Path = Path.of(System.getProperty("user.home")),
+    appData: String? = System.getenv("APPDATA"),
+    xdgStateHome: String? = System.getenv("XDG_STATE_HOME"),
+): Path {
+    val os = osName.lowercase()
     return when {
         os.contains("mac") -> home.resolve("Library/Application Support/AnyDownload")
-        os.contains("win") -> Path.of(System.getenv("APPDATA") ?: home.toString()).resolve("AnyDownload")
+        os.contains("win") -> Path.of(appData ?: home.toString()).resolve("AnyDownload")
         else -> {
-            val base = System.getenv("XDG_STATE_HOME")?.let { Path.of(it) } ?: home.resolve(".local/state")
+            val base = xdgStateHome?.let { Path.of(it) } ?: home.resolve(".local/state")
             base.resolve("AnyDownload")
         }
     }

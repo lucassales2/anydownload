@@ -65,14 +65,26 @@ private class JavaCliProcess(private val process: Process) : CliProcess {
 
 /** Finds an executable on PATH without starting anything. */
 object ExecutableOnPath {
-    fun find(name: String): String? {
-        val path = System.getenv("PATH") ?: return null
-        val candidates = if (isWindows()) {
+    fun find(name: String): String? = findOnPath(
+        name = name,
+        path = System.getenv("PATH"),
+        windows = isWindows(),
+    )
+
+    /**
+     * [windows] also looks for `.exe`, `.cmd`, and `.bat`, which is how a
+     * Windows install of yt-dlp or ffmpeg is named. A missing file is a miss;
+     * nothing is started.
+     */
+    internal fun findOnPath(name: String, path: String?, windows: Boolean): String? {
+        if (path == null) return null
+        val candidates = if (windows) {
             listOf(name, "$name.exe", "$name.cmd", "$name.bat")
         } else {
             listOf(name)
         }
         path.split(File.pathSeparatorChar).forEach { directory ->
+            if (directory.isBlank()) return@forEach
             val base = runCatching { Path.of(directory) }.getOrNull() ?: return@forEach
             candidates.forEach { candidate ->
                 val file = base.resolve(candidate)
