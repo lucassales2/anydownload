@@ -11,7 +11,7 @@ tags: [project, glossary]
 | --- | --- |
 | KMP | Kotlin Multiplatform: shared Kotlin code compiled for multiple targets. It does not make native executables portable to every target. |
 | Compose Multiplatform | Proposed shared UI framework; platform support and browser behavior must be validated separately from core KMP. |
-| Engine | In-app Kotlin port of yt-dlp. It resolves and downloads media. It is not a call to the Python CLI. |
+| Engine | End state: an in-app Kotlin port of yt-dlp. During Phase D1 the desktop app instead calls an installed yt-dlp through `DownloadEngine`. Shared code still does not spawn a process. See ADR-005. |
 | Extractor | yt-dlp's site-specific or generic implementation for discovering metadata/media URLs. Support varies by engine version and site behavior. |
 | Remote mode | Withdrawn product shape. A server performed extraction and clients fetched finished files. See ADR-001. |
 | Local mode | The app executes the Kotlin engine and stores files on the device. This is the product on every target. |
@@ -24,4 +24,5 @@ tags: [project, glossary]
 | Parity | Evidence that a reviewed MeTube workflow has an equivalent outcome; platform/security differences are explicit. Not a claim of identical API or source code. |
 | ADR | Architecture Decision Record: a proposal or accepted decision with context, alternatives, and consequences. |
 | M0–M5 | Roadmap milestone identifiers. |
+| D1 | Phase 1: MeTube's screens in Compose on desktop, with downloads performed by an installed yt-dlp. Tasks T-026–T-036. |
 | T-NNN / F-NN | Stable task / feature-parity identifiers. |

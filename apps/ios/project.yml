@@ -1,0 +1,44 @@
+name: AnyDownload
+options:
+  bundleIdPrefix: com.anydownlod
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    # The pre-build phase invokes the Gradle wrapper outside the Xcode sandbox.
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    # Compose Multiplatform 1.12 has no iosX64 (Intel simulator) variant.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+targets:
+  AnyDownload:
+    type: application
+    platform: iOS
+    sources:
+      - path: AnyDownload
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anydownlod.ios
+        PRODUCT_NAME: AnyDownload
+        INFOPLIST_FILE: AnyDownload/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../../shared/ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+    preBuildScripts:
+      - name: Build shared Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/../.."
+          ./gradlew :shared:ui:embedAndSignAppleFrameworkForXcode
+schemes:
+  AnyDownload:
+    build:
+      targets:
+        AnyDownload: all
+    run:
+      config: Debug
+    archive:
+      config: Release

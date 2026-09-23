@@ -2,7 +2,7 @@
 
 **A planned Kotlin Multiplatform app for downloading video and audio from yt-dlp-supported sites on Android, iOS, desktop, and web.**
 
-> **Status: planning, plus a client scaffold that does not match the accepted architecture.** The documentation vault and task board are the source of truth. An early skeleton (task [T-008](vault/06-tasks/T-008-Scaffold-KMP-clients.md)) exists under `shared/` and `apps/`. It was drafted as a remote API client. The accepted direction is a local Kotlin engine ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)). There is no download implementation yet.
+> **Status: Phase D1 verified.** The desktop app is a MeTube-style Compose window that downloads through the `yt-dlp` and `ffmpeg` programs installed on the machine. `shared/core` and `shared/ui` never spawn a process; the process adapter lives only in `apps/desktop`. Android, iOS, and web build the same screens against an in-memory fake and do not download. The end state is still an in-process local Kotlin engine on every target ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)); that port has not started and [T-022](vault/06-tasks/T-022-Parity-audit.md) will audit it. Phase scope: [Phase 1](vault/00-project/Phase-1-Desktop-MeTube.md) and [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
 
 The product name is **AnyDownload**. The repository is named [`anydownlod`](https://github.com/lucassales2/anydownlod) to match the original project folder.
 
@@ -27,33 +27,41 @@ These are **planned capabilities, not implemented features**. The [feature-parit
 | --- | --- |
 | Android | In-app Kotlin engine and Compose UI. A download runs while the app process is allowed to run. |
 | iOS | Same shared engine. Sandbox file export. The system can suspend the app. |
-| Desktop | Same shared engine on Compose/JVM for Windows, macOS, and Linux. |
+| Desktop | D1: Compose/JVM window calling an installed `yt-dlp` from `apps/desktop`. Later: the shared Kotlin engine. |
 | Web | Compose/Wasm. No Python subprocess. Cross-origin fetches and in-browser media processing still have to be proven. |
 
-The engine is shared Kotlin. It does not shell out to the Python yt-dlp CLI. See [ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md).
+The later engine is shared Kotlin and does not shell out to the Python yt-dlp CLI ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)). Until that port exists, the desktop D1 adapter calls the installed CLI from `apps/desktop` only.
 
 [`YtDlp-kt`](https://github.com/dinaraparanid/YtDlp-kt) was reviewed: it is archived, JVM-only, GPL-3.0, and depends on an external CLI. It is not a drop-in shared KMP engine. See the [upstream review](vault/05-research/Upstream-review.md).
 
-## Client scaffold (unreviewed)
+## How D1 is put together
 
-The scaffold is a remote-client draft: shared domain models, a typed API client, a Compose Multiplatform shell that calls `GET /api/v1/capabilities`, and one host per platform. That shape is superseded. The next scaffold work replaces the API client with an in-process engine. See the [roadmap](vault/00-project/Roadmap.md).
+`shared/core` owns the domain, the `DownloadEngine` / `SubscriptionRepository` / `SettingsRepository` interfaces, validation, and the in-memory fakes every host can run. `shared/ui` owns the Compose screens and depends only on those interfaces. `apps/desktop` owns the JSON store and the only `ProcessBuilder` use, in `com.anydownlod.desktop.engine`; it resolves `yt-dlp` and `ffmpeg` from `PATH` and never bundles them. `shared/network` remains in the tree but is not part of the app path. The in-process Kotlin engine from [ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md) is still the later target; do not move the desktop process adapter into shared code.
 
 | Module | Purpose |
 | --- | --- |
-| `shared/core` | Domain models, job-state helpers, source-URL pre-validation |
-| `shared/network` | Draft Ktor API client. Superseded as the product path; HTTP adapters may remain. |
-| `shared/ui` | Compose Multiplatform shell, capability-aware state, iOS framework entry point |
-| `apps/android` | Android application module |
-| `apps/desktop` | Compose Desktop application |
-| `apps/web` | Compose/Wasm browser application, subject to the T-004 spike |
-| `apps/ios` | SwiftUI host for the `AnyDownloadKit` framework, generated from `project.yml` |
+| `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, in-memory fakes |
+| `shared/network` | Withdrawn server client. Kept in the tree, unused by D1 |
+| `shared/ui` | Compose Multiplatform screens; depends on core interfaces, no process APIs |
+| `apps/android` | Android application; D1 shell on the in-memory fake, no downloads |
+| `apps/desktop` | Desktop host: JSON store, yt-dlp/ffmpeg adapter, Compose window |
+| `apps/web` | Compose/Wasm browser application; D1 shell on the in-memory fake |
+| `apps/ios` | SwiftUI host for the `AnyDownloadKit` framework; D1 shell on the in-memory fake |
 
 Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.4.0, Ktor 3.6.0, JDK 21, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target. Minimum platform versions are **not decided**; T-004 and T-006 own that. Intel iOS simulators are unsupported because Compose Multiplatform 1.12 no longer publishes an `iosX64` variant.
+
+### Run the desktop D1 app
+
+`yt-dlp` and `ffmpeg` must be installed and on `PATH`; nothing is bundled. Downloads write under the folder chosen in Settings (default `~/Downloads/AnyDownload`). Queue, history, subscriptions, and settings persist outside the download root in the OS app-data folder (`~/Library/Application Support/AnyDownload` on macOS).
+
+```sh
+./gradlew :apps:desktop:run
+./gradlew :apps:desktop:test    # store, engine, parser, and headless UI tests
+```
 
 ```sh
 ./gradlew :shared:core:jvmTest :shared:network:jvmTest  # shared unit tests
 ./gradlew :apps:android:assembleDebug                   # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :apps:desktop:run                             # desktop window
 ./gradlew :apps:web:wasmJsBrowserDevelopmentRun         # browser app
 xcodebuild -project apps/ios/AnyDownload.xcodeproj -scheme AnyDownload \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
@@ -101,14 +109,14 @@ build.gradle.kts
 gradle.properties
 gradle/                    # Wrapper and version catalog (libs.versions.toml)
 shared/
-  core/                    # Domain models and validation
-  network/                 # Typed API client and DTOs
-  ui/                      # Compose Multiplatform UI and iOS framework
+  core/                    # Domain, interfaces, validation, in-memory fakes
+  network/                 # Withdrawn server client (unused by D1)
+  ui/                      # Compose Multiplatform screens and iOS framework
 apps/
-  android/                 # Android application
-  desktop/                 # Compose Desktop application
-  web/                     # Compose/Wasm browser application
-  ios/                     # SwiftUI/Xcode host for AnyDownloadKit
+  android/                 # Android application (fake-backed shell)
+  desktop/                 # Desktop host: JSON store, yt-dlp adapter, window
+  web/                     # Compose/Wasm application (fake-backed shell)
+  ios/                     # SwiftUI/Xcode host for AnyDownloadKit (fake-backed shell)
 vault/                     # Open this folder as an Obsidian vault
   Home.md
   Kanban.md
@@ -123,7 +131,7 @@ vault/                     # Open this folder as an Obsidian vault
   .obsidian/               # Portable vault settings only
 ```
 
-The scaffold predates ADR-004 and still targets a server. Treat module names, the `com.anydownlod` package, and pinned versions as provisional. Next work is a local download on each target ([T-004](vault/06-tasks/T-004-Validate-KMP-targets.md)).
+Treat module names, the `com.anydownlod` package, and pinned versions as provisional; minimum platform versions are still open. Phase D1 is complete: desktop runs the MeTube workflows through an installed yt-dlp, and the Kotlin port remains [ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md). Next work is the [T-022](vault/06-tasks/T-022-Parity-audit.md) parity audit and the target work in [T-004](vault/06-tasks/T-004-Validate-KMP-targets.md); do not move the desktop process adapter into shared code.
 
 ## Contributing and licensing
 

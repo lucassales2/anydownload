@@ -21,10 +21,13 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-1. Prove a local download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), especially Compose/Wasm and iOS.
-2. Reshape the client scaffold around an in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)).
-3. Record license obligations for ported yt-dlp logic and any media toolkit ([T-006](../06-tasks/T-006-Review-security-licensing.md)).
-4. Sketch the local Add / Queue / History flows ([T-007](../06-tasks/T-007-Define-UX-and-contract.md)).
+Phase **D1** is the implementation work in progress. Spec: [Phase 1 — Desktop MeTube](Phase-1-Desktop-MeTube.md). Decision: [ADR-005](../03-decisions/ADR-005-Desktop-metube-phase.md).
+
+1. Build the shared domain seam and the Compose shell ([T-026](../06-tasks/T-026-Shared-domain-and-engine-seam.md), [T-027](../06-tasks/T-027-Desktop-app-shell.md)).
+2. Build Add, Downloading, Completed, Subscriptions, and Settings against the in-memory fake (T-028–T-031).
+3. Persist that state and download through an installed yt-dlp on desktop only (T-032–T-035), then verify (T-036).
+
+After D1, the earlier M0/M1 gates resume: a local Kotlin download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), the in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)), and license notes for copied extractor code ([T-006](../06-tasks/T-006-Review-security-licensing.md)). D1 does not close those.
 
 ## Sequencing rules
 

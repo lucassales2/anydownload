@@ -1,0 +1,54 @@
+name: Client build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  jvm-android-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Shared unit tests
+        run: ./gradlew :shared:core:jvmTest :shared:network:jvmTest
+
+      - name: Android debug APK
+        run: ./gradlew :apps:android:assembleDebug
+
+      - name: Desktop compile
+        run: ./gradlew :apps:desktop:compileKotlin
+
+      - name: Web distribution
+        run: ./gradlew :apps:web:wasmJsBrowserDistribution
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Link iOS simulator framework
+        run: ./gradlew :shared:ui:linkDebugFrameworkIosSimulatorArm64

@@ -10,6 +10,8 @@ tags: [product, parity, research]
 
 **Baseline reviewed:** 2026-09-16, MeTube commit `6708a882294a6e8c5ffe097354c7eee42eb0f309`. This is a source/documentation inventory, **not a runtime parity test**. Every AnyDownload capability below is **planned, not implemented**.
 
+Phase D1 implements the desktop workflows for these rows by calling an installed yt-dlp, not by porting it. The task map is in [Phase 1](../00-project/Phase-1-Desktop-MeTube.md). A D1 pass is not the [T-022](../06-tasks/T-022-Parity-audit.md) audit.
+
 Evidence keys: [R — README](https://github.com/alexta69/metube/blob/6708a882294a6e8c5ffe097354c7eee42eb0f309/README.md), [U — UI controls](https://github.com/alexta69/metube/blob/6708a882294a6e8c5ffe097354c7eee42eb0f309/ui/src/app/app.html), [F — formats](https://github.com/alexta69/metube/blob/6708a882294a6e8c5ffe097354c7eee42eb0f309/ui/src/app/interfaces/formats.ts), [D — format/postprocessing implementation](https://github.com/alexta69/metube/blob/6708a882294a6e8c5ffe097354c7eee42eb0f309/app/dl_formats.py), [A — server handlers](https://github.com/alexta69/metube/blob/6708a882294a6e8c5ffe097354c7eee42eb0f309/app/main.py).
 
 | ID | Reviewed MeTube capability | AnyDownload acceptance target | Milestone / tasks | Evidence |

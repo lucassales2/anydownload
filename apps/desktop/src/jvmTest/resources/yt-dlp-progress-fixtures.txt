@@ -1,0 +1,9 @@
+[youtube] Extracting URL: https://example.com/watch?v=fixture
+TITLE|One public video
+[download] Destination: /downloads/One public video.mp4
+DL|downloading|1048576|NA|10485760|524288.0|18
+DL|downloading|5242880|NA|10485760|1048576.0|5
+DL|downloading|10485760|10485760|NA|NA|0
+PP|started
+PP|finished
+FILE|/downloads/One public video.mp4

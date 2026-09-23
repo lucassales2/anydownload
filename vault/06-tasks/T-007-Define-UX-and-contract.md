@@ -31,3 +31,5 @@ Local Add, Queue, History, Subscriptions, and Settings flows for a no-login app.
 ## Evidence / notes
 
 Not started. The API outline is a withdrawn server sketch. Use [user flows](../01-product/User-flows.md).
+
+Desktop implementation of Add, Queue, History, Subscriptions, and Settings is Phase D1 ([phase note](../00-project/Phase-1-Desktop-MeTube.md), T-026–T-036). That phase does not close this task: mobile wireframes, the full accessibility pass, and the written on-device contract review are still open here.

@@ -8,6 +8,10 @@ Thumbs.db
 *.iml
 .vscode/
 
+# Xcode local state
+**/xcuserdata/
+**/*.xcuserstate
+
 # Secrets and local environment
 .env
 .env.*

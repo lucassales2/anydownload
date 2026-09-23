@@ -41,6 +41,17 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-036 — Phase 1 verification](06-tasks/T-036-Phase-1-verification.md) #D1 #P0
+- [x] [T-035 — Cookies, presets, and subscription checks](06-tasks/T-035-Desktop-cookies-presets-subscriptions.md) #D1 #P1
+- [x] [T-034 — Formats, playlists, and batches through yt-dlp](06-tasks/T-034-Desktop-ytdlp-formats-and-batches.md) #D1 #P1
+- [x] [T-033 — Desktop yt-dlp engine for one URL](06-tasks/T-033-Desktop-ytdlp-single-url.md) #D1 #P0
+- [x] [T-032 — Desktop JSON store](06-tasks/T-032-Desktop-json-store.md) #D1 #P0
+- [x] [T-031 — Settings screen](06-tasks/T-031-Settings-screen.md) #D1 #P1
+- [x] [T-030 — Subscriptions screen](06-tasks/T-030-Subscriptions-screen.md) #D1 #P1
+- [x] [T-029 — Queue and history screens](06-tasks/T-029-Queue-and-history-screens.md) #D1 #P0
+- [x] [T-028 — Add form](06-tasks/T-028-Add-form.md) #D1 #P1
+- [x] [T-027 — Desktop app shell](06-tasks/T-027-Desktop-app-shell.md) #D1 #P0
+- [x] [T-026 — Shared domain and engine seam](06-tasks/T-026-Shared-domain-and-engine-seam.md) #D1 #P0
 - [x] [T-001 — Create the planning vault](06-tasks/T-001-Planning-vault.md) #M0 #P0
 - [x] [T-002 — Publish public GitHub repository](06-tasks/T-002-Public-GitHub-repository.md) #M0 #P0
 - [x] [T-005 — Choose backend and engine boundary](06-tasks/T-005-Choose-backend-engine.md) #M0 #P0

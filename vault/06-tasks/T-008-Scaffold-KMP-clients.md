@@ -32,3 +32,4 @@ Draft scaffold added ahead of the M0 gate at the owner's request on 2026-09-16. 
 - Pinned toolchain: Gradle 9.7.1 (checksum-pinned wrapper), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.4.0, Ktor 3.6.0, JDK 21.
 - Verified locally on 2026-09-16 (macOS 26, JDK 21.0.11, Xcode 26.5, Android SDK 37): `:shared:core:jvmTest`, `:shared:network:jvmTest`, `:apps:android:assembleDebug`, `:apps:desktop:compileKotlin`, `:apps:web:wasmJsBrowserDistribution`, `:shared:ui:linkDebugFrameworkIosArm64`, and an unsigned iOS Simulator `xcodebuild`.
 - Still open: in-process engine boundary, file adapters, CI evidence, dependency inventory.
+- Phase D1 (ADR-005, T-026–T-036) replaces the desktop shell and calls an installed yt-dlp from `apps/desktop` only. That does not satisfy the in-process engine criterion above. Do not move a process API into common code while doing D1.

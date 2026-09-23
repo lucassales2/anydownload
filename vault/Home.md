@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** planning · **Targets:** iOS, web (Compose/Wasm), Android, desktop · **Name:** AnyDownload
+**Phase:** D1 desktop MeTube · **Targets:** desktop first; iOS, web, and Android stay in the end state · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,10 +14,9 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read the [product brief](01-product/Product-brief.md) and [MeTube feature inventory](01-product/Feature-parity.md).
-2. Review the [platform constraints](02-architecture/Platform-matrix.md). Compose/Wasm and iOS are in scope and still unproven for a local engine.
-3. Review the [architecture](02-architecture/Architecture.md) and [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md).
-4. Work through the ready tasks on [Kanban](Kanban.md). The next engineering gate is a local download on each target.
+1. Read [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) and [ADR-005](03-decisions/ADR-005-Desktop-metube-phase.md). That is the current implementation work.
+2. Take the first Ready D1 card on [Kanban](Kanban.md). [T-026](06-tasks/T-026-Shared-domain-and-engine-seam.md) is first.
+3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state: a Kotlin engine on iOS, Compose/Wasm, Android, and desktop. D1 does not start that port.
 
 ## Accepted direction — 2026-09-21
 
@@ -34,6 +33,7 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 
 - [Documentation guide](00-project/Documentation-guide.md) — opening the vault, Kanban workflow, templates, privacy.
 - [Roadmap](00-project/Roadmap.md) — milestone scopes and exit criteria.
+- [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) — current implementation handoff.
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 
@@ -66,7 +66,7 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 
 ## Scope reminders
 
-- Site support follows the Kotlin port of yt-dlp. The goal is yt-dlp's coverage; the first build is one URL on each target.
+- Site support follows the Kotlin port of yt-dlp. The goal is yt-dlp's coverage. Phase D1 reaches that coverage on desktop by calling the installed yt-dlp, then the port replaces that adapter.
 - MeTube-equivalent workflows are the target, not a pixel-for-pixel copy or MeTube protocol compatibility.
 - Downloads finish on the device. There is no server job.
 - This vault is public. Never paste real credentials or private-media links here.
