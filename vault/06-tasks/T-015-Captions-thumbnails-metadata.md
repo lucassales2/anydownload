@@ -28,4 +28,4 @@ Standalone captions/artwork and format-appropriate embedding/sidecars for F-14/F
 
 ## Evidence / notes
 
-Not started. No external music catalog lookup or library-management feature is assumed.
+Not started. This task does not look up Spotify or any other music catalog. Embedding title, artists, album, and artwork for a Spotify match is [T-037](T-037-Spotify-youtube-match.md), which depends on this task.

@@ -57,7 +57,7 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 - [Risk register](04-delivery/Risk-register.md)
 - [Security and licensing](04-delivery/Security-and-licensing.md)
 - [Upstream review](05-research/Upstream-review.md) — reviewed 2026-09-16, with pinned source references.
-- [Client yt-dlp options](05-research/Client-yt-dlp-options.md) — reviewed 2026-09-23. Python packagers versus the Kotlin port on web, iOS, and Android. Does not change ADR-004.
+- [Client yt-dlp options](05-research/Client-yt-dlp-options.md) — reviewed 2026-09-23. Python packagers versus the Kotlin port on web, iOS, and Android, plus Spotify via a spotDL-style YouTube match. Does not change ADR-004.
 
 ### Templates
 
@@ -68,6 +68,7 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 ## Scope reminders
 
 - Site support follows the Kotlin port of yt-dlp. The goal is yt-dlp's coverage. Phase D1 reaches that coverage on desktop by calling the installed yt-dlp, then the port replaces that adapter.
+- Spotify URLs use that engine after a YouTube match ([T-037](06-tasks/T-037-Spotify-youtube-match.md)). D1 does not implement the match.
 - MeTube-equivalent workflows are the target, not a pixel-for-pixel copy or MeTube protocol compatibility.
 - Downloads finish on the device. There is no server job.
 - This vault is public. Never paste real credentials or private-media links here.

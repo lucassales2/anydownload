@@ -95,6 +95,7 @@ Parity here means the desktop workflow behaves like the reviewed MeTube UI while
 ## Explicitly later
 
 - Porting yt-dlp extractors, the JavaScript challenge runtime, or a shared media toolkit.
+- Spotify metadata and YouTube matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)).
 - Android, iOS, and web downloads, share sheets, and background execution.
 - Bundling yt-dlp or FFmpeg inside the app.
 - Browser extensions, bookmarklets, iOS shortcuts, Raycast.

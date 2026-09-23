@@ -14,7 +14,7 @@ Dates and effort estimates are intentionally unset until feasibility work is com
 | **M0 — Plan and de-risk** | Vault, public repository, accepted local-only scope, four-target local-engine feasibility, license notes for a Kotlin port, local UX flows. | Owner scope is recorded in ADR-004. A local download is shown on iOS, Compose/Wasm, Android, and desktop, or a target is documented as blocked with the reason. | T-001–T-007 |
 | **M1 — Local vertical slice** | Shared Kotlin engine and UI shell. One public URL downloads on each target and the file stays on the device. | Same workflow on all four families, including a failed URL. Record desktop OS and browser coverage. | T-008–T-010 |
 | **M2 — On-device downloader core** | Durable local queue, retries, playlists/channels, batch links, video/audio profiles, history, on-device files. | Queue survives app restart; retries do not duplicate finished files; files are not loaded wholly into memory. This is the usable MVP, not full parity. | T-011–T-014 |
-| **M3 — yt-dlp and MeTube workflow parity** | Captions, thumbnails, clips, chapters, SponsorBlock, presets/options, local cookies, subscriptions, and sharing. | Every parity row has tested evidence or a documented platform gap. Self-host server operations are out of scope. | T-015–T-022, except T-021 |
+| **M3 — yt-dlp and MeTube workflow parity** | Captions, thumbnails, clips, chapters, SponsorBlock, presets/options, local cookies, subscriptions, sharing, and Spotify URLs matched onto YouTube. | Every parity row has tested evidence or a documented platform gap. Self-host server operations are out of scope. | T-015–T-022, except T-021, plus T-037 |
 | **M4 — Portfolio builds** | Repeatable build/run instructions for all four targets and license notices. | A person can build each target from the README. Store submission is not required. | T-023 |
 
 Local execution is the product, not a later optional track. T-024 and T-025 fold into M0/M1 feasibility.
@@ -27,7 +27,7 @@ Phase **D1** is the implementation work in progress. Spec: [Phase 1 — Desktop 
 2. Build Add, Downloading, Completed, Subscriptions, and Settings against the in-memory fake (T-028–T-031).
 3. Persist that state and download through an installed yt-dlp on desktop only (T-032–T-035), then verify (T-036).
 
-After D1, the earlier M0/M1 gates resume: a local Kotlin download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), the in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)), and license notes for copied extractor code ([T-006](../06-tasks/T-006-Review-security-licensing.md)). D1 does not close those.
+After D1, the earlier M0/M1 gates resume: a local Kotlin download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), the in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)), and license notes for copied extractor code ([T-006](../06-tasks/T-006-Review-security-licensing.md)). Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) waits until a YouTube download works. D1 does not close those.
 
 ## Sequencing rules
 

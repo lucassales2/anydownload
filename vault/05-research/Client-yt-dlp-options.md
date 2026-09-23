@@ -10,7 +10,7 @@ tags: [research, engine, platforms]
 
 **Method:** public documentation and project pages inspected on 2026-09-23. No Android, iOS, or web build was run. No Python dependency was added to this repository. Upstream source was not copied here.
 
-This note records how an installed or embedded yt-dlp could run on web, iOS, and Android, and what a Kotlin port still has to carry. It does not change [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) or [ADR-005](../03-decisions/ADR-005-Desktop-metube-phase.md). Desktop keeps calling the yt-dlp already on `PATH`.
+This note records how an installed or embedded yt-dlp could run on web, iOS, and Android, what a Kotlin port still has to carry, and how that engine accepts Spotify URLs. It does not change [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) or [ADR-005](../03-decisions/ADR-005-Desktop-metube-phase.md). Desktop keeps calling the yt-dlp already on `PATH`.
 
 ## Question
 
@@ -26,6 +26,7 @@ Checked 2026-09-23. Versions below are the pages inspected, not artifacts built 
 - [yt-dlp-android](https://github.com/ffmpegkit-maintained/yt-dlp-android): Chaquopy example that calls `yt_dlp.YoutubeDL` in-process. The project describes a Python 3.13 runtime, an AAR on the order of 60–80 MB before FFmpeg, and a yt-dlp version frozen at library build time.
 - [yt-dlp-apple-webkit-jsi](https://pypi.org/project/yt-dlp-apple-webkit-jsi/): a Python plugin that runs YouTube challenge scripts in Apple JavaScriptCore on iOS and macOS.
 - License facts for yt-dlp source (Unlicense), yt-dlp release binaries (GPLv3+ pieces inside PyInstaller bundles), YtDlp-kt (GPL-3.0), and FFmpeg remain those recorded in the [upstream review](Upstream-review.md) on 2026-09-16. NewPipe Extractor is GPL-3.0; that license text was not re-audited here. [T-006](../06-tasks/T-006-Review-security-licensing.md) still owns the inventory before any extractor source is copied.
+- [spotDL](https://github.com/spotDL/spotify-downloader) README, inspected 2026-09-23: MIT. Spotify URLs are metadata. Audio comes from a YouTube match via yt-dlp. FFmpeg is required. Deno is recommended for YouTube videos that need yt-dlp's JavaScript runtime. Current releases default to the SpotipyFree metadata client; the official Web API is opt-in with a client id, client secret, and `--use-official-api`. The default audio provider is YouTube Music. YouTube, SoundCloud, Bandcamp, and Piped are the other providers.
 
 ## Findings
 
@@ -79,6 +80,19 @@ The port does not remove these limits:
 
 Prove the port on the JVM first. Desktop keeps the CLI until the Kotlin extractor matches it on the same fixtures. The same common code then runs on the other hosts through platform HTTP and file adapters. That split is already the [platform matrix](../02-architecture/Platform-matrix.md).
 
+### Spotify, following spotDL
+
+The Kotlin engine also accepts Spotify track, album, playlist, and artist URLs by reimplementing [spotDL](https://github.com/spotDL/spotify-downloader)'s workflow. Do not add the spotDL package. Do not copy its Python into this repository. T-006 still records the MIT license before any of that source is copied.
+
+spotDL loads song metadata from Spotify, searches an audio provider, downloads the match with yt-dlp, and embeds album art, lyrics, and tags with FFmpeg. Spotify's own audio streams stay unused. In this app that is a step in front of `DownloadEngine`:
+
+- A Spotify URL expands to song records: title, artists, album, duration, ISRC, and artwork URL. Metadata uses the unauthenticated client by default. A client id and secret stored on the device select the official Web API. The app still has no account. Saved-library queries wait for that official client with user auth.
+- Each song matches YouTube Music first, then YouTube. The score uses artist, title, duration, album, and ISRC when the provider returns one.
+- The matched URL is an ordinary engine job. Playlist, album, and artist URLs become child jobs, with the same cancel and per-item failure behavior as a yt-dlp playlist.
+- The finished audio file carries the Spotify title, artists, album, and artwork. Lyrics, SoundCloud, Bandcamp, Piped, and spotDL's save, sync, and meta operations come after that slice.
+
+On desktop, before the port, the matcher is Kotlin and the download remains the installed yt-dlp. There is no `spotdl` subprocess. A Spotify song is still a YouTube download, so the JavaScript runtime, the media toolkit, and the web cross-origin limit all still apply.
+
 ## Limitations
 
 No device build, package-size measurement, or fixture download was run for Chaquopy, Briefcase, QuickJS, JavaScriptCore, or a Kotlin extractor. AAR size and Python version are taken from the yt-dlp-android project's own description. YouTube's challenge requirements move; re-read the EJS wiki at implementation time. Store review stays out of scope. If distribution is reconsidered later, bundled interpreters become a review topic (Apple guideline 2.5.2 for downloaded code, and Play policy for downloader apps). Runtime self-update of yt-dlp or EJS scripts is the risky part of that review.
@@ -94,5 +108,6 @@ Keep `DownloadEngine` as the shared seam. Engines stay platform adapters:
 - **iOS:** do not start a Briefcase app. Linking CPython's iOS build into the existing host is a custom spike, the same idea as Chaquopy, and the route to the full catalog without a port. A small Kotlin extractor plus JavaScriptCore matches ADR-004.
 - **Web:** leave the host on the in-memory fake. An in-page engine cannot pull media from arbitrary origins.
 - **Kotlin port, when started:** HTTP download plus one non-YouTube extractor on the JVM, then the same code on Android and iOS. Add YouTube by embedding yt-dlp-ejs. Do not schedule a bulk extractor translation.
+- **Spotify:** after a YouTube download works, resolve Spotify URLs in Kotlin with the spotDL workflow above, then hand each match to that same download path. YouTube Music first, then YouTube. Embed title, artists, album, and artwork. Leave SoundCloud, Bandcamp, Piped, lyrics, sync, and Spotify saved-library queries for later.
 
 [T-004](../06-tasks/T-004-Validate-KMP-targets.md) still has to show a local download on each target before that target is treated as feasible. [T-006](../06-tasks/T-006-Review-security-licensing.md) still records licenses before extractor source is copied.

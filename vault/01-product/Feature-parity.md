@@ -42,6 +42,7 @@ Evidence keys: [R — README](https://github.com/alexta69/metube/blob/6708a88229
 | F-24 | Reverse proxy, TLS, URL prefix, host/port/IPv6, public artifact URLs, CORS, optional directory listing and robots file. | **Withdrawn.** No self-host server. | — / [T-021](../06-tasks/T-021-Self-host-operations.md) | R, A |
 | F-25 | Self-hosted amd64/arm64 containers; permissions/umask; logs; yt-dlp version/update controls including optional nightly updates. | **Withdrawn** as a server package. The app shows its engine revision locally. | — / T-021 | R, U, A |
 | F-26 | Private-address rejection by default, credential-aware CORS, protected state directories. | Local URL and path checks; cookies and queue state stay on the device and out of logs. | M1 / [T-009](../06-tasks/T-009-Backend-vertical-slice.md) | R, A |
+| F-27 | Spotify track, album, playlist, and artist URLs. Baseline is [spotDL](https://github.com/spotDL/spotify-downloader), README inspected 2026-09-23, not MeTube. | Resolve metadata, match YouTube Music then YouTube, download through the engine, and embed title, artists, album, and artwork. Spotify audio streams are not a source. Lyrics, other providers, sync, and saved library are later. | M3 / [T-037](../06-tasks/T-037-Spotify-youtube-match.md) | spotDL |
 
 ## How to use this matrix
 
@@ -54,5 +55,5 @@ Evidence keys: [R — README](https://github.com/alexta69/metube/blob/6708a88229
 ## Not established as baseline download features
 
 - Generic active-download pause/resume or drag-to-reorder queues. Subscription pause/resume **is** confirmed.
-- Full music tagging/library organization, social feeds, multi-user SaaS, or DRM bypass.
+- Full music tagging/library organization, social feeds, multi-user SaaS, or DRM bypass. F-27 is a separate spotDL-style match, not a music library.
 - A stable, versioned MeTube API for arbitrary clients. Its reviewed real-time channel uses **Socket.IO**, not a plain WebSocket protocol.

@@ -17,12 +17,15 @@ flowchart TD
     UI[Compose UI on iOS, Wasm, Android, desktop] --> APP[Shared Kotlin app]
     APP --> Q[On-device queue, history, settings]
     APP --> E[Kotlin port of yt-dlp]
+    SpotifyUrl[Spotify URL] --> Meta[Spotify metadata]
+    Meta --> Match[YouTube match]
+    Match --> E
     E --> HTTP[Platform HTTP adapter]
     E --> MEDIA[Platform media toolkit]
     APP --> FILES[Platform file storage]
 ```
 
-- **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI.
+- **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI. A Spotify URL is metadata plus a YouTube or YouTube Music match, then the same engine. See [T-037](../06-tasks/T-037-Spotify-youtube-match.md).
 - **Platform adapters:** HTTP, file write, share/open, and lifecycle. Common code does not spawn a process or assume Python.
 - **Web:** Compose/Wasm. Cross-origin fetches and in-browser media processing are the feasibility risk in [T-004](../06-tasks/T-004-Validate-KMP-targets.md).
 - **iOS:** the same shared engine, with sandbox file export and no guarantee of work after suspension.
@@ -106,6 +109,6 @@ vault/                 Planning and documentation
 
 ## Consequences
 
-The port is the product. Site coverage grows with implemented extractors. Postprocessing needs a media toolkit on each target. Wasm and iOS feasibility is unproven. License obligations for yt-dlp-derived code stay in [T-006](../06-tasks/T-006-Review-security-licensing.md).
+The port is the product. Site coverage grows with implemented extractors. Spotify support follows that port by matching onto YouTube, recorded in [Client yt-dlp options](../05-research/Client-yt-dlp-options.md). Postprocessing needs a media toolkit on each target. Wasm and iOS feasibility is unproven. License obligations for yt-dlp-derived code and any copied spotDL matcher stay in [T-006](../06-tasks/T-006-Review-security-licensing.md).
 
 See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) and [ADR-002](../03-decisions/ADR-002-Kotlin-wrapper.md). The remote diagram above is historical.

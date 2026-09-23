@@ -48,7 +48,7 @@ The existing client scaffold (`shared/network`, job API DTOs) was drafted for a 
 
 ## Addendum — 2026-09-23
 
-[Client yt-dlp options](../05-research/Client-yt-dlp-options.md) compares Briefcase, Buildozer, Chaquopy, pyqtdeploy, Termux, and a Kotlin port as ways to run yt-dlp on web, iOS, and Android. Briefcase, Buildozer, pyqtdeploy, and Termux are rejected as the app shell. Chaquopy can embed upstream yt-dlp inside the Android app only, and only as a platform adapter outside shared code. The Kotlin port remains this decision. The note also records what that port still needs: a JavaScript challenge runtime, a per-target media toolkit, and a web client that cannot fetch arbitrary origins. Desktop stays on the installed CLI from [ADR-005](ADR-005-Desktop-metube-phase.md). No Python dependency was added.
+[Client yt-dlp options](../05-research/Client-yt-dlp-options.md) compares Briefcase, Buildozer, Chaquopy, pyqtdeploy, Termux, and a Kotlin port as ways to run yt-dlp on web, iOS, and Android. Briefcase, Buildozer, pyqtdeploy, and Termux are rejected as the app shell. Chaquopy can embed upstream yt-dlp inside the Android app only, and only as a platform adapter outside shared code. The Kotlin port remains this decision. The note also records what that port still needs: a JavaScript challenge runtime, a per-target media toolkit, and a web client that cannot fetch arbitrary origins. The same engine accepts Spotify URLs by the [spotDL](https://github.com/spotDL/spotify-downloader) workflow: Spotify metadata, a YouTube or YouTube Music match, then the existing download path. Spotify's own audio is not a source. Desktop stays on the installed CLI from [ADR-005](ADR-005-Desktop-metube-phase.md). No Python dependency was added.
 
 ## Approval
 

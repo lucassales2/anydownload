@@ -18,7 +18,7 @@ Accepted by the owner on 2026-09-21. Record: [ADR-004](../03-decisions/ADR-004-L
 
 ## Intended use
 
-The owner uses the app locally to save media from sites yt-dlp supports, with MeTube-style queue, format, playlist, and history workflows. There is no server owner, no multi-user mode, and no account.
+The owner uses the app locally to save media from sites yt-dlp supports, with MeTube-style queue, format, playlist, and history workflows. Spotify track, album, playlist, and artist URLs resolve to metadata and a YouTube match, then use that same engine. There is no server owner, no multi-user mode, and no account.
 
 ## Product principles
 

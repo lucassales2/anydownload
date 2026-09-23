@@ -13,6 +13,7 @@ tags: [project, board]
 - [ ] [T-013 — Video profiles and audio extraction](06-tasks/T-013-Media-formats.md) #M2 #P1
 - [ ] [T-014 — History, storage and artifact delivery](06-tasks/T-014-Storage-and-delivery.md) #M2 #P1
 - [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #M3 #P1
+- [ ] [T-037 — Spotify URLs via a YouTube match](06-tasks/T-037-Spotify-youtube-match.md) #M3 #P1
 - [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #M3 #P1
 - [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #M3 #P1
 - [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #M3 #P0

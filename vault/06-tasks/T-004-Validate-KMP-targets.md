@@ -28,4 +28,4 @@ Show that one local download can finish on iOS, Compose/Wasm, Android, and deskt
 
 ## Evidence / notes
 
-Not started. Framework upstream stability labels do not prove application support. After ADR-004 this task must show a **local** download on iOS, Compose/Wasm, Android, and desktop. Store distribution is out of scope. A JVM process wrapper around Python yt-dlp does not pass this task.
+Not started. Framework upstream stability labels do not prove application support. After ADR-004 this task must show a **local** download on iOS, Compose/Wasm, Android, and desktop. Store distribution is out of scope. A JVM process wrapper around Python yt-dlp does not pass this task. [Client yt-dlp options](../05-research/Client-yt-dlp-options.md) records the expected web cross-origin limit and the rejected Python packagers; a run on this task confirms or revises that, and the note alone does not pass the task.

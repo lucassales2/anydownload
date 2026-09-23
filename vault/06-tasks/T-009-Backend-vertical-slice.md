@@ -27,4 +27,4 @@ One public URL downloads inside the app, with progress, a device file, and a cle
 
 ## Evidence / notes
 
-Not started. Do not add a server or shell out to the Python yt-dlp CLI from common code.
+Not started. Do not add a server or shell out to the Python yt-dlp CLI from common code. The first URL is a direct media URL. Spotify matching is [T-037](T-037-Spotify-youtube-match.md). Packager limits are in [Client yt-dlp options](../05-research/Client-yt-dlp-options.md).
