@@ -1,6 +1,10 @@
 package com.anydownlod.ui.shell
 
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.job_postprocessing
+import com.anydownlod.ui.generated.resources.job_waiting
+import com.anydownlod.ui.i18n.UiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -29,8 +33,8 @@ class JobPresentationTest {
 
     @Test
     fun stateLabelsKeepUnknownRaw() {
-        assertEquals("unknown", JobState.UNKNOWN.displayLabel())
-        assertEquals("Post-processing", JobState.POSTPROCESSING.displayLabel())
-        assertEquals("Waiting", JobState.SCHEDULED.displayLabel())
+        assertEquals(UiText.raw("unknown"), JobState.UNKNOWN.displayLabel())
+        assertEquals(UiText.of(Res.string.job_postprocessing), JobState.POSTPROCESSING.displayLabel())
+        assertEquals(UiText.of(Res.string.job_waiting), JobState.SCHEDULED.displayLabel())
     }
 }

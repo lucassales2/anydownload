@@ -33,7 +33,39 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.copy_error
+import com.anydownlod.ui.generated.resources.delete
+import com.anydownlod.ui.generated.resources.delete_failures
+import com.anydownlod.ui.generated.resources.delete_file
+import com.anydownlod.ui.generated.resources.delete_file_fallback
+import com.anydownlod.ui.generated.resources.delete_file_title
+import com.anydownlod.ui.generated.resources.deleted_files
+import com.anydownlod.ui.generated.resources.empty_history_body
+import com.anydownlod.ui.generated.resources.empty_history_title
+import com.anydownlod.ui.generated.resources.file_already_gone
+import com.anydownlod.ui.generated.resources.file_removed
+import com.anydownlod.ui.generated.resources.file_stays
+import com.anydownlod.ui.generated.resources.history_subtitle
+import com.anydownlod.ui.generated.resources.history_title
+import com.anydownlod.ui.generated.resources.keep
+import com.anydownlod.ui.generated.resources.keep_file
+import com.anydownlod.ui.generated.resources.kpi_failed
+import com.anydownlod.ui.generated.resources.kpi_saved
+import com.anydownlod.ui.generated.resources.kpi_stopped
+import com.anydownlod.ui.generated.resources.kpi_unrecognized
+import com.anydownlod.ui.generated.resources.open_file
+import com.anydownlod.ui.generated.resources.remove
+import com.anydownlod.ui.generated.resources.remove_many_title
+import com.anydownlod.ui.generated.resources.remove_one_title
+import com.anydownlod.ui.generated.resources.remove_selected
+import com.anydownlod.ui.generated.resources.retry
+import com.anydownlod.ui.generated.resources.retry_failed
+import com.anydownlod.ui.generated.resources.reveal_in_folder
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.shell.EmptyStatePanel
+import org.jetbrains.compose.resources.stringResource
 import com.anydownlod.ui.shell.formatBytes
 import com.anydownlod.ui.theme.ActionRow
 import com.anydownlod.ui.theme.DestructiveOutlinedButton
@@ -63,7 +95,8 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingRemoveIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
-    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var statusMessage by remember { mutableStateOf<UiText?>(null) }
+    var statusTone by remember { mutableStateOf(StatusTone.Information) }
 
     LaunchedEffect(rows) {
         selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
@@ -72,45 +105,45 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = PageInset)) {
             PageHeading(
-                title = "Finished",
-                subtitle = "Saved files, failures, and cancellations.",
+                title = stringResource(Res.string.history_title),
+                subtitle = stringResource(Res.string.history_subtitle),
             )
             if (rows.isEmpty()) {
                 EmptyStatePanel(
-                    title = "No finished downloads",
-                    body = "Finished downloads appear here.",
+                    title = stringResource(Res.string.empty_history_title),
+                    body = stringResource(Res.string.empty_history_body),
                     modifier = Modifier.weight(1f),
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiTile(
                         value = rows.count { it.state == JobState.COMPLETED }.toString(),
-                        label = "Saved",
+                        label = stringResource(Res.string.kpi_saved),
                         tone = StatusTone.Positive,
                     )
                     KpiTile(
                         value = rows.count { it.state == JobState.FAILED }.toString(),
-                        label = "Failed jobs",
+                        label = stringResource(Res.string.kpi_failed),
                         tone = StatusTone.Negative,
                     )
                     KpiTile(
                         value = rows.count { it.state == JobState.CANCELLED }.toString(),
-                        label = "Stopped",
+                        label = stringResource(Res.string.kpi_stopped),
                         tone = StatusTone.Neutral,
                     )
                     val unrecognized = rows.count { it.state == JobState.UNKNOWN }
                     if (unrecognized > 0) {
                         KpiTile(
                             value = unrecognized.toString(),
-                            label = "Unrecognized",
+                            label = stringResource(Res.string.kpi_unrecognized),
                             tone = StatusTone.Critical,
                         )
                     }
                 }
                 statusMessage?.let { message ->
                     MessageStrip(
-                        text = message,
-                        tone = if (message.startsWith("Some files")) StatusTone.Negative else StatusTone.Information,
+                        text = message.resolve(),
+                        tone = statusTone,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -127,10 +160,10 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-retry-selected"),
                     ) {
-                        Text("Retry failed")
+                        Text(stringResource(Res.string.retry_failed))
                     }
                     DestructiveOutlinedButton(
-                        text = "Remove selected",
+                        text = stringResource(Res.string.remove_selected),
                         onClick = { pendingRemoveIds = selectedIds },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-remove-selected"),
@@ -174,16 +207,16 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 title = {
                     Text(
                         if (pendingRemoveIds.size == 1) {
-                            "Remove this entry from history?"
+                            stringResource(Res.string.remove_one_title)
                         } else {
-                            "Remove ${pendingRemoveIds.size} entries from history?"
+                            stringResource(Res.string.remove_many_title, pendingRemoveIds.size)
                         }
                     )
                 },
-                text = { Text("The file stays on disk.") },
+                text = { Text(stringResource(Res.string.file_stays)) },
                 confirmButton = {
                     DestructiveTextButton(
-                        text = "Remove",
+                        text = stringResource(Res.string.remove),
                         onClick = {
                             presenter.removeSelected(pendingRemoveIds)
                             selectedIds = selectedIds - pendingRemoveIds
@@ -194,7 +227,7 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingRemoveIds = emptySet() }) {
-                        Text("Keep")
+                        Text(stringResource(Res.string.keep))
                     }
                 },
             )
@@ -204,24 +237,39 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
             val row = rows.firstOrNull { it.id == jobId }
             AlertDialog(
                 onDismissRequest = { pendingDeleteId = null },
-                title = { Text("Delete this file from the download folder?") },
+                title = { Text(stringResource(Res.string.delete_file_title)) },
                 text = {
                     Text(
                         row?.artifacts
                             ?.joinToString(separator = "\n") { it.fileName }
-                            ?: "This removes the downloaded file."
+                            ?: stringResource(Res.string.delete_file_fallback)
                     )
                 },
                 confirmButton = {
                     DestructiveTextButton(
-                        text = "Delete",
+                        text = stringResource(Res.string.delete),
                         onClick = {
                             val result = presenter.deleteArtifacts(jobId)
-                            statusMessage = when {
-                                result.failures.isNotEmpty() ->
-                                    "Some files could not be deleted: ${result.failures.joinToString()}"
-                                result.deletedCount == 0 -> "The file was already gone."
-                                else -> "Deleted ${result.deletedCount} file(s)."
+                            when {
+                                result.failures.isNotEmpty() -> {
+                                    statusMessage = UiText.of(
+                                        Res.string.delete_failures,
+                                        result.failures.joinToString(),
+                                    )
+                                    statusTone = StatusTone.Negative
+                                }
+                                result.deletedCount == 0 -> {
+                                    statusMessage = UiText.of(Res.string.file_already_gone)
+                                    statusTone = StatusTone.Information
+                                }
+                                else -> {
+                                    statusMessage = UiText.quantity(
+                                        Res.plurals.deleted_files,
+                                        result.deletedCount,
+                                        result.deletedCount,
+                                    )
+                                    statusTone = StatusTone.Information
+                                }
                             }
                             pendingDeleteId = null
                         },
@@ -230,7 +278,7 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingDeleteId = null }) {
-                        Text("Keep file")
+                        Text(stringResource(Res.string.keep_file))
                     }
                 },
             )
@@ -282,13 +330,16 @@ private fun HistoryRowItem(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    StatusBadge(label = row.stateLabel, tone = tone, live = true)
+                    StatusBadge(label = row.stateLabel.resolve(), tone = tone, live = true)
                 }
                 row.artifacts.forEach { artifact ->
+                    val removedLabel = if (artifact.removed) {
+                        stringResource(Res.string.file_removed, artifact.fileName)
+                    } else {
+                        null
+                    }
                     Text(
-                        text = if (artifact.removed) {
-                            "${artifact.fileName} (file removed)"
-                        } else {
+                        text = removedLabel ?: run {
                             listOfNotNull(artifact.fileName, artifact.sizeBytes?.let(::formatBytes))
                                 .joinToString(" \u00b7 ")
                         },
@@ -309,7 +360,7 @@ private fun HistoryRowItem(
                             onClick = onRetry,
                             modifier = Modifier.testTag("history-retry-${row.id}"),
                         ) {
-                            Text("Retry")
+                            Text(stringResource(Res.string.retry))
                         }
                     }
                     if (row.errorMessage != null) {
@@ -317,7 +368,7 @@ private fun HistoryRowItem(
                             onClick = onCopyError,
                             modifier = Modifier.testTag("history-copy-${row.id}"),
                         ) {
-                            Text("Copy error")
+                            Text(stringResource(Res.string.copy_error))
                         }
                     }
                     if (row.hasArtifact) {
@@ -325,22 +376,22 @@ private fun HistoryRowItem(
                             onClick = onOpenFile,
                             modifier = Modifier.testTag("history-open-${row.id}"),
                         ) {
-                            Text("Open file")
+                            Text(stringResource(Res.string.open_file))
                         }
                         TextButton(
                             onClick = onRevealFile,
                             modifier = Modifier.testTag("history-reveal-${row.id}"),
                         ) {
-                            Text("Reveal in folder")
+                            Text(stringResource(Res.string.reveal_in_folder))
                         }
                         DestructiveTextButton(
-                            text = "Delete file",
+                            text = stringResource(Res.string.delete_file),
                             onClick = onDeleteFile,
                             modifier = Modifier.testTag("history-delete-${row.id}"),
                         )
                     }
                     DestructiveTextButton(
-                        text = "Remove",
+                        text = stringResource(Res.string.remove),
                         onClick = onRemove,
                         modifier = Modifier.testTag("history-remove-${row.id}"),
                     )

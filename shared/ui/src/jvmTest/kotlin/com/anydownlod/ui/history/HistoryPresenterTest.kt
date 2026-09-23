@@ -2,6 +2,7 @@ package com.anydownlod.ui.history
 
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryDownloadEngine
+import com.anydownlod.ui.i18n.UiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,7 +19,7 @@ class HistoryPresenterTest {
         val rows = HistoryPresenter.rows(InMemoryDownloadEngine.sampleJobs() + unknown)
 
         assertEquals(setOf("seed-completed", "seed-failed", "future"), rows.map { it.id }.toSet())
-        assertEquals("unknown", rows.first { it.id == "future" }.stateLabel)
+        assertEquals(UiText.raw("unknown"), rows.first { it.id == "future" }.stateLabel)
         assertTrue(rows.first { it.id == "seed-failed" }.canRetry)
         assertFalse(rows.first { it.id == "seed-completed" }.canRetry)
     }

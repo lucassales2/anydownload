@@ -47,14 +47,6 @@ object PresetOptionKeys {
         SPONSORBLOCK_REMOVE,
     )
 
-    fun label(key: String): String = when (key) {
-        EMBED_SUBTITLES -> "Embed subtitles"
-        WRITE_METADATA -> "Write metadata"
-        WRITE_THUMBNAIL -> "Write thumbnail sidecar"
-        SPLIT_BY_CHAPTERS -> "Split by chapters"
-        SPONSORBLOCK_REMOVE -> "Remove SponsorBlock segments"
-        else -> key
-    }
 }
 
 /**

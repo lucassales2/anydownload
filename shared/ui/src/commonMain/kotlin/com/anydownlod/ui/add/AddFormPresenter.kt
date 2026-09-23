@@ -16,6 +16,19 @@ import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.validation.BatchUrlValidator
 import com.anydownlod.core.validation.SourceUrlValidation
 import com.anydownlod.core.validation.SourceUrlValidator
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.added_jobs
+import com.anydownlod.ui.generated.resources.already_queued
+import com.anydownlod.ui.generated.resources.clipboard_empty
+import com.anydownlod.ui.generated.resources.no_valid_urls
+import com.anydownlod.ui.generated.resources.nothing_to_add
+import com.anydownlod.ui.generated.resources.paste_one_url
+import com.anydownlod.ui.generated.resources.rejected_lines
+import com.anydownlod.ui.generated.resources.subscribe_needs_url
+import com.anydownlod.ui.generated.resources.subscribe_not_batch
+import com.anydownlod.ui.generated.resources.subscribed
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.toUiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +46,7 @@ data class AddSubmitReport(
 /** What one Subscribe click did. */
 data class AddSubscribeReport(
     val subscription: Subscription?,
-    val rejectedReason: String?,
+    val rejectedReason: UiText?,
 ) {
     val accepted: Boolean get() = subscription != null
 }
@@ -72,7 +85,7 @@ class AddFormPresenter(
     fun applyPastedText(text: String?) {
         val value = text?.trim().orEmpty()
         if (value.isEmpty()) {
-            _status.value = AddStatus("Clipboard is empty.", isError = true)
+            _status.value = AddStatus(UiText.of(Res.string.clipboard_empty), isError = true)
             return
         }
         setUrl(value)
@@ -150,11 +163,13 @@ class AddFormPresenter(
         }
 
         val batch = BatchUrlValidator.validate(current.urlText)
-        val rejected = batch.invalid.map { AddLineError(it.raw, it.reason) }
+        val rejected = batch.invalid.map { it.error.toAddLineError(it.raw) }
         if (batch.validUrls.isEmpty()) {
             _state.update { it.copy(lineErrors = rejected) }
             _status.value = AddStatus(
-                message = if (rejected.isEmpty()) "Paste at least one source URL." else "No valid URLs in the batch.",
+                message = UiText.of(
+                    if (rejected.isEmpty()) Res.string.paste_one_url else Res.string.no_valid_urls,
+                ),
                 isError = true,
             )
             return null
@@ -206,15 +221,15 @@ class AddFormPresenter(
         val current = _state.value
         val lines = current.urlText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.isEmpty()) {
-            return rejectSubscribe("Paste a channel or playlist URL to subscribe.")
+            return rejectSubscribe(UiText.of(Res.string.subscribe_needs_url))
         }
         if (lines.size > 1) {
-            return rejectSubscribe("Subscribe takes one channel or playlist URL, not a batch.")
+            return rejectSubscribe(UiText.of(Res.string.subscribe_not_batch))
         }
 
         val validated = SourceUrlValidator.validate(lines.single())
         if (validated is SourceUrlValidation.Invalid) {
-            return rejectSubscribe(validated.reason)
+            return rejectSubscribe(validated.error.toUiText())
         }
         current.inputError()?.let { return rejectSubscribe(it) }
 
@@ -226,11 +241,11 @@ class AddFormPresenter(
             downloadOptions = current.toDownloadOptions(settings),
             checkIntervalMinutes = settings.subscriptionIntervalMinutes,
         )
-        _status.value = AddStatus("Subscribed to ${subscription.displayName}. Checks run while the app is open.")
+        _status.value = AddStatus(UiText.of(Res.string.subscribed, subscription.displayName))
         return AddSubscribeReport(subscription = subscription, rejectedReason = null)
     }
 
-    private fun rejectSubscribe(reason: String): AddSubscribeReport {
+    private fun rejectSubscribe(reason: UiText): AddSubscribeReport {
         _status.value = AddStatus(reason, isError = true)
         return AddSubscribeReport(subscription = null, rejectedReason = reason)
     }
@@ -241,18 +256,18 @@ class AddFormPresenter(
     }
 }
 
-private fun AddFormState.inputError(): String? = destinationError ?: playlistLimitError ?: clipError
+private fun AddFormState.inputError(): UiText? = destinationError ?: playlistLimitError ?: clipError
 
-private fun submitMessage(started: Int, pending: Int, duplicate: Int, rejected: Int): String {
+private fun submitMessage(started: Int, pending: Int, duplicate: Int, rejected: Int): UiText {
     val added = started + pending
-    val parts = mutableListOf<String>()
+    val parts = mutableListOf<UiText>()
     if (added > 0) {
-        parts += "Added $added job${if (added == 1) "" else "s"}: $started started, $pending waiting to start."
+        parts += UiText.quantity(Res.plurals.added_jobs, added, added, started, pending)
     }
-    if (duplicate > 0) parts += "Already queued: $duplicate."
-    if (rejected > 0) parts += "Rejected line${if (rejected == 1) "" else "s"}: $rejected."
-    if (parts.isEmpty()) parts += "Nothing to add."
-    return parts.joinToString(" ")
+    if (duplicate > 0) parts += UiText.of(Res.string.already_queued, duplicate)
+    if (rejected > 0) parts += UiText.quantity(Res.plurals.rejected_lines, rejected, rejected)
+    if (parts.isEmpty()) parts += UiText.of(Res.string.nothing_to_add)
+    return UiText.combined(parts)
 }
 
 private fun hostOf(url: String): String? {

@@ -12,12 +12,20 @@ import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.validation.RelativePathValidation
 import com.anydownlod.core.validation.RelativePathValidator
+import com.anydownlod.core.validation.SourceUrlError
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.clip_end_error
+import com.anydownlod.ui.generated.resources.clip_order_error
+import com.anydownlod.ui.generated.resources.clip_start_error
+import com.anydownlod.ui.generated.resources.playlist_limit_error
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.toUiText
 
 /** One rejected line of a pasted batch. */
-data class AddLineError(val line: String, val reason: String)
+data class AddLineError(val line: String, val reason: UiText)
 
 /** Short status line shown under the form actions. */
-data class AddStatus(val message: String, val isError: Boolean = false)
+data class AddStatus(val message: UiText, val isError: Boolean = false)
 
 /** Lossy containers accept a bitrate choice; lossless ones do not. */
 val AudioContainer.isLossy: Boolean
@@ -61,33 +69,33 @@ data class AddFormState(
     val canSubscribe: Boolean get() = hasInput && nonBlankLineCount <= 1
 
     /** Inline destination-folder error, or null when the value is acceptable. */
-    val destinationError: String?
+    val destinationError: UiText?
         get() = when (val result = RelativePathValidator.validate(destinationFolder)) {
             is RelativePathValidation.Valid -> null
-            is RelativePathValidation.Invalid -> result.reason
+            is RelativePathValidation.Invalid -> result.error.toUiText()
         }
 
     /** Inline playlist-limit error, or null. Blank is treated as 0. */
-    val playlistLimitError: String?
+    val playlistLimitError: UiText?
         get() {
             val text = playlistItemLimit.trim()
             if (text.isEmpty()) return null
             val value = text.toIntOrNull()
-            return if (value == null || value < 0) "Playlist limit must be a whole number, 0 or more." else null
+            return if (value == null || value < 0) UiText.of(Res.string.playlist_limit_error) else null
         }
 
     /** True when a clip range (or start/end-only range) is malformed. */
-    val clipError: String?
+    val clipError: UiText?
         get() {
             val start = clipStart.trim()
             val end = clipEnd.trim()
             if (start.isEmpty() && end.isEmpty()) return null
             val startSeconds = if (start.isEmpty()) null else parseClipTimestamp(start)
             val endSeconds = if (end.isEmpty()) null else parseClipTimestamp(end)
-            if (start.isNotEmpty() && startSeconds == null) return "Clip start must be seconds or HH:MM:SS."
-            if (end.isNotEmpty() && endSeconds == null) return "Clip end must be seconds or HH:MM:SS."
+            if (start.isNotEmpty() && startSeconds == null) return UiText.of(Res.string.clip_start_error)
+            if (end.isNotEmpty() && endSeconds == null) return UiText.of(Res.string.clip_end_error)
             if (startSeconds != null && endSeconds != null && endSeconds <= startSeconds) {
-                return "Clip end must be after clip start."
+                return UiText.of(Res.string.clip_order_error)
             }
             return null
         }
@@ -155,3 +163,6 @@ internal fun parseClipTimestamp(raw: String): Long? {
         else -> numbers[0] * 3600 + numbers[1] * 60 + numbers[2]
     }
 }
+
+internal fun SourceUrlError.toAddLineError(line: String): AddLineError =
+    AddLineError(line = line, reason = toUiText())

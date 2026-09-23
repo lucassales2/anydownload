@@ -43,11 +43,74 @@ import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.add_batch_hint
+import com.anydownlod.ui.generated.resources.add_source
+import com.anydownlod.ui.generated.resources.advanced_options
+import com.anydownlod.ui.generated.resources.auto
+import com.anydownlod.ui.generated.resources.auto_start
+import com.anydownlod.ui.generated.resources.bitrate_kbps
+import com.anydownlod.ui.generated.resources.caption_automatic
+import com.anydownlod.ui.generated.resources.caption_either
+import com.anydownlod.ui.generated.resources.caption_language
+import com.anydownlod.ui.generated.resources.caption_language_hint
+import com.anydownlod.ui.generated.resources.caption_manual
+import com.anydownlod.ui.generated.resources.clip_end
+import com.anydownlod.ui.generated.resources.clip_hint
+import com.anydownlod.ui.generated.resources.clip_start
+import com.anydownlod.ui.generated.resources.codec_preference
+import com.anydownlod.ui.generated.resources.container
+import com.anydownlod.ui.generated.resources.container_profile
+import com.anydownlod.ui.generated.resources.custom_options
+import com.anydownlod.ui.generated.resources.custom_options_hint
+import com.anydownlod.ui.generated.resources.delivery
+import com.anydownlod.ui.generated.resources.destination_folder
+import com.anydownlod.ui.generated.resources.destination_hint
+import com.anydownlod.ui.generated.resources.download
+import com.anydownlod.ui.generated.resources.embed_subtitles
+import com.anydownlod.ui.generated.resources.filename_prefix
+import com.anydownlod.ui.generated.resources.format
+import com.anydownlod.ui.generated.resources.hide_advanced
+import com.anydownlod.ui.generated.resources.line_error
+import com.anydownlod.ui.generated.resources.lossless_hint
+import com.anydownlod.ui.generated.resources.lossy_hint
+import com.anydownlod.ui.generated.resources.media_audio
+import com.anydownlod.ui.generated.resources.media_captions
+import com.anydownlod.ui.generated.resources.media_thumbnail
+import com.anydownlod.ui.generated.resources.media_type
+import com.anydownlod.ui.generated.resources.media_video
+import com.anydownlod.ui.generated.resources.new_download
+import com.anydownlod.ui.generated.resources.no_presets_add
+import com.anydownlod.ui.generated.resources.paste
+import com.anydownlod.ui.generated.resources.playlist_limit
+import com.anydownlod.ui.generated.resources.playlist_limit_hint
+import com.anydownlod.ui.generated.resources.preference
+import com.anydownlod.ui.generated.resources.presets_order
+import com.anydownlod.ui.generated.resources.profile_ios
+import com.anydownlod.ui.generated.resources.quality_best
+import com.anydownlod.ui.generated.resources.quality_hint
+import com.anydownlod.ui.generated.resources.quality_preference
+import com.anydownlod.ui.generated.resources.quality_resolution
+import com.anydownlod.ui.generated.resources.quality_worst
+import com.anydownlod.ui.generated.resources.sponsorblock_hint
+import com.anydownlod.ui.generated.resources.sponsorblock_remove
+import com.anydownlod.ui.generated.resources.split_by_chapters
+import com.anydownlod.ui.generated.resources.start_immediately
+import com.anydownlod.ui.generated.resources.subscribe
+import com.anydownlod.ui.generated.resources.thumbnail_only
+import com.anydownlod.ui.generated.resources.url_placeholder
+import com.anydownlod.ui.generated.resources.use_cookie_file
+import com.anydownlod.ui.generated.resources.wait_for_start
+import com.anydownlod.ui.generated.resources.write_metadata
+import com.anydownlod.ui.generated.resources.write_thumbnail
+import com.anydownlod.ui.i18n.resolve
+import com.anydownlod.ui.i18n.text
 import com.anydownlod.ui.theme.AppTextField
 import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.PageInset
 import com.anydownlod.ui.theme.SegmentedChoice
 import com.anydownlod.ui.theme.StatusTone
+import org.jetbrains.compose.resources.stringResource
 
 private val qualityOptions = listOf(
     QualityPreference.Best,
@@ -102,18 +165,18 @@ fun AddForm(
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = "New download",
+                        text = text(Res.string.new_download),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Text(text = "Add a source", style = MaterialTheme.typography.titleMedium)
+                    Text(text = text(Res.string.add_source), style = MaterialTheme.typography.titleMedium)
                 }
                 OutlinedButton(
                     onClick = { presenter.subscribe() },
                     enabled = state.canSubscribe,
                     modifier = Modifier.testTag("add-subscribe-button"),
                 ) {
-                    Text("Subscribe")
+                    Text(text(Res.string.subscribe))
                 }
             }
 
@@ -125,13 +188,13 @@ fun AddForm(
                 onDownload = { presenter.submit() },
             )
             Text(
-                text = "One URL per line. A batch creates one job per valid line.",
+                text = text(Res.string.add_batch_hint),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
 
             ChoiceRow(
-                label = "Media type",
+                label = text(Res.string.media_type),
                 options = MediaType.entries,
                 selected = state.mediaType,
                 optionLabel = { it.displayName() },
@@ -143,13 +206,13 @@ fun AddForm(
                 MediaType.AUDIO -> AudioFields(state, presenter)
                 MediaType.CAPTIONS -> CaptionsFields(state, presenter)
                 MediaType.THUMBNAIL -> Text(
-                    text = "Thumbnail only: the image is written without the media file.",
+                    text = text(Res.string.thumbnail_only),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            Text(text = "Delivery", style = MaterialTheme.typography.titleSmall)
+            Text(text = text(Res.string.delivery), style = MaterialTheme.typography.titleSmall)
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -168,7 +231,7 @@ fun AddForm(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     state.lineErrors.forEach { error ->
                         Text(
-                            text = "${error.line}: ${error.reason}",
+                            text = stringResource(Res.string.line_error, error.line, error.reason.resolve()),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -178,7 +241,7 @@ fun AddForm(
 
             status?.let { current ->
                 MessageStrip(
-                    text = current.message,
+                    text = current.message.resolve(),
                     tone = if (current.isError) StatusTone.Negative else StatusTone.Positive,
                 )
             }
@@ -211,7 +274,7 @@ private fun DeliveryFields(
     }
     if (cookiesConfigured) {
         LabeledCheckbox(
-            label = "Use the configured cookie file",
+            label = text(Res.string.use_cookie_file),
             checked = state.useCookies,
             onCheckedChange = presenter::setUseCookies,
         )
@@ -220,17 +283,18 @@ private fun DeliveryFields(
 
 @Composable
 private fun AutoStartRow(state: AddFormState, presenter: AddFormPresenter) {
+    val automatic = state.startPolicy == StartPolicy.AUTOMATIC
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Auto-start", style = MaterialTheme.typography.labelLarge)
+            Text(text(Res.string.auto_start), style = MaterialTheme.typography.labelLarge)
             Text(
-                text = if (state.startPolicy == StartPolicy.AUTOMATIC) {
-                    "Start as soon as added"
+                text = if (automatic) {
+                    text(Res.string.start_immediately)
                 } else {
-                    "Wait for Start"
+                    text(Res.string.wait_for_start)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -238,7 +302,7 @@ private fun AutoStartRow(state: AddFormState, presenter: AddFormPresenter) {
         }
         Spacer(Modifier.width(12.dp))
         Switch(
-            checked = state.startPolicy == StartPolicy.AUTOMATIC,
+            checked = automatic,
             onCheckedChange = {
                 presenter.setStartPolicy(if (it) StartPolicy.AUTOMATIC else StartPolicy.MANUAL)
             },
@@ -253,7 +317,7 @@ private fun PrefixField(state: AddFormState, presenter: AddFormPresenter, modifi
         value = state.filenamePrefix,
         onValueChange = presenter::setFilenamePrefix,
         modifier = modifier,
-        label = { Text("Filename prefix") },
+        label = { Text(text(Res.string.filename_prefix)) },
         singleLine = true,
     )
 }
@@ -264,9 +328,9 @@ private fun FolderField(state: AddFormState, presenter: AddFormPresenter, modifi
         value = state.destinationFolder,
         onValueChange = presenter::setDestinationFolder,
         modifier = modifier,
-        label = { Text("Destination folder") },
+        label = { Text(text(Res.string.destination_folder)) },
         supportingText = {
-            Text(state.destinationError ?: "Relative to the download root. Blank uses the root.")
+            Text(state.destinationError?.resolve() ?: text(Res.string.destination_hint))
         },
         isError = state.destinationError != null,
         singleLine = true,
@@ -298,7 +362,7 @@ private fun UrlEntryRow(
             value = urlText,
             onValueChange = onUrlChange,
             modifier = Modifier.weight(1f).testTag("add-url-field"),
-            placeholder = { Text("Paste a source URL") },
+            placeholder = { Text(text(Res.string.url_placeholder)) },
             minLines = 1,
             maxLines = 4,
             colors = fieldColors,
@@ -307,14 +371,14 @@ private fun UrlEntryRow(
             onClick = onPaste,
             modifier = Modifier.testTag("add-paste-button"),
         ) {
-            Text("Paste")
+            Text(text(Res.string.paste))
         }
         Button(
             onClick = onDownload,
             enabled = downloadEnabled,
             modifier = Modifier.testTag("add-download-button"),
         ) {
-            Text("Download")
+            Text(text(Res.string.download))
         }
     }
 }
@@ -322,28 +386,28 @@ private fun UrlEntryRow(
 @Composable
 private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
     ChoiceRow(
-        label = "Container profile",
+        label = text(Res.string.container_profile),
         options = VideoContainerProfile.entries,
         selected = state.videoProfile,
         optionLabel = { it.displayName() },
         onSelect = presenter::setVideoProfile,
     )
     ChoiceRow(
-        label = "Codec preference",
+        label = text(Res.string.codec_preference),
         options = VideoCodec.entries,
         selected = state.videoCodec,
         optionLabel = { it.displayName() },
         onSelect = presenter::setVideoCodec,
     )
     ChoiceRow(
-        label = "Quality preference",
+        label = text(Res.string.quality_preference),
         options = qualityOptions,
         selected = state.quality,
         optionLabel = { it.displayName() },
         onSelect = presenter::setQuality,
     )
     Text(
-        text = "Quality is a preference, not a promise that the file will be that height.",
+        text = text(Res.string.quality_hint),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -352,7 +416,7 @@ private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
 @Composable
 private fun AudioFields(state: AddFormState, presenter: AddFormPresenter) {
     ChoiceRow(
-        label = "Container",
+        label = text(Res.string.container),
         options = AudioContainer.entries,
         selected = state.audioContainer,
         optionLabel = { it.displayName() },
@@ -360,20 +424,20 @@ private fun AudioFields(state: AddFormState, presenter: AddFormPresenter) {
     )
     if (state.audioContainer.isLossy) {
         ChoiceRow(
-            label = "Bitrate (kbps)",
+            label = text(Res.string.bitrate_kbps),
             options = bitrateOptions,
             selected = state.audioBitrate,
-            optionLabel = { if (it.isEmpty()) "Auto" else it },
+            optionLabel = { if (it.isEmpty()) text(Res.string.auto) else it },
             onSelect = presenter::setAudioBitrate,
         )
         Text(
-            text = "Lossy containers are converted when the source does not already match.",
+            text = text(Res.string.lossy_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     } else {
         Text(
-            text = "${state.audioContainer.displayName()} is lossless; no bitrate is applied.",
+            text = text(Res.string.lossless_hint, state.audioContainer.displayName()),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -386,19 +450,19 @@ private fun CaptionsFields(state: AddFormState, presenter: AddFormPresenter) {
         value = state.captionLanguage,
         onValueChange = presenter::setCaptionLanguage,
         modifier = Modifier.fillMaxWidth(),
-        label = { Text("Caption language") },
-        supportingText = { Text("Language code, for example en or pt-BR.") },
+        label = { Text(text(Res.string.caption_language)) },
+        supportingText = { Text(text(Res.string.caption_language_hint)) },
         singleLine = true,
     )
     ChoiceRow(
-        label = "Preference",
+        label = text(Res.string.preference),
         options = CaptionPreference.entries,
         selected = state.captionPreference,
         optionLabel = { it.displayName() },
         onSelect = presenter::setCaptionPreference,
     )
     ChoiceRow(
-        label = "Format",
+        label = text(Res.string.format),
         options = CaptionFormat.entries,
         selected = state.captionFormat,
         optionLabel = { it.displayName() },
@@ -417,7 +481,7 @@ private fun AdvancedSection(
         onClick = presenter::toggleAdvancedExpanded,
         modifier = Modifier.testTag("add-advanced-toggle"),
     ) {
-        Text(if (state.advancedExpanded) "Hide advanced options" else "Advanced options")
+        Text(if (state.advancedExpanded) text(Res.string.hide_advanced) else text(Res.string.advanced_options))
     }
     if (!state.advancedExpanded) return
 
@@ -426,8 +490,10 @@ private fun AdvancedSection(
             value = state.playlistItemLimit,
             onValueChange = presenter::setPlaylistItemLimit,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Playlist item limit") },
-            supportingText = { Text(state.playlistLimitError ?: "0 means no extra limit.") },
+            label = { Text(text(Res.string.playlist_limit)) },
+            supportingText = {
+                Text(state.playlistLimitError?.resolve() ?: text(Res.string.playlist_limit_hint))
+            },
             isError = state.playlistLimitError != null,
             singleLine = true,
         )
@@ -437,19 +503,19 @@ private fun AdvancedSection(
                 value = state.clipStart,
                 onValueChange = presenter::setClipStart,
                 modifier = Modifier.weight(1f),
-                label = { Text("Clip start") },
+                label = { Text(text(Res.string.clip_start)) },
                 singleLine = true,
             )
             AppTextField(
                 value = state.clipEnd,
                 onValueChange = presenter::setClipEnd,
                 modifier = Modifier.weight(1f),
-                label = { Text("Clip end") },
+                label = { Text(text(Res.string.clip_end)) },
                 singleLine = true,
             )
         }
         Text(
-            text = state.clipError ?: "Clip times accept seconds or HH:MM:SS; one side alone is allowed.",
+            text = state.clipError?.resolve() ?: text(Res.string.clip_hint),
             color = if (state.clipError != null) {
                 MaterialTheme.colorScheme.error
             } else {
@@ -458,30 +524,30 @@ private fun AdvancedSection(
             style = MaterialTheme.typography.bodySmall,
         )
 
-        LabeledCheckbox("Split by chapters", state.splitByChapters, presenter::setSplitByChapters)
-        LabeledCheckbox("Remove SponsorBlock segments", state.sponsorBlockRemove, presenter::setSponsorBlockRemove)
+        LabeledCheckbox(text(Res.string.split_by_chapters), state.splitByChapters, presenter::setSplitByChapters)
+        LabeledCheckbox(text(Res.string.sponsorblock_remove), state.sponsorBlockRemove, presenter::setSponsorBlockRemove)
         Text(
-            text = "SponsorBlock removal needs marker data and may have no effect on some sources.",
+            text = text(Res.string.sponsorblock_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         if (state.mediaType == MediaType.VIDEO || state.mediaType == MediaType.AUDIO) {
-            LabeledCheckbox("Embed subtitles", state.embedSubtitles, presenter::setEmbedSubtitles)
+            LabeledCheckbox(text(Res.string.embed_subtitles), state.embedSubtitles, presenter::setEmbedSubtitles)
         }
         if (state.mediaType != MediaType.THUMBNAIL) {
-            LabeledCheckbox("Write metadata", state.writeMetadata, presenter::setWriteMetadata)
-            LabeledCheckbox("Write thumbnail sidecar", state.writeThumbnail, presenter::setWriteThumbnail)
+            LabeledCheckbox(text(Res.string.write_metadata), state.writeMetadata, presenter::setWriteMetadata)
+            LabeledCheckbox(text(Res.string.write_thumbnail), state.writeThumbnail, presenter::setWriteThumbnail)
         }
 
         if (presets.isEmpty()) {
             Text(
-                text = "No presets configured yet. Add them in Settings.",
+                text = text(Res.string.no_presets_add),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Text("Presets (applied in the order shown)", style = MaterialTheme.typography.labelLarge)
+            Text(text(Res.string.presets_order), style = MaterialTheme.typography.labelLarge)
             presets.forEach { preset ->
                 LabeledCheckbox(
                     label = preset.name,
@@ -495,8 +561,8 @@ private fun AdvancedSection(
             onValueChange = {},
             enabled = false,
             modifier = Modifier.fillMaxWidth().testTag("add-custom-json-field"),
-            label = { Text("Custom yt-dlp options") },
-            supportingText = { Text("Not available yet (Q-09). This field is disabled and never sent.") },
+            label = { Text(text(Res.string.custom_options)) },
+            supportingText = { Text(text(Res.string.custom_options_hint)) },
         )
     }
 }
@@ -526,7 +592,7 @@ private fun <T> ChoiceRow(
     label: String,
     options: List<T>,
     selected: T,
-    optionLabel: (T) -> String,
+    optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -544,33 +610,38 @@ private fun <T> ChoiceRow(
     }
 }
 
+@Composable
 private fun MediaType.displayName(): String = when (this) {
-    MediaType.VIDEO -> "Video"
-    MediaType.AUDIO -> "Audio"
-    MediaType.CAPTIONS -> "Captions"
-    MediaType.THUMBNAIL -> "Thumbnail"
+    MediaType.VIDEO -> text(Res.string.media_video)
+    MediaType.AUDIO -> text(Res.string.media_audio)
+    MediaType.CAPTIONS -> text(Res.string.media_captions)
+    MediaType.THUMBNAIL -> text(Res.string.media_thumbnail)
 }
 
+@Composable
 private fun VideoContainerProfile.displayName(): String = when (this) {
-    VideoContainerProfile.AUTO -> "Auto"
+    VideoContainerProfile.AUTO -> text(Res.string.auto)
     VideoContainerProfile.MP4 -> "MP4"
-    VideoContainerProfile.IOS_COMPATIBLE -> "iOS compatible"
+    VideoContainerProfile.IOS_COMPATIBLE -> text(Res.string.profile_ios)
 }
 
+@Composable
 private fun VideoCodec.displayName(): String = when (this) {
-    VideoCodec.AUTO -> "Auto"
+    VideoCodec.AUTO -> text(Res.string.auto)
     VideoCodec.H264 -> "H.264"
     VideoCodec.HEVC -> "HEVC"
     VideoCodec.AV1 -> "AV1"
     VideoCodec.VP9 -> "VP9"
 }
 
+@Composable
 private fun QualityPreference.displayName(): String = when (this) {
-    QualityPreference.Best -> "Best"
-    QualityPreference.Worst -> "Worst"
-    is QualityPreference.Resolution -> "${token}p"
+    QualityPreference.Best -> text(Res.string.quality_best)
+    QualityPreference.Worst -> text(Res.string.quality_worst)
+    is QualityPreference.Resolution -> text(Res.string.quality_resolution, token)
 }
 
+@Composable
 private fun AudioContainer.displayName(): String = when (this) {
     AudioContainer.M4A -> "M4A"
     AudioContainer.MP3 -> "MP3"
@@ -579,12 +650,14 @@ private fun AudioContainer.displayName(): String = when (this) {
     AudioContainer.FLAC -> "FLAC"
 }
 
+@Composable
 private fun CaptionPreference.displayName(): String = when (this) {
-    CaptionPreference.MANUAL -> "Manual"
-    CaptionPreference.AUTOMATIC -> "Automatic"
-    CaptionPreference.EITHER -> "Either"
+    CaptionPreference.MANUAL -> text(Res.string.caption_manual)
+    CaptionPreference.AUTOMATIC -> text(Res.string.caption_automatic)
+    CaptionPreference.EITHER -> text(Res.string.caption_either)
 }
 
+@Composable
 private fun CaptionFormat.displayName(): String = when (this) {
     CaptionFormat.SRT -> "SRT"
     CaptionFormat.TXT -> "TXT"

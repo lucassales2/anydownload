@@ -52,7 +52,7 @@ class AddFormUiTest {
 
         // One URL, auto-start off: the job stays pending.
         onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=manual")
-        onNodeWithTag("add-autostart-switch").performClick()
+        onNodeWithTag("add-autostart-switch").performScrollTo().performClick()
         onNodeWithTag("add-download-button").assertIsEnabled().performScrollTo().performClick()
         assertEquals(1, graph.engine.jobs.value.size)
         assertEquals(JobState.PENDING, graph.engine.jobs.value.single().state)

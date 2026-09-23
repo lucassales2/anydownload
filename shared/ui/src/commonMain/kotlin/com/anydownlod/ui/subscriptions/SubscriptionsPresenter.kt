@@ -2,6 +2,12 @@ package com.anydownlod.ui.subscriptions
 
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.domain.Subscription
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.subscription_filter_invalid
+import com.anydownlod.ui.generated.resources.subscription_interval_invalid
+import com.anydownlod.ui.generated.resources.subscription_name_required
+import com.anydownlod.ui.generated.resources.subscription_not_found
+import com.anydownlod.ui.i18n.UiText
 
 /**
  * Actions and validation for the Subscriptions table. Checks only record
@@ -35,16 +41,16 @@ class SubscriptionsPresenter(private val repository: SubscriptionRepository) {
         intervalText: String,
         titleFilter: String,
         skipMembersOnly: Boolean,
-    ): String? {
+    ): UiText? {
         val trimmedName = name.trim()
-        if (trimmedName.isEmpty()) return "Enter a name for this subscription."
+        if (trimmedName.isEmpty()) return UiText.of(Res.string.subscription_name_required)
         val interval = intervalText.trim().toIntOrNull()
-        if (interval == null || interval <= 0) return "Interval must be a positive number of minutes."
-        if (!isValidTitleFilter(titleFilter)) return "The title filter is not a valid regular expression."
+        if (interval == null || interval <= 0) return UiText.of(Res.string.subscription_interval_invalid)
+        if (!isValidTitleFilter(titleFilter)) return UiText.of(Res.string.subscription_filter_invalid)
         return if (repository.update(id, trimmedName, interval, titleFilter, skipMembersOnly)) {
             null
         } else {
-            "The subscription was not found."
+            UiText.of(Res.string.subscription_not_found)
         }
     }
 

@@ -42,17 +42,23 @@ import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.Preset
 import com.anydownlod.ui.add.AddForm
 import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.files_stay_on_device
+import com.anydownlod.ui.generated.resources.library
 import com.anydownlod.ui.history.HistoryScreen
+import com.anydownlod.ui.i18n.labelResource
+import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.queue.QueueScreen
 import com.anydownlod.ui.subscriptions.SubscriptionsScreen
 import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.StatusTone
+import org.jetbrains.compose.resources.stringResource
 
 /** The three list regions of the desktop shell. */
-enum class ShellTab(val label: String) {
-    DOWNLOADING("Downloading"),
-    COMPLETED("Completed"),
-    SUBSCRIPTIONS("Subscriptions"),
+enum class ShellTab {
+    DOWNLOADING,
+    COMPLETED,
+    SUBSCRIPTIONS,
 }
 
 /**
@@ -133,7 +139,7 @@ private fun LibraryRail(
             .padding(12.dp),
     ) {
         Text(
-            text = "Library",
+            text = stringResource(Res.string.library),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 12.dp, bottom = 8.dp),
@@ -149,7 +155,7 @@ private fun LibraryRail(
         }
         Spacer(Modifier.weight(1f))
         Text(
-            text = "Files stay on this device.",
+            text = stringResource(Res.string.files_stay_on_device),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -220,7 +226,7 @@ private fun Destination(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = tab.label,
+            text = tab.labelResource().resolve(),
             color = labelColor,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,

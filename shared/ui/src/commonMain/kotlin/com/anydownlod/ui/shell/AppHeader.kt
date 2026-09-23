@@ -24,14 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.domain.ThemePreference
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.app_name
+import com.anydownlod.ui.generated.resources.settings
+import com.anydownlod.ui.generated.resources.theme
+import com.anydownlod.ui.i18n.labelResource
+import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.theme.SegmentedChoice
-
-/** Human-readable label for a theme choice; the control is never color-only. */
-internal fun ThemePreference.label(): String = when (this) {
-    ThemePreference.SYSTEM -> "System"
-    ThemePreference.LIGHT -> "Light"
-    ThemePreference.DARK -> "Dark"
-}
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Shell bar: product mark, the labeled theme control, and Settings.
@@ -94,7 +94,7 @@ private fun ProductLockup(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.width(10.dp))
         Text(
-            text = "AnyDownload",
+            text = stringResource(Res.string.app_name),
             style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -108,11 +108,11 @@ private fun ThemeControl(theme: ThemePreference, onThemeChange: (ThemePreference
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = "Theme", style = MaterialTheme.typography.labelLarge)
+        Text(text = stringResource(Res.string.theme), style = MaterialTheme.typography.labelLarge)
         SegmentedChoice(
             options = ThemePreference.entries,
             selected = theme,
-            optionLabel = { it.label() },
+            optionLabel = { it.labelResource().resolve() },
             onSelect = onThemeChange,
         )
     }
@@ -120,5 +120,7 @@ private fun ThemeControl(theme: ThemePreference, onThemeChange: (ThemePreference
 
 @Composable
 private fun SettingsButton(onOpenSettings: () -> Unit) {
-    FilledTonalButton(onClick = onOpenSettings) { Text("Settings") }
+    FilledTonalButton(onClick = onOpenSettings) {
+        Text(stringResource(Res.string.settings))
+    }
 }

@@ -11,6 +11,9 @@ import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.fake.InMemoryDownloadEngine
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.clipboard_empty
+import com.anydownlod.ui.i18n.UiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,7 +51,7 @@ class AddFormPresenterTest {
         f.presenter.applyPastedText(" \n ")
 
         assertEquals("https://example.com/watch?v=pasted", f.presenter.state.value.urlText)
-        assertEquals("Clipboard is empty.", f.presenter.status.value?.message)
+        assertEquals(UiText.of(Res.string.clipboard_empty), f.presenter.status.value?.message)
         assertEquals(true, f.presenter.status.value?.isError)
     }
 

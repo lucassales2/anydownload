@@ -45,7 +45,8 @@ fun UiText.resolve(): String = when (this) {
             pluralStringResource(resource, quantity, *args.toTypedArray())
         }
     is UiText.Raw -> value
-    is UiText.Combined -> parts.joinToString(separator) { it.resolve() }
+    // Resolve children first; joinToString's lambda is not a composable context.
+    is UiText.Combined -> parts.map { it.resolve() }.joinToString(separator)
 }
 
 @Composable

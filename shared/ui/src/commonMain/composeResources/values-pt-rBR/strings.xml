@@ -80,6 +80,7 @@
     <string name="active">Ativa</string>
     <string name="never">Nunca</string>
     <string name="next_check">Próxima %1$s</string>
+    <string name="subscription_schedule">A cada %1$s min · Última verificação %2$s · Próxima %3$s</string>
     <string name="title_filter_line">Filtro de título: %1$s</string>
     <string name="all_titles">Todos os títulos</string>
     <string name="skips_members">Ignora itens só para membros</string>

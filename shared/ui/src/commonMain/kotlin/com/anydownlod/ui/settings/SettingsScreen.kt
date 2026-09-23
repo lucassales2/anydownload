@@ -19,6 +19,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,17 +44,79 @@ import com.anydownlod.ui.theme.DestructiveOutlinedButton
 import com.anydownlod.ui.theme.DestructiveTextButton
 import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.ObjectCard
-import com.anydownlod.ui.theme.SegmentedChoice
 import com.anydownlod.ui.theme.StatusTone
 import com.anydownlod.ui.theme.colors
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.AppSettingsDefaults
 import com.anydownlod.core.domain.Preset
 import com.anydownlod.core.domain.PresetOptionKeys
-import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.core.domain.ToolAvailability
 import com.anydownlod.core.domain.ToolStatus
-import com.anydownlod.ui.shell.label
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.add_preset
+import com.anydownlod.ui.generated.resources.cancel
+import com.anydownlod.ui.generated.resources.channel_template
+import com.anydownlod.ui.generated.resources.chapter_template
+import com.anydownlod.ui.generated.resources.choose_folder
+import com.anydownlod.ui.generated.resources.clear_completed
+import com.anydownlod.ui.generated.resources.clear_completed_hint
+import com.anydownlod.ui.generated.resources.close
+import com.anydownlod.ui.generated.resources.cookie_cleared
+import com.anydownlod.ui.generated.resources.cookie_configured
+import com.anydownlod.ui.generated.resources.cookie_import_desktop_only
+import com.anydownlod.ui.generated.resources.cookie_import_failed
+import com.anydownlod.ui.generated.resources.cookie_imported
+import com.anydownlod.ui.generated.resources.cookie_not_configured
+import com.anydownlod.ui.generated.resources.cookie_status
+import com.anydownlod.ui.generated.resources.cookie_warning
+import com.anydownlod.ui.generated.resources.default_concurrent
+import com.anydownlod.ui.generated.resources.defaults_restored
+import com.anydownlod.ui.generated.resources.delete
+import com.anydownlod.ui.generated.resources.delete_cookie_body
+import com.anydownlod.ui.generated.resources.delete_cookie_title
+import com.anydownlod.ui.generated.resources.down
+import com.anydownlod.ui.generated.resources.download_folder_updated
+import com.anydownlod.ui.generated.resources.folder_desktop_only
+import com.anydownlod.ui.generated.resources.import_file
+import com.anydownlod.ui.generated.resources.keep
+import com.anydownlod.ui.generated.resources.max_concurrent
+import com.anydownlod.ui.generated.resources.name
+import com.anydownlod.ui.generated.resources.no_folder
+import com.anydownlod.ui.generated.resources.no_presets_yet
+import com.anydownlod.ui.generated.resources.options
+import com.anydownlod.ui.generated.resources.output_template
+import com.anydownlod.ui.generated.resources.playlist_template
+import com.anydownlod.ui.generated.resources.preset_added
+import com.anydownlod.ui.generated.resources.preset_name_required
+import com.anydownlod.ui.generated.resources.preset_no_options
+import com.anydownlod.ui.generated.resources.presets_layer_hint
+import com.anydownlod.ui.generated.resources.remove
+import com.anydownlod.ui.generated.resources.replace_file
+import com.anydownlod.ui.generated.resources.restore
+import com.anydownlod.ui.generated.resources.restore_defaults
+import com.anydownlod.ui.generated.resources.restore_defaults_body
+import com.anydownlod.ui.generated.resources.restore_defaults_title
+import com.anydownlod.ui.generated.resources.save
+import com.anydownlod.ui.generated.resources.section_cookies
+import com.anydownlod.ui.generated.resources.section_filenames
+import com.anydownlod.ui.generated.resources.section_presets
+import com.anydownlod.ui.generated.resources.section_queue
+import com.anydownlod.ui.generated.resources.section_storage
+import com.anydownlod.ui.generated.resources.section_tools
+import com.anydownlod.ui.generated.resources.settings
+import com.anydownlod.ui.generated.resources.settings_subtitle
+import com.anydownlod.ui.generated.resources.templates_hint
+import com.anydownlod.ui.generated.resources.theme
+import com.anydownlod.ui.generated.resources.tool_available
+import com.anydownlod.ui.generated.resources.tool_not_checked
+import com.anydownlod.ui.generated.resources.tool_not_found
+import com.anydownlod.ui.generated.resources.tools_hint
+import com.anydownlod.ui.generated.resources.up
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.labelResource
+import com.anydownlod.ui.i18n.presetOptionLabel
+import com.anydownlod.ui.i18n.resolve
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Local preferences: Storage, Filenames, Queue, Cookies, Presets, Appearance,
@@ -65,25 +128,25 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
     val presenter = remember(graph.settings) { SettingsPresenter(graph.settings) }
 
     var tools by remember { mutableStateOf<ToolStatus?>(null) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<UiText?>(null) }
     var confirmRestore by remember { mutableStateOf(false) }
     var confirmCookieDelete by remember { mutableStateOf(false) }
     var addingPreset by remember { mutableStateOf(false) }
 
     var outputTemplate by remember { mutableStateOf(settings.outputTemplate) }
-    var outputError by remember { mutableStateOf<String?>(null) }
+    var outputError by remember { mutableStateOf<UiText?>(null) }
     var playlistTemplate by remember { mutableStateOf(settings.playlistTemplate) }
-    var playlistError by remember { mutableStateOf<String?>(null) }
+    var playlistError by remember { mutableStateOf<UiText?>(null) }
     var channelTemplate by remember { mutableStateOf(settings.channelTemplate) }
-    var channelError by remember { mutableStateOf<String?>(null) }
+    var channelError by remember { mutableStateOf<UiText?>(null) }
     var chapterTemplate by remember { mutableStateOf(settings.chapterTemplate) }
-    var chapterError by remember { mutableStateOf<String?>(null) }
+    var chapterError by remember { mutableStateOf<UiText?>(null) }
     var concurrencyText by remember { mutableStateOf(settings.maxConcurrentDownloads.toString()) }
-    var concurrencyError by remember { mutableStateOf<String?>(null) }
+    var concurrencyError by remember { mutableStateOf<UiText?>(null) }
     var clearMinutesText by remember {
         mutableStateOf((settings.clearCompletedAfterSeconds / 60).toString())
     }
-    var clearMinutesError by remember { mutableStateOf<String?>(null) }
+    var clearMinutesError by remember { mutableStateOf<UiText?>(null) }
 
     LaunchedEffect(graph.toolProbe) {
         tools = graph.toolProbe.probe()
@@ -95,15 +158,15 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(text = "Settings", style = MaterialTheme.typography.headlineMedium)
+                Text(text = stringResource(Res.string.settings), style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = "How downloads are saved on this device.",
+                    text = stringResource(Res.string.settings_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             FilledTonalButton(onClick = onClose, modifier = Modifier.testTag("settings-close")) {
-                Text("Close")
+                Text(stringResource(Res.string.close))
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -117,15 +180,20 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            AppearanceSection(
+                theme = settings.theme,
+                onThemeChange = presenter::setTheme,
+            )
+
             StorageSection(
                 downloadRoot = settings.downloadRoot,
                 onChooseFolder = {
                     val chosen = graph.pickFolder()
                     if (chosen != null) {
                         presenter.setDownloadRoot(chosen)
-                        notice = "Download folder updated."
+                        notice = UiText.of(Res.string.download_folder_updated)
                     } else {
-                        notice = "Folder selection is available on desktop."
+                        notice = UiText.of(Res.string.folder_desktop_only)
                     }
                 },
             )
@@ -179,14 +247,15 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                 onImport = {
                     val picked = graph.pickCookieFile()
                     if (picked == null) {
-                        notice = "Cookie import is only available on desktop."
+                        notice = UiText.of(Res.string.cookie_import_desktop_only)
                     } else {
                         val result = graph.cookieStore.import(picked)
                         if (result.success) {
                             presenter.setCookiesConfigured(true)
-                            notice = "Cookie file imported."
+                            notice = UiText.of(Res.string.cookie_imported)
                         } else {
-                            notice = result.message ?: "That file could not be imported."
+                            notice = result.message?.let(UiText::raw)
+                                ?: UiText.of(Res.string.cookie_import_failed)
                         }
                     }
                 },
@@ -201,19 +270,14 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                 onMoveDown = { presenter.movePresetDown(it) },
             )
 
-            AppearanceSection(
-                theme = settings.theme,
-                onThemeChange = presenter::setTheme,
-            )
-
             ToolsSection(tools = tools)
 
             notice?.let { message ->
-                MessageStrip(text = message, tone = StatusTone.Information)
+                MessageStrip(text = message.resolve(), tone = StatusTone.Information)
             }
 
             DestructiveOutlinedButton(
-                text = "Restore defaults",
+                text = stringResource(Res.string.restore_defaults),
                 onClick = { confirmRestore = true },
                 modifier = Modifier.testTag("settings-restore-defaults"),
             )
@@ -224,16 +288,11 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
     if (confirmRestore) {
         AlertDialog(
             onDismissRequest = { confirmRestore = false },
-            title = { Text("Restore default settings?") },
-            text = {
-                Text(
-                    "Templates, queue limits, subscription interval, and theme return to their defaults. " +
-                        "The download folder, cookie status, and presets stay."
-                )
-            },
+            title = { Text(stringResource(Res.string.restore_defaults_title)) },
+            text = { Text(stringResource(Res.string.restore_defaults_body)) },
             confirmButton = {
                 DestructiveTextButton(
-                    text = "Restore",
+                    text = stringResource(Res.string.restore),
                     onClick = {
                         presenter.restoreDefaults()
                         outputTemplate = AppSettingsDefaults.OUTPUT_TEMPLATE
@@ -249,14 +308,14 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                         clearMinutesText = "0"
                         clearMinutesError = null
                         confirmRestore = false
-                        notice = "Defaults restored."
+                        notice = UiText.of(Res.string.defaults_restored)
                     },
                     modifier = Modifier.testTag("settings-confirm-restore"),
                 )
             },
             dismissButton = {
                 TextButton(onClick = { confirmRestore = false }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             },
         )
@@ -265,23 +324,23 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
     if (confirmCookieDelete) {
         AlertDialog(
             onDismissRequest = { confirmCookieDelete = false },
-            title = { Text("Delete the cookie file?") },
-            text = { Text("The stored cookie file is removed and the status returns to Not configured.") },
+            title = { Text(stringResource(Res.string.delete_cookie_title)) },
+            text = { Text(stringResource(Res.string.delete_cookie_body)) },
             confirmButton = {
                 DestructiveTextButton(
-                    text = "Delete",
+                    text = stringResource(Res.string.delete),
                     onClick = {
                         graph.cookieStore.delete()
                         presenter.setCookiesConfigured(false)
                         confirmCookieDelete = false
-                        notice = "Cookie status cleared."
+                        notice = UiText.of(Res.string.cookie_cleared)
                     },
                     modifier = Modifier.testTag("settings-confirm-cookie-delete"),
                 )
             },
             dismissButton = {
                 TextButton(onClick = { confirmCookieDelete = false }) {
-                    Text("Keep")
+                    Text(stringResource(Res.string.keep))
                 }
             },
         )
@@ -293,7 +352,7 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
             onAdd = { name, options ->
                 presenter.addPreset(name, options)
                 addingPreset = false
-                notice = "Preset added."
+                notice = UiText.of(Res.string.preset_added)
             },
         )
     }
@@ -301,15 +360,13 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
 
 @Composable
 private fun StorageSection(downloadRoot: String, onChooseFolder: () -> Unit) {
-    SettingsSection("Storage") {
+    SettingsSection(stringResource(Res.string.section_storage)) {
         Text(
-            text = downloadRoot.ifBlank {
-                "No folder chosen. A folder is required before a real download."
-            },
+            text = downloadRoot.ifBlank { stringResource(Res.string.no_folder) },
             style = MaterialTheme.typography.bodyMedium,
         )
         Button(onClick = onChooseFolder, modifier = Modifier.testTag("settings-choose-folder")) {
-            Text("Choose folder")
+            Text(stringResource(Res.string.choose_folder))
         }
     }
 }
@@ -317,27 +374,51 @@ private fun StorageSection(downloadRoot: String, onChooseFolder: () -> Unit) {
 @Composable
 private fun FilenamesSection(
     outputTemplate: String,
-    outputError: String?,
+    outputError: UiText?,
     onOutputChange: (String) -> Unit,
     playlistTemplate: String,
-    playlistError: String?,
+    playlistError: UiText?,
     onPlaylistChange: (String) -> Unit,
     channelTemplate: String,
-    channelError: String?,
+    channelError: UiText?,
     onChannelChange: (String) -> Unit,
     chapterTemplate: String,
-    chapterError: String?,
+    chapterError: UiText?,
     onChapterChange: (String) -> Unit,
 ) {
-    SettingsSection("Filenames") {
+    SettingsSection(stringResource(Res.string.section_filenames)) {
         Text(
-            text = "Templates use tokens such as %(title)s. The filename prefix stays on the add form.",
+            text = stringResource(Res.string.templates_hint),
             style = MaterialTheme.typography.bodySmall,
         )
-        TemplateField("Output template", outputTemplate, outputError, "settings-template-output", onOutputChange)
-        TemplateField("Playlist template", playlistTemplate, playlistError, "settings-template-playlist", onPlaylistChange)
-        TemplateField("Channel template", channelTemplate, channelError, "settings-template-channel", onChannelChange)
-        TemplateField("Chapter template", chapterTemplate, chapterError, "settings-template-chapter", onChapterChange)
+        TemplateField(
+            label = stringResource(Res.string.output_template),
+            value = outputTemplate,
+            error = outputError,
+            testTag = "settings-template-output",
+            onValueChange = onOutputChange,
+        )
+        TemplateField(
+            label = stringResource(Res.string.playlist_template),
+            value = playlistTemplate,
+            error = playlistError,
+            testTag = "settings-template-playlist",
+            onValueChange = onPlaylistChange,
+        )
+        TemplateField(
+            label = stringResource(Res.string.channel_template),
+            value = channelTemplate,
+            error = channelError,
+            testTag = "settings-template-channel",
+            onValueChange = onChannelChange,
+        )
+        TemplateField(
+            label = stringResource(Res.string.chapter_template),
+            value = chapterTemplate,
+            error = chapterError,
+            testTag = "settings-template-chapter",
+            onValueChange = onChapterChange,
+        )
     }
 }
 
@@ -345,7 +426,7 @@ private fun FilenamesSection(
 private fun TemplateField(
     label: String,
     value: String,
-    error: String?,
+    error: UiText?,
     testTag: String,
     onValueChange: (String) -> Unit,
 ) {
@@ -356,7 +437,7 @@ private fun TemplateField(
         modifier = Modifier.fillMaxWidth().testTag(testTag),
         label = { Text(label) },
         isError = currentError != null,
-        supportingText = currentError?.let { message -> { Text(message) } },
+        supportingText = currentError?.let { message -> { Text(message.resolve()) } },
         singleLine = true,
     )
 }
@@ -364,27 +445,27 @@ private fun TemplateField(
 @Composable
 private fun QueueSection(
     concurrencyText: String,
-    concurrencyError: String?,
+    concurrencyError: UiText?,
     onConcurrencyChange: (String) -> Unit,
     clearMinutesText: String,
-    clearMinutesError: String?,
+    clearMinutesError: UiText?,
     onClearMinutesChange: (String) -> Unit,
 ) {
-    SettingsSection("Queue") {
+    SettingsSection(stringResource(Res.string.section_queue)) {
         NumberField(
-            label = "Max concurrent downloads",
+            label = stringResource(Res.string.max_concurrent),
             value = concurrencyText,
             error = concurrencyError,
             testTag = "settings-concurrency",
-            supporting = "Default 3.",
+            supporting = stringResource(Res.string.default_concurrent),
             onValueChange = onConcurrencyChange,
         )
         NumberField(
-            label = "Clear completed after (minutes)",
+            label = stringResource(Res.string.clear_completed),
             value = clearMinutesText,
             error = clearMinutesError,
             testTag = "settings-clear-completed",
-            supporting = "0 keeps finished rows forever.",
+            supporting = stringResource(Res.string.clear_completed_hint),
             onValueChange = onClearMinutesChange,
         )
     }
@@ -394,7 +475,7 @@ private fun QueueSection(
 private fun NumberField(
     label: String,
     value: String,
-    error: String?,
+    error: UiText?,
     testTag: String,
     supporting: String,
     onValueChange: (String) -> Unit,
@@ -406,7 +487,9 @@ private fun NumberField(
         modifier = Modifier.fillMaxWidth().testTag(testTag),
         label = { Text(label) },
         isError = currentError != null,
-        supportingText = { Text(currentError ?: supporting) },
+        supportingText = {
+            Text(currentError?.resolve() ?: supporting)
+        },
         singleLine = true,
     )
 }
@@ -417,23 +500,32 @@ private fun CookiesSection(
     onImport: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    SettingsSection("Cookies") {
+    val statusLabel = if (configured) {
+        stringResource(Res.string.cookie_configured)
+    } else {
+        stringResource(Res.string.cookie_not_configured)
+    }
+    SettingsSection(stringResource(Res.string.section_cookies)) {
         Text(
-            text = "Status: ${if (configured) "Configured" else "Not configured"}",
+            text = stringResource(Res.string.cookie_status, statusLabel),
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            text = "A cookie file stays on this computer and can expose an account. " +
-                "Importing it does not guarantee the site will allow the download. " +
-                "Contents are never shown here.",
+            text = stringResource(Res.string.cookie_warning),
             style = MaterialTheme.typography.bodySmall,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onImport, modifier = Modifier.testTag("settings-cookies-import")) {
-                Text(if (configured) "Replace" else "Import")
+                Text(
+                    if (configured) {
+                        stringResource(Res.string.replace_file)
+                    } else {
+                        stringResource(Res.string.import_file)
+                    }
+                )
             }
             DestructiveOutlinedButton(
-                text = "Delete",
+                text = stringResource(Res.string.delete),
                 onClick = onDelete,
                 enabled = configured,
                 modifier = Modifier.testTag("settings-cookies-delete"),
@@ -450,13 +542,13 @@ private fun PresetsSection(
     onMoveUp: (String) -> Unit,
     onMoveDown: (String) -> Unit,
 ) {
-    SettingsSection("Presets") {
+    SettingsSection(stringResource(Res.string.section_presets)) {
         Text(
-            text = "Presets layer in this order; a later preset overrides an earlier one on the same key.",
+            text = stringResource(Res.string.presets_layer_hint),
             style = MaterialTheme.typography.bodySmall,
         )
         if (presets.isEmpty()) {
-            Text("No presets yet.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(Res.string.no_presets_yet), style = MaterialTheme.typography.bodyMedium)
         }
         presets.forEachIndexed { index, preset ->
             Row(
@@ -483,57 +575,44 @@ private fun PresetsSection(
                     enabled = index > 0,
                     modifier = Modifier.testTag("settings-preset-up-${preset.id}"),
                 ) {
-                    Text("Up")
+                    Text(stringResource(Res.string.up))
                 }
                 TextButton(
                     onClick = { onMoveDown(preset.id) },
                     enabled = index < presets.lastIndex,
                     modifier = Modifier.testTag("settings-preset-down-${preset.id}"),
                 ) {
-                    Text("Down")
+                    Text(stringResource(Res.string.down))
                 }
                 TextButton(
                     onClick = { onRemove(preset.id) },
                     modifier = Modifier.testTag("settings-preset-remove-${preset.id}"),
                 ) {
-                    Text("Remove")
+                    Text(stringResource(Res.string.remove))
                 }
             }
         }
         Button(onClick = onAdd, modifier = Modifier.testTag("settings-add-preset")) {
-            Text("Add preset")
+            Text(stringResource(Res.string.add_preset))
         }
     }
 }
 
+@Composable
 private fun presetSummary(preset: Preset): String =
     if (preset.options.isEmpty()) {
-        "No options"
+        stringResource(Res.string.preset_no_options)
     } else {
-        preset.options.keys.joinToString { PresetOptionKeys.label(it) }
+        preset.options.keys.map { presetOptionLabel(it).resolve() }.joinToString()
     }
-
-@Composable
-private fun AppearanceSection(theme: ThemePreference, onThemeChange: (ThemePreference) -> Unit) {
-    SettingsSection("Appearance") {
-        Text("Theme", style = MaterialTheme.typography.bodyMedium)
-        SegmentedChoice(
-            options = ThemePreference.entries,
-            selected = theme,
-            optionLabel = { it.label() },
-            onSelect = onThemeChange,
-            optionTag = { "settings-theme-${it.wireName}" },
-        )
-    }
-}
 
 @Composable
 private fun ToolsSection(tools: ToolStatus?) {
-    SettingsSection("Tools") {
+    SettingsSection(stringResource(Res.string.section_tools)) {
         ToolRow("yt-dlp", tools?.ytDlp, "settings-tool-ytdlp")
         ToolRow("ffmpeg", tools?.ffmpeg, "settings-tool-ffmpeg")
         Text(
-            text = "Versions come from the local PATH probe. A missing tool stops a real download.",
+            text = stringResource(Res.string.tools_hint),
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -556,9 +635,9 @@ private fun ToolRow(label: String, availability: ToolAvailability?, testTag: Str
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(
             text = when {
-                availability == null -> "Not checked"
-                availability.available -> availability.version ?: "Available"
-                else -> "Not found"
+                availability == null -> stringResource(Res.string.tool_not_checked)
+                availability.available -> availability.version ?: stringResource(Res.string.tool_available)
+                else -> stringResource(Res.string.tool_not_found)
             },
             color = color,
             style = MaterialTheme.typography.bodyMedium,
@@ -567,7 +646,7 @@ private fun ToolRow(label: String, availability: ToolAvailability?, testTag: Str
 }
 
 @Composable
-private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = title,
@@ -585,22 +664,22 @@ private fun AddPresetDialog(
     onAdd: (String, Map<String, String>) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<UiText?>(null) }
     val selected = remember { mutableStateMapOf<String, Boolean>() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add preset") },
+        title = { Text(stringResource(Res.string.add_preset)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth().testTag("settings-preset-name"),
-                    label = { Text("Name") },
+                    label = { Text(stringResource(Res.string.name)) },
                     singleLine = true,
                 )
-                Text("Options", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(Res.string.options), style = MaterialTheme.typography.labelLarge)
                 PresetOptionKeys.all.forEach { key ->
                     Row(
                         modifier = Modifier
@@ -613,12 +692,15 @@ private fun AddPresetDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = selected[key] == true, onCheckedChange = null)
-                        Text(PresetOptionKeys.label(key), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            presetOptionLabel(key).resolve(),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
                 error?.let { message ->
                     Text(
-                        text = message,
+                        text = message.resolve(),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -629,7 +711,7 @@ private fun AddPresetDialog(
             TextButton(
                 onClick = {
                     if (name.isBlank()) {
-                        error = "Enter a preset name."
+                        error = UiText.of(Res.string.preset_name_required)
                     } else {
                         onAdd(
                             name,
@@ -639,12 +721,12 @@ private fun AddPresetDialog(
                 },
                 modifier = Modifier.testTag("settings-preset-save"),
             ) {
-                Text("Save")
+                Text(stringResource(Res.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss, modifier = Modifier.testTag("settings-preset-cancel")) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         },
     )

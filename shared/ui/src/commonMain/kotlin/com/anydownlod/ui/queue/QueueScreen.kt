@@ -30,7 +30,29 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.cancel
+import com.anydownlod.ui.generated.resources.cancel_body
+import com.anydownlod.ui.generated.resources.cancel_download
+import com.anydownlod.ui.generated.resources.cancel_many_title
+import com.anydownlod.ui.generated.resources.cancel_one_title
+import com.anydownlod.ui.generated.resources.cancel_selected
+import com.anydownlod.ui.generated.resources.empty_queue_body
+import com.anydownlod.ui.generated.resources.empty_queue_title
+import com.anydownlod.ui.generated.resources.eta
+import com.anydownlod.ui.generated.resources.keep_downloading
+import com.anydownlod.ui.generated.resources.kpi_not_started
+import com.anydownlod.ui.generated.resources.kpi_working
+import com.anydownlod.ui.generated.resources.open_source
+import com.anydownlod.ui.generated.resources.phase
+import com.anydownlod.ui.generated.resources.queue_subtitle
+import com.anydownlod.ui.generated.resources.queue_title
+import com.anydownlod.ui.generated.resources.start
+import com.anydownlod.ui.generated.resources.start_selected
+import com.anydownlod.ui.generated.resources.waiting_until
+import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.shell.EmptyStatePanel
+import org.jetbrains.compose.resources.stringResource
 import com.anydownlod.ui.shell.formatBytes
 import com.anydownlod.ui.shell.formatDueTime
 import com.anydownlod.ui.shell.formatEta
@@ -73,25 +95,25 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize().padding(horizontal = PageInset),
         ) {
             PageHeading(
-                title = "In progress",
-                subtitle = "Active and waiting downloads.",
+                title = stringResource(Res.string.queue_title),
+                subtitle = stringResource(Res.string.queue_subtitle),
             )
             if (rows.isEmpty()) {
                 EmptyStatePanel(
-                    title = "Nothing is downloading",
-                    body = "Add a URL above to start a download.",
+                    title = stringResource(Res.string.empty_queue_title),
+                    body = stringResource(Res.string.empty_queue_body),
                     modifier = Modifier.weight(1f),
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiTile(
                         value = working.toString(),
-                        label = "Working",
+                        label = stringResource(Res.string.kpi_working),
                         tone = StatusTone.Information,
                     )
                     KpiTile(
                         value = notStarted.toString(),
-                        label = "Not started",
+                        label = stringResource(Res.string.kpi_not_started),
                         tone = StatusTone.Critical,
                     )
                 }
@@ -108,10 +130,10 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("queue-start-selected"),
                     ) {
-                        Text("Start selected")
+                        Text(stringResource(Res.string.start_selected))
                     }
                     DestructiveOutlinedButton(
-                        text = "Cancel selected",
+                        text = stringResource(Res.string.cancel_selected),
                         onClick = {
                             if (rows.any { it.id in selectedIds && it.cancelNeedsConfirm }) {
                                 pendingCancelIds = selectedIds
@@ -157,16 +179,16 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 title = {
                     Text(
                         if (pendingCancelIds.size == 1) {
-                            "Cancel this download?"
+                            stringResource(Res.string.cancel_one_title)
                         } else {
-                            "Cancel selected downloads?"
+                            stringResource(Res.string.cancel_many_title)
                         }
                     )
                 },
-                text = { Text("This stops the download. It does not delete a finished file.") },
+                text = { Text(stringResource(Res.string.cancel_body)) },
                 confirmButton = {
                     DestructiveTextButton(
-                        text = "Cancel download",
+                        text = stringResource(Res.string.cancel_download),
                         onClick = {
                             presenter.cancelSelected(pendingCancelIds)
                             selectedIds = selectedIds - pendingCancelIds
@@ -177,7 +199,7 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingCancelIds = emptySet() }) {
-                        Text("Keep downloading")
+                        Text(stringResource(Res.string.keep_downloading))
                     }
                 },
             )
@@ -226,7 +248,7 @@ private fun QueueRowItem(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    StatusBadge(label = row.stateLabel, tone = tone, live = true)
+                    StatusBadge(label = row.stateLabel.resolve(), tone = tone, live = true)
                 }
                 row.sourceHost?.let { host ->
                     Text(
@@ -238,7 +260,10 @@ private fun QueueRowItem(
                     )
                 }
                 row.phase?.let { phase ->
-                    Text(text = "Phase: $phase", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = stringResource(Res.string.phase, phase),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
                 ProgressMeter(
                     progress = if (row.indeterminate) {
@@ -248,6 +273,7 @@ private fun QueueRowItem(
                     },
                     modifier = Modifier.testTag("queue-progress-${row.id}"),
                 )
+                val etaLabel = row.etaSeconds?.let { stringResource(Res.string.eta, formatEta(it)) }
                 val details = buildList {
                     row.downloadedBytes?.let { downloaded ->
                         add(
@@ -259,7 +285,7 @@ private fun QueueRowItem(
                         )
                     }
                     row.speedBytesPerSecond?.let { add(formatSpeed(it)) }
-                    row.etaSeconds?.let { add("ETA ${formatEta(it)}") }
+                    etaLabel?.let { add(it) }
                     if (!row.indeterminate) add("${(row.percent ?: 0.0).toInt()}%")
                 }
                 if (details.isNotEmpty()) {
@@ -271,7 +297,7 @@ private fun QueueRowItem(
                 }
                 row.scheduledAtEpochMillis?.let { due ->
                     Text(
-                        text = "Waiting until the source is available (${formatDueTime(due)}).",
+                        text = stringResource(Res.string.waiting_until, formatDueTime(due)),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -281,11 +307,11 @@ private fun QueueRowItem(
                             onClick = onStart,
                             modifier = Modifier.testTag("queue-start-${row.id}"),
                         ) {
-                            Text("Start")
+                            Text(stringResource(Res.string.start))
                         }
                     }
                     DestructiveOutlinedButton(
-                        text = "Cancel",
+                        text = stringResource(Res.string.cancel),
                         onClick = onCancel,
                         modifier = Modifier.testTag("queue-cancel-${row.id}"),
                     )
@@ -293,7 +319,7 @@ private fun QueueRowItem(
                         onClick = onOpenSource,
                         modifier = Modifier.testTag("queue-open-${row.id}"),
                     ) {
-                        Text("Open source")
+                        Text(stringResource(Res.string.open_source))
                     }
                 }
             }

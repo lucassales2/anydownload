@@ -5,6 +5,14 @@ import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.AppSettingsDefaults
 import com.anydownlod.core.domain.Preset
 import com.anydownlod.core.domain.ThemePreference
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.clear_minutes_error
+import com.anydownlod.ui.generated.resources.concurrency_error
+import com.anydownlod.ui.generated.resources.template_absolute
+import com.anydownlod.ui.generated.resources.template_empty_segment
+import com.anydownlod.ui.generated.resources.template_parent
+import com.anydownlod.ui.generated.resources.template_required
+import com.anydownlod.ui.i18n.UiText
 
 /**
  * Validation and writes for the Settings screen. Every setter is validated
@@ -17,25 +25,25 @@ class SettingsPresenter(private val repository: SettingsRepository) {
         repository.update { it.copy(downloadRoot = path.trim()) }
     }
 
-    fun setOutputTemplate(value: String): String? = setTemplate(value) { it.copy(outputTemplate = value) }
+    fun setOutputTemplate(value: String): UiText? = setTemplate(value) { it.copy(outputTemplate = value) }
 
-    fun setPlaylistTemplate(value: String): String? = setTemplate(value) { it.copy(playlistTemplate = value) }
+    fun setPlaylistTemplate(value: String): UiText? = setTemplate(value) { it.copy(playlistTemplate = value) }
 
-    fun setChannelTemplate(value: String): String? = setTemplate(value) { it.copy(channelTemplate = value) }
+    fun setChannelTemplate(value: String): UiText? = setTemplate(value) { it.copy(channelTemplate = value) }
 
-    fun setChapterTemplate(value: String): String? = setTemplate(value) { it.copy(chapterTemplate = value) }
+    fun setChapterTemplate(value: String): UiText? = setTemplate(value) { it.copy(chapterTemplate = value) }
 
-    fun setMaxConcurrentDownloads(text: String): String? {
+    fun setMaxConcurrentDownloads(text: String): UiText? {
         val value = text.trim().toIntOrNull()
-        if (value == null || value < 1) return "Concurrent downloads must be 1 or more."
+        if (value == null || value < 1) return UiText.of(Res.string.concurrency_error)
         repository.update { it.copy(maxConcurrentDownloads = value) }
         return null
     }
 
     /** Stored in seconds; the field is labeled in minutes. */
-    fun setClearCompletedMinutes(text: String): String? {
+    fun setClearCompletedMinutes(text: String): UiText? {
         val minutes = text.trim().toIntOrNull()
-        if (minutes == null || minutes < 0) return "Clear-completed minutes must be 0 or more."
+        if (minutes == null || minutes < 0) return UiText.of(Res.string.clear_minutes_error)
         repository.update { it.copy(clearCompletedAfterSeconds = minutes * 60L) }
         return null
     }
@@ -86,7 +94,7 @@ class SettingsPresenter(private val repository: SettingsRepository) {
         }
     }
 
-    private fun setTemplate(value: String, apply: (AppSettings) -> AppSettings): String? {
+    private fun setTemplate(value: String, apply: (AppSettings) -> AppSettings): UiText? {
         validateTemplate(value)?.let { return it }
         repository.update(apply)
         return null
@@ -94,14 +102,14 @@ class SettingsPresenter(private val repository: SettingsRepository) {
 
     companion object {
         /** A string check only: no yt-dlp run, no filesystem lookup. */
-        fun validateTemplate(value: String): String? {
-            if (value.isBlank()) return "Enter a template."
+        fun validateTemplate(value: String): UiText? {
+            if (value.isBlank()) return UiText.of(Res.string.template_required)
             if (value.startsWith('/') || value.startsWith('\\') || Regex("^[A-Za-z]:").containsMatchIn(value)) {
-                return "The template cannot be an absolute path."
+                return UiText.of(Res.string.template_absolute)
             }
             val segments = value.split('/', '\\')
-            if (segments.any { it == ".." }) return "The template cannot contain a \"..\" segment."
-            if (segments.any { it.isEmpty() }) return "The template has an empty path segment."
+            if (segments.any { it == ".." }) return UiText.of(Res.string.template_parent)
+            if (segments.any { it.isEmpty() }) return UiText.of(Res.string.template_empty_segment)
             return null
         }
     }

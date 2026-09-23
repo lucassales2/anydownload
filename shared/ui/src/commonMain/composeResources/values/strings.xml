@@ -80,6 +80,7 @@
     <string name="active">Active</string>
     <string name="never">Never</string>
     <string name="next_check">Next %1$s</string>
+    <string name="subscription_schedule">Every %1$s min · Last check %2$s · Next %3$s</string>
     <string name="title_filter_line">Title filter: %1$s</string>
     <string name="all_titles">All titles</string>
     <string name="skips_members">Skips members-only</string>

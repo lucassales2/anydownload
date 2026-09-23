@@ -3,6 +3,7 @@ package com.anydownlod.ui.history
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.shell.displayLabel
 
 /** One artifact line on a history row, with the original for host callbacks. */
@@ -20,7 +21,7 @@ data class HistoryRow(
     val title: String,
     val sourceUrl: String,
     val state: JobState,
-    val stateLabel: String,
+    val stateLabel: UiText,
     val errorMessage: String?,
     val canRetry: Boolean,
     val artifacts: List<HistoryArtifact>,

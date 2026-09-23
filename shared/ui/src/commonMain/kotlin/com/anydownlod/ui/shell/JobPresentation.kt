@@ -1,21 +1,12 @@
 package com.anydownlod.ui.shell
 
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.labelResource
 import kotlin.math.roundToInt
 
 /** Human label for a job state. [JobState.UNKNOWN] keeps its raw wire label. */
-fun JobState.displayLabel(): String = when (this) {
-    JobState.RESOLVING -> "Resolving"
-    JobState.PENDING -> "Pending"
-    JobState.SCHEDULED -> "Waiting"
-    JobState.QUEUED -> "Queued"
-    JobState.DOWNLOADING -> "Downloading"
-    JobState.POSTPROCESSING -> "Post-processing"
-    JobState.COMPLETED -> "Completed"
-    JobState.FAILED -> "Failed"
-    JobState.CANCELLED -> "Cancelled"
-    JobState.UNKNOWN -> wireName
-}
+fun JobState.displayLabel(): UiText = labelResource()
 
 /** Decimal byte formatting for download rows. */
 fun formatBytes(bytes: Long): String {

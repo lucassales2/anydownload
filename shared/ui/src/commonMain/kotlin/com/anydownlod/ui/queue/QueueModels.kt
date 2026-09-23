@@ -2,6 +2,7 @@ package com.anydownlod.ui.queue
 
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.shell.displayLabel
 
 /**
@@ -13,7 +14,7 @@ data class QueueRow(
     val sourceUrl: String,
     val sourceHost: String?,
     val state: JobState,
-    val stateLabel: String,
+    val stateLabel: UiText,
     val phase: String?,
     val percent: Double?,
     val downloadedBytes: Long?,

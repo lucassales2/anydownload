@@ -35,6 +35,7 @@ import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.luminance
@@ -47,6 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.select_all
+import org.jetbrains.compose.resources.stringResource
 
 /** Horizontal inset shared by the composer, lists, and page titles. */
 val PageInset = 20.dp
@@ -242,7 +246,10 @@ fun SelectionBar(
                 onClick = onToggleAll,
                 modifier = Modifier.testTag(selectAllTag),
             )
-            Text(text = "Select all", style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = stringResource(Res.string.select_all),
+                style = MaterialTheme.typography.labelLarge,
+            )
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -265,11 +272,12 @@ fun ActionRow(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> SegmentedChoice(
     options: List<T>,
     selected: T,
-    optionLabel: (T) -> String,
+    optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     optionTag: (T) -> String? = { null },
@@ -279,9 +287,12 @@ fun <T> SegmentedChoice(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()).padding(4.dp),
+        // FlowRow avoids nesting horizontalScroll inside Settings' verticalScroll,
+        // which breaks tagged mouse clicks in desktop Compose UI tests.
+        FlowRow(
+            modifier = Modifier.padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             options.forEach { option ->
                 val picked = option == selected

@@ -33,7 +33,43 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.all_titles
+import com.anydownlod.ui.generated.resources.cancel
+import com.anydownlod.ui.generated.resources.check
+import com.anydownlod.ui.generated.resources.check_all
+import com.anydownlod.ui.generated.resources.check_interval
+import com.anydownlod.ui.generated.resources.check_selected
+import com.anydownlod.ui.generated.resources.delete
+import com.anydownlod.ui.generated.resources.delete_subscription_body
+import com.anydownlod.ui.generated.resources.delete_subscription_title
+import com.anydownlod.ui.generated.resources.edit
+import com.anydownlod.ui.generated.resources.edit_subscription
+import com.anydownlod.ui.generated.resources.empty_subscriptions_body
+import com.anydownlod.ui.generated.resources.empty_subscriptions_title
+import com.anydownlod.ui.generated.resources.includes_members
+import com.anydownlod.ui.generated.resources.keep
+import com.anydownlod.ui.generated.resources.kpi_paused_sources
+import com.anydownlod.ui.generated.resources.kpi_running
+import com.anydownlod.ui.generated.resources.name
+import com.anydownlod.ui.generated.resources.never
+import com.anydownlod.ui.generated.resources.pause
+import com.anydownlod.ui.generated.resources.resume
+import com.anydownlod.ui.generated.resources.save
+import com.anydownlod.ui.generated.resources.skip_members
+import com.anydownlod.ui.generated.resources.skips_members
+import com.anydownlod.ui.generated.resources.subscription_options_locked
+import com.anydownlod.ui.generated.resources.subscription_schedule
+import com.anydownlod.ui.generated.resources.subscriptions_subtitle
+import com.anydownlod.ui.generated.resources.subscriptions_title
+import com.anydownlod.ui.generated.resources.title_filter
+import com.anydownlod.ui.generated.resources.title_filter_hint
+import com.anydownlod.ui.generated.resources.title_filter_line
+import com.anydownlod.ui.i18n.UiText
+import com.anydownlod.ui.i18n.resolve
+import com.anydownlod.ui.i18n.subscriptionStatusLabel
 import com.anydownlod.ui.shell.EmptyStatePanel
+import org.jetbrains.compose.resources.stringResource
 import com.anydownlod.ui.shell.formatUtcMinute
 import com.anydownlod.ui.theme.ActionRow
 import com.anydownlod.ui.theme.AppTextField
@@ -67,25 +103,25 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = PageInset)) {
             PageHeading(
-                title = "Followed sources",
-                subtitle = "Channels and playlists on a schedule.",
+                title = stringResource(Res.string.subscriptions_title),
+                subtitle = stringResource(Res.string.subscriptions_subtitle),
             )
             if (rows.isEmpty()) {
                 EmptyStatePanel(
-                    title = "No subscriptions",
-                    body = "Paste a channel or playlist URL in the add form above and choose Subscribe. Checks run while the app is open.",
+                    title = stringResource(Res.string.empty_subscriptions_title),
+                    body = stringResource(Res.string.empty_subscriptions_body),
                     modifier = Modifier.weight(1f),
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiTile(
                         value = rows.count { !it.paused }.toString(),
-                        label = "Running",
+                        label = stringResource(Res.string.kpi_running),
                         tone = StatusTone.Positive,
                     )
                     KpiTile(
                         value = rows.count { it.paused }.toString(),
-                        label = "Paused sources",
+                        label = stringResource(Res.string.kpi_paused_sources),
                         tone = StatusTone.Neutral,
                     )
                 }
@@ -101,14 +137,14 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         onClick = { presenter.checkAll() },
                         modifier = Modifier.testTag("subscriptions-check-all"),
                     ) {
-                        Text("Check all")
+                        Text(stringResource(Res.string.check_all))
                     }
                     OutlinedButton(
                         onClick = { presenter.checkSelected(selectedIds) },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("subscriptions-check-selected"),
                     ) {
-                        Text("Check selected")
+                        Text(stringResource(Res.string.check_selected))
                     }
                 }
                 LazyColumn(
@@ -153,11 +189,11 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
     deletingId?.let { id ->
         AlertDialog(
             onDismissRequest = { deletingId = null },
-            title = { Text("Delete this subscription?") },
-            text = { Text("Downloads already in the queue or history stay. Future checks stop.") },
+            title = { Text(stringResource(Res.string.delete_subscription_title)) },
+            text = { Text(stringResource(Res.string.delete_subscription_body)) },
             confirmButton = {
                 DestructiveTextButton(
-                    text = "Delete",
+                    text = stringResource(Res.string.delete),
                     onClick = {
                         presenter.delete(id)
                         deletingId = null
@@ -167,7 +203,7 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
             },
             dismissButton = {
                 TextButton(onClick = { deletingId = null }) {
-                    Text("Keep")
+                    Text(stringResource(Res.string.keep))
                 }
             },
         )
@@ -195,11 +231,7 @@ private fun SubscriptionRowItem(
         row.lastError != null -> StatusTone.Negative
         else -> StatusTone.Positive
     }
-    val badge = when {
-        row.paused -> "Paused"
-        row.lastError != null -> "Check failed"
-        else -> "Active"
-    }
+    val badge = subscriptionStatusLabel(row.paused, row.lastError != null).resolve()
     ObjectCard(accent = tone.colors().foreground) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -241,16 +273,32 @@ private fun SubscriptionRowItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                val lastCheck = row.lastCheckedAtEpochMillis?.let(::formatUtcMinute)
+                    ?: stringResource(Res.string.never)
+                val nextCheck = row.nextCheckAtEpochMillis?.let(::formatUtcMinute) ?: "\u2014"
                 Text(
-                    text = "Every ${row.intervalMinutes} min  ·  Last check ${
-                        row.lastCheckedAtEpochMillis?.let(::formatUtcMinute) ?: "Never"
-                    }  ·  Next ${row.nextCheckAtEpochMillis?.let(::formatUtcMinute) ?: "\u2014"}",
+                    text = stringResource(
+                        Res.string.subscription_schedule,
+                        row.intervalMinutes,
+                        lastCheck,
+                        nextCheck,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                val filterSummary = if (row.titleFilter.isEmpty()) {
+                    stringResource(Res.string.all_titles)
+                } else {
+                    row.titleFilter
+                }
+                val membersSummary = if (row.skipMembersOnly) {
+                    stringResource(Res.string.skips_members)
+                } else {
+                    stringResource(Res.string.includes_members)
+                }
                 Text(
-                    text = "Title filter: ${if (row.titleFilter.isEmpty()) "All titles" else row.titleFilter}" +
+                    text = stringResource(Res.string.title_filter_line, filterSummary) +
                         "  ·  " +
-                        if (row.skipMembersOnly) "Skips members-only" else "Includes members-only",
+                        membersSummary,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -270,22 +318,28 @@ private fun SubscriptionRowItem(
                         onClick = onCheck,
                         modifier = Modifier.testTag("subscriptions-check-${row.id}"),
                     ) {
-                        Text("Check")
+                        Text(stringResource(Res.string.check))
                     }
                     TextButton(
                         onClick = onTogglePause,
                         modifier = Modifier.testTag("subscriptions-pause-${row.id}"),
                     ) {
-                        Text(if (row.paused) "Resume" else "Pause")
+                        Text(
+                            if (row.paused) {
+                                stringResource(Res.string.resume)
+                            } else {
+                                stringResource(Res.string.pause)
+                            }
+                        )
                     }
                     TextButton(
                         onClick = onEdit,
                         modifier = Modifier.testTag("subscriptions-edit-${row.id}"),
                     ) {
-                        Text("Edit")
+                        Text(stringResource(Res.string.edit))
                     }
                     DestructiveTextButton(
-                        text = "Delete",
+                        text = stringResource(Res.string.delete),
                         onClick = onDelete,
                         modifier = Modifier.testTag("subscriptions-delete-${row.id}"),
                     )
@@ -299,39 +353,39 @@ private fun SubscriptionRowItem(
 private fun EditSubscriptionDialog(
     row: SubscriptionRow,
     onDismiss: () -> Unit,
-    onSave: (name: String, intervalText: String, titleFilter: String, skipMembersOnly: Boolean) -> String?,
+    onSave: (name: String, intervalText: String, titleFilter: String, skipMembersOnly: Boolean) -> UiText?,
 ) {
     var name by remember(row.id) { mutableStateOf(row.name) }
     var intervalText by remember(row.id) { mutableStateOf(row.intervalMinutes.toString()) }
     var titleFilter by remember(row.id) { mutableStateOf(row.titleFilter) }
     var skipMembersOnly by remember(row.id) { mutableStateOf(row.skipMembersOnly) }
-    var error by remember(row.id) { mutableStateOf<String?>(null) }
+    var error by remember(row.id) { mutableStateOf<UiText?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit subscription") },
+        title = { Text(stringResource(Res.string.edit_subscription)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-name"),
-                    label = { Text("Name") },
+                    label = { Text(stringResource(Res.string.name)) },
                     singleLine = true,
                 )
                 AppTextField(
                     value = intervalText,
                     onValueChange = { intervalText = it.filter(Char::isDigit) },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-interval"),
-                    label = { Text("Check interval (minutes)") },
+                    label = { Text(stringResource(Res.string.check_interval)) },
                     singleLine = true,
                 )
                 AppTextField(
                     value = titleFilter,
                     onValueChange = { titleFilter = it },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-filter"),
-                    label = { Text("Title filter") },
-                    supportingText = { Text("Regular expression; empty means every title.") },
+                    label = { Text(stringResource(Res.string.title_filter)) },
+                    supportingText = { Text(stringResource(Res.string.title_filter_hint)) },
                     singleLine = true,
                 )
                 Row(
@@ -345,16 +399,15 @@ private fun EditSubscriptionDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(checked = skipMembersOnly, onCheckedChange = null)
-                    Text("Skip members-only items", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(Res.string.skip_members), style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(
-                    text = "Quality and format stay as they were when you subscribed. " +
-                        "Delete and subscribe again to change them.",
+                    text = stringResource(Res.string.subscription_options_locked),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 error?.let { message ->
                     Text(
-                        text = message,
+                        text = message.resolve(),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -369,7 +422,7 @@ private fun EditSubscriptionDialog(
                 },
                 modifier = Modifier.testTag("subscriptions-edit-save"),
             ) {
-                Text("Save")
+                Text(stringResource(Res.string.save))
             }
         },
         dismissButton = {
@@ -377,7 +430,7 @@ private fun EditSubscriptionDialog(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("subscriptions-edit-cancel"),
             ) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         },
     )
