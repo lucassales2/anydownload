@@ -48,7 +48,7 @@ fun main() = application {
             exitApplication()
         },
         title = "AnyDownload",
-        state = rememberWindowState(size = DpSize(1100.dp, 800.dp)),
+        state = rememberWindowState(size = DpSize(1280.dp, 860.dp)),
     ) {
         App(desktop.graph)
     }

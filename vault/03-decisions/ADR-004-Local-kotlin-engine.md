@@ -8,7 +8,7 @@ tags: [architecture, decisions, engine]
 
 # ADR-004 — Local Kotlin engine, no backend
 
-[Decision log](Decision-log.md) · [Architecture](../02-architecture/Architecture.md) · [Product brief](../01-product/Product-brief.md)
+[Decision log](Decision-log.md) · [Architecture](../02-architecture/Architecture.md) · [Product brief](../01-product/Product-brief.md) · [Client yt-dlp options](../05-research/Client-yt-dlp-options.md)
 
 Supersedes [ADR-001](ADR-001-Execution-model.md) and [ADR-003](ADR-003-Backend-engine.md).
 
@@ -45,6 +45,10 @@ Compose/Wasm and iOS are in scope and unproven for this engine. The browser has 
 FFmpeg-style postprocessing (merge, audio extract, clips) needs a per-target media toolkit decision. Copying extractor logic from yt-dlp must follow that project's license; [T-006](../06-tasks/T-006-Review-security-licensing.md) still records the license inventory. Store review does not.
 
 The existing client scaffold (`shared/network`, job API DTOs) was drafted for a remote server. It is not the engine.
+
+## Addendum — 2026-09-23
+
+[Client yt-dlp options](../05-research/Client-yt-dlp-options.md) compares Briefcase, Buildozer, Chaquopy, pyqtdeploy, Termux, and a Kotlin port as ways to run yt-dlp on web, iOS, and Android. Briefcase, Buildozer, pyqtdeploy, and Termux are rejected as the app shell. Chaquopy can embed upstream yt-dlp inside the Android app only, and only as a platform adapter outside shared code. The Kotlin port remains this decision. The note also records what that port still needs: a JavaScript challenge runtime, a per-target media toolkit, and a web client that cannot fetch arbitrary origins. Desktop stays on the installed CLI from [ADR-005](ADR-005-Desktop-metube-phase.md). No Python dependency was added.
 
 ## Approval
 

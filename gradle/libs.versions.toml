@@ -2,7 +2,7 @@
 # Toolchain. Pinned as one reviewed combination; see README "Client scaffold"
 # and vault/06-tasks/T-008-Scaffold-KMP-clients.md. Provisional until T-004
 # records minimum supported versions.
-agp = "9.4.0"
+agp = "9.0.0"
 kotlin = "2.4.20"
 composeMultiplatform = "1.12.0"
 coroutines = "1.11.0"

@@ -6,7 +6,7 @@ tags: [architecture, platforms]
 
 # Platform feasibility and sharing matrix
 
-[Home](../Home.md) · [Architecture](Architecture.md) · [Target spike](../06-tasks/T-004-Validate-KMP-targets.md) · [Upstream review](../05-research/Upstream-review.md)
+[Home](../Home.md) · [Architecture](Architecture.md) · [Target spike](../06-tasks/T-004-Validate-KMP-targets.md) · [Upstream review](../05-research/Upstream-review.md) · [Client yt-dlp options](../05-research/Client-yt-dlp-options.md)
 
 KMP shares code; it does not erase operating-system, runtime, browser, or app-store restrictions. Every entry below describes a **plan to validate**, not current app support.
 

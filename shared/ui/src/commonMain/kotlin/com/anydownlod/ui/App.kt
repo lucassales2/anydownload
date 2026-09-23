@@ -4,8 +4,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +18,7 @@ import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.settings.SettingsScreen
 import com.anydownlod.ui.shell.AppShell
 import com.anydownlod.ui.shell.ShellTab
+import com.anydownlod.ui.theme.AnyDownloadTheme
 
 /**
  * Root composable called by the Android, iOS, desktop, and web hosts.
@@ -47,8 +46,8 @@ fun App(graph: AppGraph = remember { InMemoryAppGraph() }) {
         ThemePreference.DARK -> true
     }
 
-    MaterialTheme(colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+    AnyDownloadTheme(darkTheme = darkTheme) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (settingsOpen) {
                 SettingsScreen(graph = graph, onClose = { settingsOpen = false })
             } else {

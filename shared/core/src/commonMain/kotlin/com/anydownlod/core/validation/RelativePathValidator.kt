@@ -1,11 +1,18 @@
 package com.anydownlod.core.validation
 
+/** Why a destination folder was rejected. The UI maps each case to a string resource. */
+enum class RelativePathError {
+    Absolute,
+    EmptySegment,
+    DotSegment,
+}
+
 /** Result of validating a destination folder relative to the download root. */
 sealed interface RelativePathValidation {
     /** [path] is normalized with `/` separators; an empty path means the root. */
     data class Valid(val path: String) : RelativePathValidation
 
-    data class Invalid(val reason: String) : RelativePathValidation
+    data class Invalid(val error: RelativePathError) : RelativePathValidation
 }
 
 /**
@@ -24,15 +31,15 @@ object RelativePathValidator {
             return RelativePathValidation.Valid("")
         }
         if (candidate.startsWith('/') || candidate.startsWith('\\') || drivePrefix.containsMatchIn(candidate)) {
-            return RelativePathValidation.Invalid("Choose a folder inside the download root, not an absolute path.")
+            return RelativePathValidation.Invalid(RelativePathError.Absolute)
         }
 
         val segments = candidate.split('/', '\\')
         if (segments.any { it.isEmpty() }) {
-            return RelativePathValidation.Invalid("The folder path has an empty segment.")
+            return RelativePathValidation.Invalid(RelativePathError.EmptySegment)
         }
         if (segments.any { it == "." || it == ".." }) {
-            return RelativePathValidation.Invalid("The folder path cannot use \".\" or \"..\".")
+            return RelativePathValidation.Invalid(RelativePathError.DotSegment)
         }
 
         return RelativePathValidation.Valid(segments.joinToString("/"))

@@ -1,24 +1,27 @@
 package com.anydownlod.ui.add
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,10 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.CaptionFormat
@@ -43,6 +43,11 @@ import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.ui.theme.AppTextField
+import com.anydownlod.ui.theme.MessageStrip
+import com.anydownlod.ui.theme.PageInset
+import com.anydownlod.ui.theme.SegmentedChoice
+import com.anydownlod.ui.theme.StatusTone
 
 private val qualityOptions = listOf(
     QualityPreference.Best,
@@ -58,9 +63,9 @@ private val qualityOptions = listOf(
 private val bitrateOptions = listOf("", "128", "192", "256", "320")
 
 /**
- * The MeTube add form: always-visible fields, media-type-specific fields, and
- * a collapsed advanced section. State lives in [AddFormPresenter] so it
- * survives opening Settings and switching tabs.
+ * The add composer: a source field with the primary action beside it, format
+ * choices, and a delivery group. State lives in [AddFormPresenter] so it
+ * survives opening Settings and switching lists.
  */
 @Composable
 fun AddForm(
@@ -73,14 +78,45 @@ fun AddForm(
     val status by presenter.status.collectAsState()
     val clipboard = LocalClipboardManager.current
 
-    Card(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = PageInset, vertical = 12.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
         Column(
             modifier = Modifier
-                .heightIn(max = 430.dp)
+                .heightIn(max = 360.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "New download",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(text = "Add a source", style = MaterialTheme.typography.titleMedium)
+                }
+                OutlinedButton(
+                    onClick = { presenter.subscribe() },
+                    enabled = state.canSubscribe,
+                    modifier = Modifier.testTag("add-subscribe-button"),
+                ) {
+                    Text("Subscribe")
+                }
+            }
+
             UrlEntryRow(
                 urlText = state.urlText,
                 downloadEnabled = state.hasInput,
@@ -102,56 +138,6 @@ fun AddForm(
                 onSelect = presenter::setMediaType,
             )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Auto-start", style = MaterialTheme.typography.labelLarge)
-                Switch(
-                    checked = state.startPolicy == StartPolicy.AUTOMATIC,
-                    onCheckedChange = {
-                        presenter.setStartPolicy(if (it) StartPolicy.AUTOMATIC else StartPolicy.MANUAL)
-                    },
-                    modifier = Modifier.testTag("add-autostart-switch"),
-                )
-                Text(
-                    text = if (state.startPolicy == StartPolicy.AUTOMATIC) {
-                        "Start as soon as added"
-                    } else {
-                        "Wait for Start"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-
-            OutlinedTextField(
-                value = state.filenamePrefix,
-                onValueChange = presenter::setFilenamePrefix,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Filename prefix") },
-                singleLine = true,
-            )
-
-            OutlinedTextField(
-                value = state.destinationFolder,
-                onValueChange = presenter::setDestinationFolder,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Destination folder") },
-                supportingText = {
-                    Text(state.destinationError ?: "Relative to the download root. Blank uses the root.")
-                },
-                isError = state.destinationError != null,
-                singleLine = true,
-            )
-
-            if (cookiesConfigured) {
-                LabeledCheckbox(
-                    label = "Use the configured cookie file",
-                    checked = state.useCookies,
-                    onCheckedChange = presenter::setUseCookies,
-                )
-            }
-
             when (state.mediaType) {
                 MediaType.VIDEO -> VideoFields(state, presenter)
                 MediaType.AUDIO -> AudioFields(state, presenter)
@@ -159,18 +145,24 @@ fun AddForm(
                 MediaType.THUMBNAIL -> Text(
                     text = "Thumbnail only: the image is written without the media file.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            AdvancedSection(state = state, presets = presets, presenter = presenter)
-
-            OutlinedButton(
-                onClick = { presenter.subscribe() },
-                enabled = state.canSubscribe,
-                modifier = Modifier.testTag("add-subscribe-button"),
+            Text(text = "Delivery", style = MaterialTheme.typography.titleSmall)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
-                Text("Subscribe")
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DeliveryFields(state, presenter, cookiesConfigured)
+                }
             }
+
+            AdvancedSection(state = state, presets = presets, presenter = presenter)
 
             if (state.lineErrors.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -185,24 +177,105 @@ fun AddForm(
             }
 
             status?.let { current ->
-                Text(
+                MessageStrip(
                     text = current.message,
-                    color = if (current.isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    tone = if (current.isError) StatusTone.Negative else StatusTone.Positive,
                 )
             }
         }
     }
 }
 
+@Composable
+private fun DeliveryFields(
+    state: AddFormState,
+    presenter: AddFormPresenter,
+    cookiesConfigured: Boolean,
+) {
+    AutoStartRow(state, presenter)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 520.dp) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                PrefixField(state, presenter, Modifier.weight(1f))
+                FolderField(state, presenter, Modifier.weight(1f))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                PrefixField(state, presenter, Modifier.fillMaxWidth())
+                FolderField(state, presenter, Modifier.fillMaxWidth())
+            }
+        }
+    }
+    if (cookiesConfigured) {
+        LabeledCheckbox(
+            label = "Use the configured cookie file",
+            checked = state.useCookies,
+            onCheckedChange = presenter::setUseCookies,
+        )
+    }
+}
+
+@Composable
+private fun AutoStartRow(state: AddFormState, presenter: AddFormPresenter) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Auto-start", style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = if (state.startPolicy == StartPolicy.AUTOMATIC) {
+                    "Start as soon as added"
+                } else {
+                    "Wait for Start"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = state.startPolicy == StartPolicy.AUTOMATIC,
+            onCheckedChange = {
+                presenter.setStartPolicy(if (it) StartPolicy.AUTOMATIC else StartPolicy.MANUAL)
+            },
+            modifier = Modifier.testTag("add-autostart-switch"),
+        )
+    }
+}
+
+@Composable
+private fun PrefixField(state: AddFormState, presenter: AddFormPresenter, modifier: Modifier) {
+    AppTextField(
+        value = state.filenamePrefix,
+        onValueChange = presenter::setFilenamePrefix,
+        modifier = modifier,
+        label = { Text("Filename prefix") },
+        singleLine = true,
+    )
+}
+
+@Composable
+private fun FolderField(state: AddFormState, presenter: AddFormPresenter, modifier: Modifier) {
+    AppTextField(
+        value = state.destinationFolder,
+        onValueChange = presenter::setDestinationFolder,
+        modifier = modifier,
+        label = { Text("Destination folder") },
+        supportingText = {
+            Text(state.destinationError ?: "Relative to the download root. Blank uses the root.")
+        },
+        isError = state.destinationError != null,
+        singleLine = true,
+    )
+}
+
 /**
- * URL field with Paste and Download beside it, matching a single entry bar:
- * type or paste a link, then start the download from the same row.
+ * URL field with Paste and Download beside it: type or paste a link, then
+ * start the download from the same row.
  */
 @Composable
 private fun UrlEntryRow(
@@ -212,18 +285,23 @@ private fun UrlEntryRow(
     onPaste: () -> Unit,
     onDownload: () -> Unit,
 ) {
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
+        AppTextField(
             value = urlText,
             onValueChange = onUrlChange,
             modifier = Modifier.weight(1f).testTag("add-url-field"),
             placeholder = { Text("Paste a source URL") },
             minLines = 1,
             maxLines = 4,
+            colors = fieldColors,
         )
         FilledTonalButton(
             onClick = onPaste,
@@ -267,6 +345,7 @@ private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
     Text(
         text = "Quality is a preference, not a promise that the file will be that height.",
         style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -290,18 +369,20 @@ private fun AudioFields(state: AddFormState, presenter: AddFormPresenter) {
         Text(
             text = "Lossy containers are converted when the source does not already match.",
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     } else {
         Text(
             text = "${state.audioContainer.displayName()} is lossless; no bitrate is applied.",
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 @Composable
 private fun CaptionsFields(state: AddFormState, presenter: AddFormPresenter) {
-    OutlinedTextField(
+    AppTextField(
         value = state.captionLanguage,
         onValueChange = presenter::setCaptionLanguage,
         modifier = Modifier.fillMaxWidth(),
@@ -331,7 +412,7 @@ private fun AdvancedSection(
     presets: List<Preset>,
     presenter: AddFormPresenter,
 ) {
-    HorizontalDivider()
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     TextButton(
         onClick = presenter::toggleAdvancedExpanded,
         modifier = Modifier.testTag("add-advanced-toggle"),
@@ -341,7 +422,7 @@ private fun AdvancedSection(
     if (!state.advancedExpanded) return
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
+        AppTextField(
             value = state.playlistItemLimit,
             onValueChange = presenter::setPlaylistItemLimit,
             modifier = Modifier.fillMaxWidth(),
@@ -352,14 +433,14 @@ private fun AdvancedSection(
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
+            AppTextField(
                 value = state.clipStart,
                 onValueChange = presenter::setClipStart,
                 modifier = Modifier.weight(1f),
                 label = { Text("Clip start") },
                 singleLine = true,
             )
-            OutlinedTextField(
+            AppTextField(
                 value = state.clipEnd,
                 onValueChange = presenter::setClipEnd,
                 modifier = Modifier.weight(1f),
@@ -382,6 +463,7 @@ private fun AdvancedSection(
         Text(
             text = "SponsorBlock removal needs marker data and may have no effect on some sources.",
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         if (state.mediaType == MediaType.VIDEO || state.mediaType == MediaType.AUDIO) {
@@ -396,6 +478,7 @@ private fun AdvancedSection(
             Text(
                 text = "No presets configured yet. Add them in Settings.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text("Presets (applied in the order shown)", style = MaterialTheme.typography.labelLarge)
@@ -407,7 +490,7 @@ private fun AdvancedSection(
             }
         }
 
-        OutlinedTextField(
+        AppTextField(
             value = "",
             onValueChange = {},
             enabled = false,
@@ -429,10 +512,11 @@ private fun LabeledCheckbox(
             value = checked,
             role = Role.Checkbox,
             onValueChange = onCheckedChange,
-        ),
+        ).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = null)
+        Spacer(Modifier.width(4.dp))
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
 }
@@ -445,20 +529,18 @@ private fun <T> ChoiceRow(
     optionLabel: (T) -> String,
     onSelect: (T) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge)
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            options.forEach { option ->
-                FilterChip(
-                    selected = option == selected,
-                    onClick = { onSelect(option) },
-                    label = { Text(optionLabel(option)) },
-                )
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SegmentedChoice(
+            options = options,
+            selected = selected,
+            optionLabel = optionLabel,
+            onSelect = onSelect,
+        )
     }
 }
 

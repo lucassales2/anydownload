@@ -34,7 +34,7 @@ class BatchUrlValidatorTest {
         )
         assertEquals(1, result.invalid.size)
         assertEquals("not-a-url", result.invalid.single().raw)
-        assertTrue(result.invalid.single().reason.isNotBlank())
+        assertEquals(SourceUrlError.UnsupportedScheme, result.invalid.single().error)
         assertTrue(result.hasInvalid)
     }
 

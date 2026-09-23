@@ -287,7 +287,7 @@ object DownloadPaths {    fun outputTemplatePath(downloadRoot: Path, template: S
             }
 
             is RelativePathValidation.Invalid ->
-                throw IllegalArgumentException(result.reason)
+                throw IllegalArgumentException(result.error.name)
         }
     }
 }

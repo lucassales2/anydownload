@@ -57,6 +57,7 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 - [Risk register](04-delivery/Risk-register.md)
 - [Security and licensing](04-delivery/Security-and-licensing.md)
 - [Upstream review](05-research/Upstream-review.md) — reviewed 2026-09-16, with pinned source references.
+- [Client yt-dlp options](05-research/Client-yt-dlp-options.md) — reviewed 2026-09-23. Python packagers versus the Kotlin port on web, iOS, and Android. Does not change ADR-004.
 
 ### Templates
 

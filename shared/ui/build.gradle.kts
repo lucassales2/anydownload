@@ -12,6 +12,8 @@ kotlin {
         namespace = "com.anydownlod.ui"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
+        // Compose resources are read through the generated Res class on Android too.
+        androidResources.enable = true
     }
 
     jvm()
@@ -40,6 +42,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            api(compose.components.resources)
         }
         jvmTest.dependencies {
             // Headless shell click-through; no desktop window or OS input needed.
@@ -48,4 +51,16 @@ kotlin {
             implementation(kotlin("test"))
         }
     }
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.anydownlod.ui.generated.resources"
+}
+
+// UI tests assert the English copy. A host locale such as pt-BR must not
+// change those lookups while values-pt-rBR is present.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
 }

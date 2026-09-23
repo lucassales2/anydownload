@@ -1,25 +1,23 @@
 package com.anydownlod.ui.subscriptions
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,10 +35,21 @@ import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
 import com.anydownlod.ui.shell.EmptyStatePanel
 import com.anydownlod.ui.shell.formatUtcMinute
+import com.anydownlod.ui.theme.ActionRow
+import com.anydownlod.ui.theme.AppTextField
+import com.anydownlod.ui.theme.DestructiveTextButton
+import com.anydownlod.ui.theme.KpiTile
+import com.anydownlod.ui.theme.ObjectCard
+import com.anydownlod.ui.theme.PageHeading
+import com.anydownlod.ui.theme.PageInset
+import com.anydownlod.ui.theme.SelectionBar
+import com.anydownlod.ui.theme.StatusBadge
+import com.anydownlod.ui.theme.StatusTone
+import com.anydownlod.ui.theme.colors
 
 /**
- * Subscriptions table bound to [com.anydownlod.core.SubscriptionRepository].
- * Checks only record timestamps until T-035 wires real scans.
+ * Subscriptions bound to [com.anydownlod.core.SubscriptionRepository].
+ * Checks only record timestamps until a real scan is wired.
  */
 @Composable
 fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
@@ -55,69 +64,74 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
         selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
     }
 
-    if (rows.isEmpty()) {
-        EmptyStatePanel(
-            title = "No subscriptions",
-            body = "Paste a channel or playlist URL in the add form above and choose Subscribe. Checks run while the app is open.",
-            modifier = modifier,
-        )
-        return
-    }
-
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            TriStateCheckbox(
-                state = when {
-                    selectedIds.isEmpty() -> ToggleableState.Off
-                    selectedIds.size == rows.size -> ToggleableState.On
-                    else -> ToggleableState.Indeterminate
-                },
-                onClick = {
-                    selectedIds = if (selectedIds.size == rows.size) emptySet() else rows.map { it.id }.toSet()
-                },
-                modifier = Modifier.testTag("subscriptions-select-all"),
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(horizontal = PageInset)) {
+            PageHeading(
+                title = "Followed sources",
+                subtitle = "Channels and playlists on a schedule.",
             )
-            Text("Select all")
-            Spacer(Modifier.weight(1f))
-            OutlinedButton(
-                onClick = { presenter.checkAll() },
-                modifier = Modifier.testTag("subscriptions-check-all"),
-            ) {
-                Text("Check all")
-            }
-            OutlinedButton(
-                onClick = { presenter.checkSelected(selectedIds) },
-                enabled = selectedIds.isNotEmpty(),
-                modifier = Modifier.testTag("subscriptions-check-selected"),
-            ) {
-                Text("Check selected")
-            }
-        }
-
-        SubscriptionHeader()
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("subscriptions-list"),
-        ) {
-            items(rows, key = { it.id }) { row ->
-                SubscriptionRowItem(
-                    row = row,
-                    selected = row.id in selectedIds,
-                    onSelectedChange = { checked ->
-                        selectedIds = if (checked) selectedIds + row.id else selectedIds - row.id
-                    },
-                    onCheck = { presenter.checkNow(row.id) },
-                    onTogglePause = {
-                        if (row.paused) presenter.resume(row.id) else presenter.pause(row.id)
-                    },
-                    onEdit = { editingId = row.id },
-                    onDelete = { deletingId = row.id },
+            if (rows.isEmpty()) {
+                EmptyStatePanel(
+                    title = "No subscriptions",
+                    body = "Paste a channel or playlist URL in the add form above and choose Subscribe. Checks run while the app is open.",
+                    modifier = Modifier.weight(1f),
                 )
-                HorizontalDivider()
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    KpiTile(
+                        value = rows.count { !it.paused }.toString(),
+                        label = "Running",
+                        tone = StatusTone.Positive,
+                    )
+                    KpiTile(
+                        value = rows.count { it.paused }.toString(),
+                        label = "Paused sources",
+                        tone = StatusTone.Neutral,
+                    )
+                }
+                SelectionBar(
+                    selection = selectionState(selectedIds.size, rows.size),
+                    onToggleAll = {
+                        selectedIds = if (selectedIds.size == rows.size) emptySet() else rows.map { it.id }.toSet()
+                    },
+                    selectAllTag = "subscriptions-select-all",
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = { presenter.checkAll() },
+                        modifier = Modifier.testTag("subscriptions-check-all"),
+                    ) {
+                        Text("Check all")
+                    }
+                    OutlinedButton(
+                        onClick = { presenter.checkSelected(selectedIds) },
+                        enabled = selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("subscriptions-check-selected"),
+                    ) {
+                        Text("Check selected")
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth().testTag("subscriptions-list"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                ) {
+                    items(rows, key = { it.id }) { row ->
+                        SubscriptionRowItem(
+                            row = row,
+                            selected = row.id in selectedIds,
+                            onSelectedChange = { checked ->
+                                selectedIds = if (checked) selectedIds + row.id else selectedIds - row.id
+                            },
+                            onCheck = { presenter.checkNow(row.id) },
+                            onTogglePause = {
+                                if (row.paused) presenter.resume(row.id) else presenter.pause(row.id)
+                            },
+                            onEdit = { editingId = row.id },
+                            onDelete = { deletingId = row.id },
+                        )
+                    }
+                }
             }
         }
     }
@@ -142,15 +156,14 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
             title = { Text("Delete this subscription?") },
             text = { Text("Downloads already in the queue or history stay. Future checks stop.") },
             confirmButton = {
-                TextButton(
+                DestructiveTextButton(
+                    text = "Delete",
                     onClick = {
                         presenter.delete(id)
                         deletingId = null
                     },
                     modifier = Modifier.testTag("subscriptions-confirm-delete"),
-                ) {
-                    Text("Delete")
-                }
+                )
             },
             dismissButton = {
                 TextButton(onClick = { deletingId = null }) {
@@ -161,22 +174,10 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun SubscriptionHeader() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spacer(Modifier.width(48.dp))
-        Text("Name", Modifier.weight(1.6f), style = MaterialTheme.typography.labelMedium)
-        Text("Interval", Modifier.width(64.dp), style = MaterialTheme.typography.labelMedium)
-        Text("Title filter", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-        Text("Members", Modifier.width(64.dp), style = MaterialTheme.typography.labelMedium)
-        Text("Last check", Modifier.width(120.dp), style = MaterialTheme.typography.labelMedium)
-        Text("Next check", Modifier.width(120.dp), style = MaterialTheme.typography.labelMedium)
-        Text("Status", Modifier.weight(0.8f), style = MaterialTheme.typography.labelMedium)
-        Text("Actions", Modifier.width(300.dp), style = MaterialTheme.typography.labelMedium)
-    }
+private fun selectionState(selected: Int, total: Int): ToggleableState = when {
+    selected == 0 -> ToggleableState.Off
+    selected == total -> ToggleableState.On
+    else -> ToggleableState.Indeterminate
 }
 
 @Composable
@@ -189,106 +190,106 @@ private fun SubscriptionRowItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Checkbox(
-            checked = selected,
-            onCheckedChange = onSelectedChange,
-            modifier = Modifier.testTag("subscriptions-select-${row.id}"),
-        )
-        Column(
-            modifier = Modifier.weight(1.6f).padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+    val tone = when {
+        row.paused -> StatusTone.Neutral
+        row.lastError != null -> StatusTone.Negative
+        else -> StatusTone.Positive
+    }
+    val badge = when {
+        row.paused -> "Paused"
+        row.lastError != null -> "Check failed"
+        else -> "Active"
+    }
+    ObjectCard(accent = tone.colors().foreground) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = row.name,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Checkbox(
+                checked = selected,
+                onCheckedChange = onSelectedChange,
+                modifier = Modifier.testTag("subscriptions-select-${row.id}"),
             )
-            Text(
-                text = row.sourceHost ?: row.sourceUrl,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = row.sourceUrl,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text(
-            text = "${row.intervalMinutes} min",
-            modifier = Modifier.width(64.dp).padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            text = if (row.titleFilter.isEmpty()) "All titles" else row.titleFilter,
-            modifier = Modifier.weight(1f).padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = if (row.skipMembersOnly) "Yes" else "No",
-            modifier = Modifier.width(64.dp).padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            text = row.lastCheckedAtEpochMillis?.let(::formatUtcMinute) ?: "Never",
-            modifier = Modifier.width(120.dp).padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            text = row.nextCheckAtEpochMillis?.let(::formatUtcMinute) ?: "\u2014",
-            modifier = Modifier.width(120.dp).padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Column(modifier = Modifier.weight(0.8f).padding(top = 8.dp)) {
-            when {
-                row.paused -> Text("Paused", style = MaterialTheme.typography.bodySmall)
-                row.lastError != null -> Text(
-                    text = row.lastError,
-                    color = MaterialTheme.colorScheme.error,
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = row.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatusBadge(label = badge, tone = tone)
+                }
+                Text(
+                    text = row.sourceHost ?: row.sourceUrl,
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = row.sourceUrl,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Every ${row.intervalMinutes} min  ·  Last check ${
+                        row.lastCheckedAtEpochMillis?.let(::formatUtcMinute) ?: "Never"
+                    }  ·  Next ${row.nextCheckAtEpochMillis?.let(::formatUtcMinute) ?: "\u2014"}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = "Title filter: ${if (row.titleFilter.isEmpty()) "All titles" else row.titleFilter}" +
+                        "  ·  " +
+                        if (row.skipMembersOnly) "Skips members-only" else "Includes members-only",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-
-                else -> Text("Active", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Row(
-            modifier = Modifier.width(300.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(
-                onClick = onCheck,
-                modifier = Modifier.testTag("subscriptions-check-${row.id}"),
-            ) {
-                Text("Check")
-            }
-            TextButton(
-                onClick = onTogglePause,
-                modifier = Modifier.testTag("subscriptions-pause-${row.id}"),
-            ) {
-                Text(if (row.paused) "Resume" else "Pause")
-            }
-            TextButton(
-                onClick = onEdit,
-                modifier = Modifier.testTag("subscriptions-edit-${row.id}"),
-            ) {
-                Text("Edit")
-            }
-            TextButton(
-                onClick = onDelete,
-                modifier = Modifier.testTag("subscriptions-delete-${row.id}"),
-            ) {
-                Text("Delete")
+                if (!row.paused && row.lastError != null) {
+                    Text(
+                        text = row.lastError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                ActionRow {
+                    TextButton(
+                        onClick = onCheck,
+                        modifier = Modifier.testTag("subscriptions-check-${row.id}"),
+                    ) {
+                        Text("Check")
+                    }
+                    TextButton(
+                        onClick = onTogglePause,
+                        modifier = Modifier.testTag("subscriptions-pause-${row.id}"),
+                    ) {
+                        Text(if (row.paused) "Resume" else "Pause")
+                    }
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.testTag("subscriptions-edit-${row.id}"),
+                    ) {
+                        Text("Edit")
+                    }
+                    DestructiveTextButton(
+                        text = "Delete",
+                        onClick = onDelete,
+                        modifier = Modifier.testTag("subscriptions-delete-${row.id}"),
+                    )
+                }
             }
         }
     }
@@ -311,21 +312,21 @@ private fun EditSubscriptionDialog(
         title = { Text("Edit subscription") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                AppTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-name"),
                     label = { Text("Name") },
                     singleLine = true,
                 )
-                OutlinedTextField(
+                AppTextField(
                     value = intervalText,
                     onValueChange = { intervalText = it.filter(Char::isDigit) },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-interval"),
                     label = { Text("Check interval (minutes)") },
                     singleLine = true,
                 )
-                OutlinedTextField(
+                AppTextField(
                     value = titleFilter,
                     onValueChange = { titleFilter = it },
                     modifier = Modifier.fillMaxWidth().testTag("subscriptions-edit-filter"),

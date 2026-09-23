@@ -1,22 +1,26 @@
 package com.anydownlod.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,10 +33,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.anydownlod.ui.theme.AppTextField
+import com.anydownlod.ui.theme.DestructiveOutlinedButton
+import com.anydownlod.ui.theme.DestructiveTextButton
+import com.anydownlod.ui.theme.MessageStrip
+import com.anydownlod.ui.theme.ObjectCard
+import com.anydownlod.ui.theme.SegmentedChoice
+import com.anydownlod.ui.theme.StatusTone
+import com.anydownlod.ui.theme.colors
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.AppSettingsDefaults
 import com.anydownlod.core.domain.Preset
@@ -78,22 +91,31 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Button(onClick = onClose, modifier = Modifier.testTag("settings-close")) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = "Settings", style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    text = "How downloads are saved on this device.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FilledTonalButton(onClick = onClose, modifier = Modifier.testTag("settings-close")) {
                 Text("Close")
             }
         }
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = 760.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             StorageSection(
                 downloadRoot = settings.downloadRoot,
@@ -187,19 +209,15 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
             ToolsSection(tools = tools)
 
             notice?.let { message ->
-                Text(
-                    text = message,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                MessageStrip(text = message, tone = StatusTone.Information)
             }
 
-            OutlinedButton(
+            DestructiveOutlinedButton(
+                text = "Restore defaults",
                 onClick = { confirmRestore = true },
                 modifier = Modifier.testTag("settings-restore-defaults"),
-            ) {
-                Text("Restore defaults")
-            }
+            )
+        }
         }
     }
 
@@ -214,7 +232,8 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                 )
             },
             confirmButton = {
-                TextButton(
+                DestructiveTextButton(
+                    text = "Restore",
                     onClick = {
                         presenter.restoreDefaults()
                         outputTemplate = AppSettingsDefaults.OUTPUT_TEMPLATE
@@ -233,9 +252,7 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                         notice = "Defaults restored."
                     },
                     modifier = Modifier.testTag("settings-confirm-restore"),
-                ) {
-                    Text("Restore")
-                }
+                )
             },
             dismissButton = {
                 TextButton(onClick = { confirmRestore = false }) {
@@ -251,7 +268,8 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
             title = { Text("Delete the cookie file?") },
             text = { Text("The stored cookie file is removed and the status returns to Not configured.") },
             confirmButton = {
-                TextButton(
+                DestructiveTextButton(
+                    text = "Delete",
                     onClick = {
                         graph.cookieStore.delete()
                         presenter.setCookiesConfigured(false)
@@ -259,9 +277,7 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                         notice = "Cookie status cleared."
                     },
                     modifier = Modifier.testTag("settings-confirm-cookie-delete"),
-                ) {
-                    Text("Delete")
-                }
+                )
             },
             dismissButton = {
                 TextButton(onClick = { confirmCookieDelete = false }) {
@@ -334,7 +350,7 @@ private fun TemplateField(
     onValueChange: (String) -> Unit,
 ) {
     val currentError = error
-    OutlinedTextField(
+    AppTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth().testTag(testTag),
@@ -384,7 +400,7 @@ private fun NumberField(
     onValueChange: (String) -> Unit,
 ) {
     val currentError = error
-    OutlinedTextField(
+    AppTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth().testTag(testTag),
@@ -416,13 +432,12 @@ private fun CookiesSection(
             Button(onClick = onImport, modifier = Modifier.testTag("settings-cookies-import")) {
                 Text(if (configured) "Replace" else "Import")
             }
-            OutlinedButton(
+            DestructiveOutlinedButton(
+                text = "Delete",
                 onClick = onDelete,
                 enabled = configured,
                 modifier = Modifier.testTag("settings-cookies-delete"),
-            ) {
-                Text("Delete")
-            }
+            )
         }
     }
 }
@@ -502,16 +517,13 @@ private fun presetSummary(preset: Preset): String =
 private fun AppearanceSection(theme: ThemePreference, onThemeChange: (ThemePreference) -> Unit) {
     SettingsSection("Appearance") {
         Text("Theme", style = MaterialTheme.typography.bodyMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemePreference.entries.forEach { option ->
-                FilterChip(
-                    selected = option == theme,
-                    onClick = { onThemeChange(option) },
-                    label = { Text(option.label()) },
-                    modifier = Modifier.testTag("settings-theme-${option.wireName}"),
-                )
-            }
-        }
+        SegmentedChoice(
+            options = ThemePreference.entries,
+            selected = theme,
+            optionLabel = { it.label() },
+            onSelect = onThemeChange,
+            optionTag = { "settings-theme-${it.wireName}" },
+        )
     }
 }
 
@@ -529,7 +541,18 @@ private fun ToolsSection(tools: ToolStatus?) {
 
 @Composable
 private fun ToolRow(label: String, availability: ToolAvailability?, testTag: String) {
-    Row(modifier = Modifier.fillMaxWidth().testTag(testTag)) {
+    val tone = when {
+        availability == null -> null
+        availability.available -> StatusTone.Positive
+        else -> StatusTone.Negative
+    }
+    val color = tone?.colors()?.foreground ?: MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier.fillMaxWidth().testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(
             text = when {
@@ -537,16 +560,22 @@ private fun ToolRow(label: String, availability: ToolAvailability?, testTag: Str
                 availability.available -> availability.version ?: "Available"
                 else -> "Not found"
             },
+            color = color,
             style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
 
 @Composable
-private fun SettingsSection(title: String, content: @Composable () -> Unit) {
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
-        content()
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        ObjectCard(contentPadding = 16.dp, content = content)
     }
 }
 
@@ -564,7 +593,7 @@ private fun AddPresetDialog(
         title = { Text("Add preset") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                AppTextField(
                     value = name,
                     onValueChange = { name = it },
                     modifier = Modifier.fillMaxWidth().testTag("settings-preset-name"),

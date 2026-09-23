@@ -6,7 +6,7 @@ sealed interface BatchUrlEntry {
 
     data class Valid(override val raw: String, val url: String) : BatchUrlEntry
 
-    data class Invalid(override val raw: String, val reason: String) : BatchUrlEntry
+    data class Invalid(override val raw: String, val error: SourceUrlError) : BatchUrlEntry
 }
 
 data class BatchUrlValidation(val entries: List<BatchUrlEntry>) {
@@ -29,7 +29,7 @@ object BatchUrlValidator {
             .map { line ->
                 when (val result = SourceUrlValidator.validate(line)) {
                     is SourceUrlValidation.Valid -> BatchUrlEntry.Valid(line, result.url)
-                    is SourceUrlValidation.Invalid -> BatchUrlEntry.Invalid(line, result.reason)
+                    is SourceUrlValidation.Invalid -> BatchUrlEntry.Invalid(line, result.error)
                 }
             }
             .toList()

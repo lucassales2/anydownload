@@ -17,7 +17,7 @@ tags: [architecture, decisions, index]
 | [ADR-004](ADR-004-Local-kotlin-engine.md) | Local Kotlin port of yt-dlp; no backend; no app login | Accepted | Owner, 2026-09-21. Target feasibility is still T-004. |
 | [ADR-005](ADR-005-Desktop-metube-phase.md) | Desktop MeTube UI first, using installed yt-dlp; Kotlin port after | Accepted | Owner, 2026-09-21. Does not supersede ADR-004. Tasks T-026–T-036. |
 
-The project license is MIT as of 2026-09-21. Next records should capture the per-target media toolkit (FFmpeg or equivalent), the web/iOS feasibility result, and dependency licenses for any copied extractor code. Use the [ADR template](../99-templates/ADR-template.md).
+The project license is MIT as of 2026-09-21. A 2026-09-23 comparison of Python packagers and the Kotlin port is in [Client yt-dlp options](../05-research/Client-yt-dlp-options.md). It does not replace ADR-004. Next records should capture the per-target media toolkit (FFmpeg or equivalent), the web/iOS feasibility result, and dependency licenses for any copied extractor code. Use the [ADR template](../99-templates/ADR-template.md).
 
 ## Lifecycle
 
