@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -69,6 +71,7 @@ fun AddForm(
 ) {
     val state by presenter.state.collectAsState()
     val status by presenter.status.collectAsState()
+    val clipboard = LocalClipboardManager.current
 
     Card(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Column(
@@ -78,16 +81,17 @@ fun AddForm(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
-                value = state.urlText,
-                onValueChange = presenter::setUrl,
-                modifier = Modifier.fillMaxWidth().testTag("add-url-field"),
-                label = { Text("Source URLs") },
-                supportingText = {
-                    Text("One URL per line. A batch creates one job per valid line.")
-                },
-                minLines = 2,
-                maxLines = 5,
+            UrlEntryRow(
+                urlText = state.urlText,
+                downloadEnabled = state.hasInput,
+                onUrlChange = presenter::setUrl,
+                onPaste = { presenter.applyPastedText(clipboard.getText()?.text) },
+                onDownload = { presenter.submit() },
+            )
+            Text(
+                text = "One URL per line. A batch creates one job per valid line.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
             )
 
             ChoiceRow(
@@ -160,21 +164,12 @@ fun AddForm(
 
             AdvancedSection(state = state, presets = presets, presenter = presenter)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { presenter.submit() },
-                    enabled = state.hasInput,
-                    modifier = Modifier.testTag("add-download-button"),
-                ) {
-                    Text("Download")
-                }
-                OutlinedButton(
-                    onClick = { presenter.subscribe() },
-                    enabled = state.canSubscribe,
-                    modifier = Modifier.testTag("add-subscribe-button"),
-                ) {
-                    Text("Subscribe")
-                }
+            OutlinedButton(
+                onClick = { presenter.subscribe() },
+                enabled = state.canSubscribe,
+                modifier = Modifier.testTag("add-subscribe-button"),
+            ) {
+                Text("Subscribe")
             }
 
             if (state.lineErrors.isNotEmpty()) {
@@ -201,6 +196,47 @@ fun AddForm(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
+        }
+    }
+}
+
+/**
+ * URL field with Paste and Download beside it, matching a single entry bar:
+ * type or paste a link, then start the download from the same row.
+ */
+@Composable
+private fun UrlEntryRow(
+    urlText: String,
+    downloadEnabled: Boolean,
+    onUrlChange: (String) -> Unit,
+    onPaste: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = urlText,
+            onValueChange = onUrlChange,
+            modifier = Modifier.weight(1f).testTag("add-url-field"),
+            placeholder = { Text("Paste a source URL") },
+            minLines = 1,
+            maxLines = 4,
+        )
+        FilledTonalButton(
+            onClick = onPaste,
+            modifier = Modifier.testTag("add-paste-button"),
+        ) {
+            Text("Paste")
+        }
+        Button(
+            onClick = onDownload,
+            enabled = downloadEnabled,
+            modifier = Modifier.testTag("add-download-button"),
+        ) {
+            Text("Download")
         }
     }
 }

@@ -65,6 +65,19 @@ class AddFormPresenter(
 
     fun setUrl(value: String) = mutate { it.copy(urlText = value, lineErrors = emptyList()) }
 
+    /**
+     * Replaces the URL field with clipboard text. A blank clipboard leaves the
+     * field as it is and reports that there was nothing to paste.
+     */
+    fun applyPastedText(text: String?) {
+        val value = text?.trim().orEmpty()
+        if (value.isEmpty()) {
+            _status.value = AddStatus("Clipboard is empty.", isError = true)
+            return
+        }
+        setUrl(value)
+    }
+
     fun setMediaType(value: MediaType) = mutate { it.copy(mediaType = value, lineErrors = emptyList()) }
 
     fun setStartPolicy(value: StartPolicy) = mutate { it.copy(startPolicy = value) }

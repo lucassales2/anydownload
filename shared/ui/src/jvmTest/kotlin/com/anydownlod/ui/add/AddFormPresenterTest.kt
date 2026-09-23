@@ -36,6 +36,23 @@ class AddFormPresenterTest {
     private fun fixture() = Fixture()
 
     @Test
+    fun pasteReplacesTheFieldAndBlankClipboardLeavesIt() {
+        val f = fixture()
+        f.presenter.setUrl("https://example.com/watch?v=old")
+
+        f.presenter.applyPastedText("  https://example.com/watch?v=pasted  ")
+
+        assertEquals("https://example.com/watch?v=pasted", f.presenter.state.value.urlText)
+        assertNull(f.presenter.status.value)
+
+        f.presenter.applyPastedText(" \n ")
+
+        assertEquals("https://example.com/watch?v=pasted", f.presenter.state.value.urlText)
+        assertEquals("Clipboard is empty.", f.presenter.status.value?.message)
+        assertEquals(true, f.presenter.status.value?.isError)
+    }
+
+    @Test
     fun audioChoicesDoNotCarryVideoFields() {
         val f = fixture()
         f.presenter.setUrl("https://example.com/watch?v=fixture")

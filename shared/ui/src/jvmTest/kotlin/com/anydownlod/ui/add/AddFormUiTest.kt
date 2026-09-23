@@ -1,14 +1,19 @@
 package com.anydownlod.ui.add
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.text.AnnotatedString
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryAppGraph
@@ -60,6 +65,42 @@ class AddFormUiTest {
         assertEquals(3, graph.engine.jobs.value.size)
         onNodeWithText("not-a-url: Only http:// and https:// sources are supported.", substring = true)
             .assertExists()
+    }
+
+    @Test
+    fun pasteButtonFillsTheFieldAndDownloadCreatesAJob() = runComposeUiTest {
+        val graph = InMemoryAppGraph()
+        setContent {
+            CompositionLocalProvider(
+                LocalClipboardManager provides FakeClipboard("https://example.com/watch?v=pasted"),
+            ) {
+                App(graph)
+            }
+        }
+
+        onNodeWithTag("add-download-button").assertIsNotEnabled()
+        onNodeWithTag("add-paste-button").performClick()
+        onNodeWithTag("add-url-field").assertTextEquals("https://example.com/watch?v=pasted")
+        onNodeWithTag("add-download-button").assertIsEnabled().performClick()
+
+        assertEquals(1, graph.engine.jobs.value.size)
+        assertEquals(
+            "https://example.com/watch?v=pasted",
+            graph.engine.jobs.value.single().request.sourceUrl,
+        )
+    }
+
+    @Test
+    fun pasteButtonReportsAnEmptyClipboard() = runComposeUiTest {
+        setContent {
+            CompositionLocalProvider(LocalClipboardManager provides FakeClipboard(null)) {
+                App(InMemoryAppGraph())
+            }
+        }
+
+        onNodeWithTag("add-paste-button").performClick()
+        onNodeWithText("Clipboard is empty.").assertExists()
+        onNodeWithTag("add-download-button").assertIsNotEnabled()
     }
 
     @Test
@@ -119,5 +160,15 @@ class AddFormUiTest {
         onNodeWithTag("add-url-field").performTextInput("\nhttps://example.com/channel/second")
         onNodeWithTag("add-subscribe-button").assertIsNotEnabled()
         assertEquals(1, graph.subscriptions.subscriptions.value.size)
+    }
+}
+
+private class FakeClipboard(initial: String?) : ClipboardManager {
+    private var text: String? = initial
+
+    override fun getText(): AnnotatedString? = text?.let(::AnnotatedString)
+
+    override fun setText(annotatedString: AnnotatedString) {
+        text = annotatedString.text
     }
 }
