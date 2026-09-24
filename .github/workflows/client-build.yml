@@ -19,7 +19,9 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: android-actions/setup-android@v3
+      # v3 still installs the legacy SDK "tools" package, which Google no longer
+      # publishes. sdkmanager then fails with "Failed to find package 'tools'".
+      - uses: android-actions/setup-android@v4
 
       - name: Install Android platform 37
         run: sdkmanager --install "platforms;android-37.0"
