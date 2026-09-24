@@ -153,6 +153,9 @@ class FreshWindowsInstallWithoutYtDlpTest {
 
             onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=fresh-windows")
             onNodeWithTag("add-download-button").performScrollTo().performClick()
+            onNodeWithText("A preview could not be loaded on this device. You can still start the download.")
+                .assertExists()
+            onNodeWithTag("preview-download").performClick()
 
             assertEquals(JobState.FAILED, app.graph.engine.jobs.value.single().state)
             onNodeWithText("Added 1 job: 1 started, 0 waiting to start.").assertExists()

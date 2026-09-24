@@ -115,7 +115,7 @@
     <string name="new_download">New download</string>
     <string name="add_source">Add a source</string>
     <string name="subscribe">Subscribe</string>
-    <string name="add_batch_hint">One URL per line. A batch creates one job per valid line.</string>
+    <string name="add_batch_hint">One URL per line. A batch creates one job per valid line. A single link opens a preview first.</string>
     <string name="media_type">Media type</string>
     <string name="thumbnail_only">Thumbnail only: the image is written without the media file.</string>
     <string name="delivery">Delivery</string>
@@ -172,6 +172,28 @@
     <string name="caption_either">Either</string>
 
     <string name="clipboard_empty">Clipboard is empty.</string>
+    <string name="clipboard_permission_title">Check the clipboard for links?</string>
+    <string name="clipboard_permission_body">AnyDownload will ask the system once for permission to read the clipboard, then check whether the latest copy is a link this app can download. The choice is saved on this device. Paste still works on its own.</string>
+    <string name="clipboard_allow">Allow</string>
+    <string name="clipboard_not_now">Not now</string>
+    <string name="clipboard_link_found">Using the link from the clipboard.</string>
+    <string name="clipboard_link_banner">The clipboard has a link this app can download.</string>
+    <string name="clipboard_use_link">Use link</string>
+    <string name="clipboard_preview_link">Preview link</string>
+    <string name="clipboard_section">Clipboard</string>
+    <string name="clipboard_setting_body">When allowed, the app checks the latest clipboard text for one http or https link.</string>
+    <string name="clipboard_status_allowed">Clipboard check allowed</string>
+    <string name="clipboard_status_denied">Clipboard check off</string>
+    <string name="clipboard_status_unknown">Clipboard check not asked yet</string>
+    <string name="preview_heading">Preview</string>
+    <string name="preview_loading">Loading the title and thumbnail…</string>
+    <string name="preview_failed">This link could not be previewed. You can still start the download.</string>
+    <string name="preview_unavailable">A preview could not be loaded on this device. You can still start the download.</string>
+    <string name="preview_timed_out">The preview took too long. You can still start the download.</string>
+    <string name="preview_back">Back</string>
+    <string name="preview_views">%1$s views</string>
+    <string name="preview_uploaded">Uploaded %1$s</string>
+    <string name="preview_playlist_count">Playlist · %1$s items</string>
     <string name="paste_one_url">Paste at least one source URL.</string>
     <string name="no_valid_urls">No valid URLs in the batch.</string>
     <string name="subscribe_needs_url">Paste a channel or playlist URL to subscribe.</string>

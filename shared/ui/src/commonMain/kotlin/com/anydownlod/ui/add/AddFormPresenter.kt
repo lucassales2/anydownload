@@ -14,12 +14,14 @@ import com.anydownlod.core.domain.Subscription
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.validation.BatchUrlValidator
+import com.anydownlod.core.validation.ClipboardLink
 import com.anydownlod.core.validation.SourceUrlValidation
 import com.anydownlod.core.validation.SourceUrlValidator
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.added_jobs
 import com.anydownlod.ui.generated.resources.already_queued
 import com.anydownlod.ui.generated.resources.clipboard_empty
+import com.anydownlod.ui.generated.resources.clipboard_link_found
 import com.anydownlod.ui.generated.resources.no_valid_urls
 import com.anydownlod.ui.generated.resources.nothing_to_add
 import com.anydownlod.ui.generated.resources.paste_one_url
@@ -89,6 +91,31 @@ class AddFormPresenter(
             return
         }
         setUrl(value)
+    }
+
+    /**
+     * Puts a clipboard link into an empty field. Returns the URL when it was
+     * applied. A non-empty field is left alone so typed text is not replaced.
+     */
+    fun applyDetectedLink(url: String): String? {
+        val compatible = ClipboardLink.compatibleUrl(url) ?: return null
+        if (_state.value.urlText.isNotBlank()) return null
+        setUrl(compatible)
+        _status.value = AddStatus(UiText.of(Res.string.clipboard_link_found))
+        return compatible
+    }
+
+    /**
+     * The one http(s) URL in the field, or null when the field is a batch,
+     * empty, or already showing an input error. A batch keeps the direct
+     * download path; a single link opens the preview first.
+     */
+    fun singleSourceUrl(): String? {
+        val current = _state.value
+        if (current.inputError() != null) return null
+        val lines = current.urlText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.size != 1) return null
+        return (SourceUrlValidator.validate(lines.single()) as? SourceUrlValidation.Valid)?.url
     }
 
     fun setMediaType(value: MediaType) = mutate { it.copy(mediaType = value, lineErrors = emptyList()) }

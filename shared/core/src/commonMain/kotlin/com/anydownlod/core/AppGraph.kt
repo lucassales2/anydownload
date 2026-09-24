@@ -16,6 +16,18 @@ interface AppGraph {
     val settings: SettingsRepository
     val toolProbe: ToolProbe
 
+    /**
+     * Loads title, thumbnail, and related metadata for one URL before a
+     * download. Hosts without an extractor report [UnavailableMediaPreviewSource].
+     */
+    val previews: MediaPreviewSource get() = UnavailableMediaPreviewSource
+
+    /**
+     * Fetches a preview thumbnail. Returns null when the host cannot load
+     * images or the URL is not an http(s) image. Never throws.
+     */
+    val loadThumbnail: suspend (String) -> ByteArray? get() = { null }
+
     /** Opens a source URL in the host browser. No-op where no browser exists. */
     val openUrl: (String) -> Unit get() = {}
 

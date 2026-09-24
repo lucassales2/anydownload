@@ -6,6 +6,7 @@ import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.ArtifactKind
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.CaptionFormat
+import com.anydownlod.core.domain.ClipboardAccess
 import com.anydownlod.core.domain.CaptionPreference
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadOptions
@@ -156,6 +157,8 @@ internal data class SettingsDocument(
     val clearCompletedAfterSeconds: Long = AppSettingsDefaults.CLEAR_COMPLETED_AFTER_SECONDS,
     val subscriptionIntervalMinutes: Int = AppSettingsDefaults.SUBSCRIPTION_INTERVAL_MINUTES,
     val theme: String = ThemePreference.SYSTEM.wireName,
+    val clipboardAccess: String = ClipboardAccess.UNKNOWN.wireName,
+    val handledClipboardUrl: String = "",
     val cookiesConfigured: Boolean = false,
     val cookieFilePath: String? = null,
     val presets: List<PresetDto> = emptyList(),
@@ -387,6 +390,8 @@ internal fun AppSettings.toDocument(cookieFilePath: String?): SettingsDocument =
     clearCompletedAfterSeconds = clearCompletedAfterSeconds,
     subscriptionIntervalMinutes = subscriptionIntervalMinutes,
     theme = theme.wireName,
+    clipboardAccess = clipboardAccess.wireName,
+    handledClipboardUrl = handledClipboardUrl,
     cookiesConfigured = cookiesConfigured,
     cookieFilePath = cookieFilePath,
     presets = presets.map { it.toDto() },
@@ -402,6 +407,9 @@ internal fun SettingsDocument.toDomain(): AppSettings = AppSettings(
     clearCompletedAfterSeconds = clearCompletedAfterSeconds,
     subscriptionIntervalMinutes = subscriptionIntervalMinutes,
     theme = ThemePreference.entries.firstOrNull { it.wireName == theme } ?: ThemePreference.SYSTEM,
+    clipboardAccess = ClipboardAccess.entries.firstOrNull { it.wireName == clipboardAccess }
+        ?: ClipboardAccess.UNKNOWN,
+    handledClipboardUrl = handledClipboardUrl,
     cookiesConfigured = cookiesConfigured,
     presets = presets.map { it.toDomain() },
 )

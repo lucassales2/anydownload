@@ -1,6 +1,7 @@
 package com.anydownlod.desktop.store
 
 import com.anydownlod.core.domain.AppSettings
+import com.anydownlod.core.domain.ClipboardAccess
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.CaptionFormat
 import com.anydownlod.core.domain.CaptionPreference
@@ -226,6 +227,8 @@ class DesktopStoreTest {
         val settings = AppSettings(
             downloadRoot = "/tmp/downloads",
             theme = ThemePreference.DARK,
+            clipboardAccess = ClipboardAccess.ALLOWED,
+            handledClipboardUrl = "https://example.com/watch?v=1",
             maxConcurrentDownloads = 4,
             clearCompletedAfterSeconds = 300,
             cookiesConfigured = true,

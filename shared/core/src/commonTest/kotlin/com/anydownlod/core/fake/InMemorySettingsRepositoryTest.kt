@@ -1,6 +1,7 @@
 package com.anydownlod.core.fake
 
 import com.anydownlod.core.domain.AppSettings
+import com.anydownlod.core.domain.ClipboardAccess
 import com.anydownlod.core.domain.ThemePreference
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,6 +26,7 @@ class InMemorySettingsRepositoryTest {
         assertEquals(0L, settings.clearCompletedAfterSeconds)
         assertEquals(60, settings.subscriptionIntervalMinutes)
         assertEquals(ThemePreference.SYSTEM, settings.theme)
+        assertEquals(ClipboardAccess.UNKNOWN, settings.clipboardAccess)
         assertFalse(settings.cookiesConfigured)
         assertTrue(settings.presets.isEmpty())
     }

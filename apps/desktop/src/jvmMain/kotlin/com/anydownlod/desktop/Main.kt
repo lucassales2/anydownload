@@ -9,6 +9,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
@@ -20,7 +21,9 @@ import com.anydownlod.desktop.engine.DownloadPaths
 import com.anydownlod.desktop.engine.ExecutableOnPath
 import com.anydownlod.desktop.engine.JavaCliProcessRunner
 import com.anydownlod.desktop.engine.PathToolProbe
+import com.anydownlod.desktop.engine.ThumbnailBytes
 import com.anydownlod.desktop.engine.YtDlpCliEngine
+import com.anydownlod.desktop.engine.YtDlpMediaPreviewSource
 import com.anydownlod.desktop.store.DesktopCookieStore
 import com.anydownlod.desktop.store.DesktopStore
 import com.anydownlod.desktop.store.PersistingSettingsRepository
@@ -34,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.net.URI
 import java.nio.file.Files
@@ -50,7 +54,7 @@ fun main() = application {
         title = "AnyDownload",
         state = rememberWindowState(size = DpSize(1280.dp, 860.dp)),
     ) {
-        App(desktop.graph)
+        App(desktop.graph, offerClipboardCheck = true)
     }
 }
 
@@ -116,6 +120,12 @@ internal class DesktopApp(
                 subscriptions = subscriptions.subscriptions.value,
                 settings = settings.settings.value,
             )
+            val previewDirectory = {
+                val root = settings.settings.value.downloadRoot
+                val candidate = root.takeIf { it.isNotBlank() }?.let { runCatching { Path.of(it) }.getOrNull() }
+                if (candidate != null && Files.isDirectory(candidate)) candidate
+                else Path.of(System.getProperty("java.io.tmpdir"))
+            }
             return DesktopApp(
                 store = store,
                 graph = desktopGraph(
@@ -125,6 +135,13 @@ internal class DesktopApp(
                     toolProbe = PathToolProbe(processRunner, resolveExecutable),
                     cookieStore = cookieStore,
                     startupWarning = store.loadWarning,
+                    previews = YtDlpMediaPreviewSource(
+                        runner = processRunner,
+                        resolveExecutable = resolveExecutable,
+                        workingDirectory = previewDirectory,
+                        ioDispatcher = ioDispatcher,
+                    ),
+                    loadThumbnail = { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } },
                 ),
                 shutdownEngine = {
                     engine.shutdown()
@@ -142,12 +159,16 @@ private fun desktopGraph(
     toolProbe: ToolProbe,
     cookieStore: CookieStore,
     startupWarning: String?,
+    previews: MediaPreviewSource,
+    loadThumbnail: suspend (String) -> ByteArray?,
 ): AppGraph = object : AppGraph {
     override val engine: DownloadEngine = downloadEngine
     override val subscriptions: SubscriptionRepository = subscriptionRepository
     override val settings: SettingsRepository = settingsRepository
     override val toolProbe: ToolProbe = toolProbe
     override val cookieStore: CookieStore = cookieStore
+    override val previews: MediaPreviewSource = previews
+    override val loadThumbnail: suspend (String) -> ByteArray? = loadThumbnail
     override val openUrl: (String) -> Unit = { url -> openInBrowser(url) }
     override val openFile: (Artifact) -> Unit = { artifact ->
         openArtifact(settingsRepository, artifact, reveal = false)

@@ -115,7 +115,7 @@
     <string name="new_download">Novo download</string>
     <string name="add_source">Adicionar uma fonte</string>
     <string name="subscribe">Inscrever</string>
-    <string name="add_batch_hint">Uma URL por linha. Um lote cria um trabalho por linha válida.</string>
+    <string name="add_batch_hint">Uma URL por linha. Um lote cria um trabalho por linha válida. Um único link abre uma prévia primeiro.</string>
     <string name="media_type">Tipo de mídia</string>
     <string name="thumbnail_only">Só a miniatura: a imagem é gravada sem o arquivo de mídia.</string>
     <string name="delivery">Entrega</string>
@@ -172,6 +172,28 @@
     <string name="caption_either">Qualquer</string>
 
     <string name="clipboard_empty">A área de transferência está vazia.</string>
+    <string name="clipboard_permission_title">Verificar a área de transferência por links?</string>
+    <string name="clipboard_permission_body">O AnyDownload vai pedir ao sistema, uma vez, permissão para ler a área de transferência e então verificar se a cópia mais recente é um link compatível com este app. A escolha fica salva neste aparelho. Colar continua funcionando por conta própria.</string>
+    <string name="clipboard_allow">Permitir</string>
+    <string name="clipboard_not_now">Agora não</string>
+    <string name="clipboard_link_found">Usando o link da área de transferência.</string>
+    <string name="clipboard_link_banner">A área de transferência tem um link que este app pode baixar.</string>
+    <string name="clipboard_use_link">Usar link</string>
+    <string name="clipboard_preview_link">Ver prévia</string>
+    <string name="clipboard_section">Área de transferência</string>
+    <string name="clipboard_setting_body">Quando permitido, o app verifica se o texto mais recente da área de transferência é um único link http ou https.</string>
+    <string name="clipboard_status_allowed">Verificação da área de transferência permitida</string>
+    <string name="clipboard_status_denied">Verificação da área de transferência desligada</string>
+    <string name="clipboard_status_unknown">Verificação da área de transferência ainda não perguntada</string>
+    <string name="preview_heading">Prévia</string>
+    <string name="preview_loading">Carregando o título e a miniatura…</string>
+    <string name="preview_failed">Não foi possível mostrar a prévia deste link. Você ainda pode iniciar o download.</string>
+    <string name="preview_unavailable">Não foi possível carregar uma prévia neste aparelho. Você ainda pode iniciar o download.</string>
+    <string name="preview_timed_out">A prévia demorou demais. Você ainda pode iniciar o download.</string>
+    <string name="preview_back">Voltar</string>
+    <string name="preview_views">%1$s visualizações</string>
+    <string name="preview_uploaded">Publicado em %1$s</string>
+    <string name="preview_playlist_count">Playlist · %1$s itens</string>
     <string name="paste_one_url">Cole pelo menos uma URL de origem.</string>
     <string name="no_valid_urls">Nenhuma URL válida no lote.</string>
     <string name="subscribe_needs_url">Cole a URL de um canal ou playlist para se inscrever.</string>

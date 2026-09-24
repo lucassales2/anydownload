@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
 import com.anydownlod.core.domain.AppSettings
+import com.anydownlod.core.domain.ClipboardAccess
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.core.fake.InMemorySettingsRepository
@@ -38,6 +39,10 @@ class AddFormUiTest {
         onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=fixture")
         onNodeWithTag("add-download-button").assertIsEnabled().performScrollTo().performClick()
 
+        onNodeWithText("Preview title").assertExists()
+        assertEquals(0, graph.engine.jobs.value.size)
+        onNodeWithTag("preview-download").performClick()
+
         assertEquals(1, graph.engine.jobs.value.size)
         assertEquals(
             "https://example.com/watch?v=fixture",
@@ -54,6 +59,7 @@ class AddFormUiTest {
         onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=manual")
         onNodeWithTag("add-autostart-switch").performScrollTo().performClick()
         onNodeWithTag("add-download-button").assertIsEnabled().performScrollTo().performClick()
+        onNodeWithTag("preview-download").performClick()
         assertEquals(1, graph.engine.jobs.value.size)
         assertEquals(JobState.PENDING, graph.engine.jobs.value.single().state)
 
@@ -82,6 +88,7 @@ class AddFormUiTest {
         onNodeWithTag("add-paste-button").performClick()
         onNodeWithTag("add-url-field").assertTextEquals("https://example.com/watch?v=pasted")
         onNodeWithTag("add-download-button").assertIsEnabled().performClick()
+        onNodeWithTag("preview-download").performClick()
 
         assertEquals(1, graph.engine.jobs.value.size)
         assertEquals(
@@ -137,6 +144,7 @@ class AddFormUiTest {
         onNodeWithText("Use the configured cookie file").performScrollTo().performClick()
         onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=fixture")
         onNodeWithTag("add-download-button").assertIsEnabled().performScrollTo().performClick()
+        onNodeWithTag("preview-download").performClick()
 
         assertTrue(graph.engine.jobs.value.single().request.options.useCookies)
     }
@@ -160,6 +168,62 @@ class AddFormUiTest {
         onNodeWithTag("add-url-field").performTextInput("\nhttps://example.com/channel/second")
         onNodeWithTag("add-subscribe-button").assertIsNotEnabled()
         assertEquals(1, graph.subscriptions.subscriptions.value.size)
+    }
+
+    @Test
+    fun allowingClipboardOpensAPreviewForACompatibleLink() = runComposeUiTest {
+        val graph = InMemoryAppGraph()
+        setContent {
+            CompositionLocalProvider(
+                LocalClipboardManager provides FakeClipboard("https://example.com/watch?v=copied"),
+            ) {
+                App(graph, offerClipboardCheck = true)
+            }
+        }
+
+        onNodeWithText("Check the clipboard for links?").assertExists()
+        onNodeWithTag("clipboard-allow").performClick()
+
+        onNodeWithText("Preview title").assertExists()
+        assertEquals(0, graph.engine.jobs.value.size)
+        assertEquals(ClipboardAccess.ALLOWED, graph.settings.settings.value.clipboardAccess)
+        onNodeWithTag("preview-download").performClick()
+        assertEquals("https://example.com/watch?v=copied", graph.engine.jobs.value.single().request.sourceUrl)
+    }
+
+    @Test
+    fun denyingClipboardIsRememberedAndDoesNotUseTheLink() = runComposeUiTest {
+        val graph = InMemoryAppGraph()
+        setContent {
+            CompositionLocalProvider(
+                LocalClipboardManager provides FakeClipboard("https://example.com/watch?v=copied"),
+            ) {
+                App(graph, offerClipboardCheck = true)
+            }
+        }
+
+        onNodeWithTag("clipboard-not-now").performClick()
+
+        assertEquals(ClipboardAccess.DENIED, graph.settings.settings.value.clipboardAccess)
+        onNodeWithTag("add-download-button").assertIsNotEnabled()
+        onNodeWithText("Preview title").assertDoesNotExist()
+        assertTrue(graph.engine.jobs.value.isEmpty())
+    }
+
+    @Test
+    fun anAllowedClipboardWithoutALinkStaysOnTheAddForm() = runComposeUiTest {
+        val graph = InMemoryAppGraph()
+        setContent {
+            CompositionLocalProvider(LocalClipboardManager provides FakeClipboard("notes from today")) {
+                App(graph, offerClipboardCheck = true)
+            }
+        }
+
+        onNodeWithTag("clipboard-allow").performClick()
+
+        onNodeWithTag("add-download-button").assertIsNotEnabled()
+        onNodeWithText("Preview title").assertDoesNotExist()
+        assertEquals(ClipboardAccess.ALLOWED, graph.settings.settings.value.clipboardAccess)
     }
 }
 

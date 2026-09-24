@@ -327,6 +327,31 @@ class AddFormPresenterTest {
     }
 
     @Test
+    fun detectedLinkFillsOnlyAnEmptyField() {
+        val f = fixture()
+
+        assertEquals(
+            "https://example.com/watch?v=copied",
+            f.presenter.applyDetectedLink("  https://example.com/watch?v=copied  "),
+        )
+        assertEquals("https://example.com/watch?v=copied", f.presenter.singleSourceUrl())
+        assertNull(f.presenter.applyDetectedLink("https://example.com/watch?v=other"))
+        assertEquals("https://example.com/watch?v=copied", f.presenter.state.value.urlText)
+        assertNull(f.presenter.applyDetectedLink("not a link"))
+    }
+
+    @Test
+    fun singleSourceUrlIsNullForABatchOrAnInputError() {
+        val f = fixture()
+        f.presenter.setUrl("https://example.com/a\nhttps://example.com/b")
+        assertNull(f.presenter.singleSourceUrl())
+
+        f.presenter.setUrl("https://example.com/a")
+        f.presenter.setDestinationFolder("../escape")
+        assertNull(f.presenter.singleSourceUrl())
+    }
+
+    @Test
     fun clipTimestampsAcceptSecondsAndClockFormats() {
         assertEquals(45L, parseClipTimestamp("45"))
         assertEquals(90L, parseClipTimestamp("1:30"))

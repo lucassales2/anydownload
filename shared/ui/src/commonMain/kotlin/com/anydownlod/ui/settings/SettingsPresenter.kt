@@ -3,6 +3,7 @@ package com.anydownlod.ui.settings
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.AppSettingsDefaults
+import com.anydownlod.core.domain.ClipboardAccess
 import com.anydownlod.core.domain.Preset
 import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.ui.generated.resources.Res
@@ -50,6 +51,10 @@ class SettingsPresenter(private val repository: SettingsRepository) {
 
     fun setTheme(theme: ThemePreference) {
         repository.update { it.copy(theme = theme) }
+    }
+
+    fun setClipboardAccess(access: ClipboardAccess) {
+        repository.update { it.copy(clipboardAccess = access) }
     }
 
     fun addPreset(name: String, options: Map<String, String> = emptyMap()): Preset? =

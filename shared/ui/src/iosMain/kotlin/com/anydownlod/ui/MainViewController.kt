@@ -7,4 +7,6 @@ import platform.UIKit.UIViewController
  * Entry point consumed by the SwiftUI host in `apps/ios`.
  * The ObjC name is `MainViewControllerKt.MainViewController()`.
  */
-fun MainViewController(): UIViewController = ComposeUIViewController { App() }
+fun MainViewController(): UIViewController = ComposeUIViewController {
+    App(offerClipboardCheck = true)
+}

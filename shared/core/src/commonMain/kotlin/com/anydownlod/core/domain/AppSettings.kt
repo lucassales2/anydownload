@@ -1,5 +1,17 @@
 package com.anydownlod.core.domain
 
+/**
+ * Whether the app may read the clipboard on its own to look for a source link.
+ *
+ * [UNKNOWN] means the one-time prompt has not been answered. Explicit Paste
+ * stays a separate gesture and does not depend on this choice.
+ */
+enum class ClipboardAccess(val wireName: String) {
+    UNKNOWN("unknown"),
+    ALLOWED("allowed"),
+    DENIED("denied"),
+}
+
 /** Light/dark preference. [SYSTEM] follows the operating system. */
 enum class ThemePreference(val wireName: String) {
     SYSTEM("system"),
@@ -68,6 +80,14 @@ data class AppSettings(
     val clearCompletedAfterSeconds: Long = AppSettingsDefaults.CLEAR_COMPLETED_AFTER_SECONDS,
     val subscriptionIntervalMinutes: Int = AppSettingsDefaults.SUBSCRIPTION_INTERVAL_MINUTES,
     val theme: ThemePreference = ThemePreference.SYSTEM,
+    /** One-time choice for automatic clipboard checks. */
+    val clipboardAccess: ClipboardAccess = ClipboardAccess.UNKNOWN,
+    /**
+     * The last compatible clipboard link already offered. A later launch does
+     * not offer that same link again. Only a URL that passed the clipboard
+     * check is stored, never arbitrary clipboard text.
+     */
+    val handledClipboardUrl: String = "",
     val cookiesConfigured: Boolean = false,
     val presets: List<Preset> = emptyList(),
 )

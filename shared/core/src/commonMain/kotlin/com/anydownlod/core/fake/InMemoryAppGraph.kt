@@ -2,6 +2,7 @@ package com.anydownlod.core.fake
 
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
@@ -16,6 +17,7 @@ class InMemoryAppGraph(
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository(),
     override val settings: SettingsRepository = InMemorySettingsRepository(),
     override val toolProbe: ToolProbe = InMemoryToolProbe,
+    override val previews: MediaPreviewSource = FixedMediaPreviewSource(),
 ) : AppGraph {
 
     companion object {

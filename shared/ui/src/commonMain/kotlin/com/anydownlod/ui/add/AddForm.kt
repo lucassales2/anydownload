@@ -135,6 +135,7 @@ fun AddForm(
     presenter: AddFormPresenter,
     presets: List<Preset>,
     cookiesConfigured: Boolean,
+    onPreviewSingleUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by presenter.state.collectAsState()
@@ -185,7 +186,10 @@ fun AddForm(
                 downloadEnabled = state.hasInput,
                 onUrlChange = presenter::setUrl,
                 onPaste = { presenter.applyPastedText(clipboard.getText()?.text) },
-                onDownload = { presenter.submit() },
+                onDownload = {
+                    val single = presenter.singleSourceUrl()
+                    if (single != null) onPreviewSingleUrl(single) else presenter.submit()
+                },
             )
             Text(
                 text = text(Res.string.add_batch_hint),
