@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D2 local HTTP engine · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
+**Phase:** D3 link field, then generic extractor · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,9 +14,9 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) and [ADR-006](03-decisions/ADR-006-Local-http-engine-phase.md). That is the current implementation work.
-2. Take the first Ready D2 card on [Kanban](Kanban.md). [T-006](06-tasks/T-006-Review-security-licensing.md) is first.
-3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state: a Kotlin port of yt-dlp on every target. D2 is HTTP-only and does not translate extractors.
+1. Read [Phase 3 — Generic extractor subset](00-project/Phase-3-Generic-Extractor.md) and [ADR-007](03-decisions/ADR-007-Generic-extractor-phase.md). That is the current implementation work.
+2. Take the first Ready D3 card on [Kanban](Kanban.md). [T-052](06-tasks/T-052-Link-only-home.md) is first: the idle screen is the link field, with no clipboard dialog.
+3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. After the first-screen cards, D3 translates one generic subset. YouTube and the media toolkit stay later.
 
 ## Accepted direction — 2026-09-21
 
@@ -25,7 +25,7 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 - Targets are iOS, Compose/Wasm, Android, and desktop.
 - Store publication is out of scope; this is a portfolio project.
 
-License notes for copied extractor code are still T-006. D2 proves a direct-file download on each host (web via extension) before any extractor is translated.
+License notes for translated extractor code are in T-006. D2 proved a direct-file download on each host. D3 starts with a link-only home screen, then translates a generic subset. The media toolkit is recorded in ADR-007 and not built yet.
 
 ## Documentation map
 
@@ -34,7 +34,8 @@ License notes for copied extractor code are still T-006. D2 proves a direct-file
 - [Documentation guide](00-project/Documentation-guide.md) — opening the vault, Kanban workflow, templates, privacy.
 - [Roadmap](00-project/Roadmap.md) — milestone scopes and exit criteria.
 - [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) — D1, done.
-- [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) — current implementation handoff.
+- [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) — D2, done.
+- [Phase 3 — Generic extractor subset](00-project/Phase-3-Generic-Extractor.md) — current handoff: link field first, then the extractor.
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 

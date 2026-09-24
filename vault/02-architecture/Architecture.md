@@ -8,7 +8,7 @@ tags: [architecture, kmp]
 
 [Home](../Home.md) · [Platform matrix](Platform-matrix.md) · [Lifecycle](Download-lifecycle.md) · [API outline](API-outline.md) · [Decision log](../03-decisions/Decision-log.md)
 
-**Accepted direction.** Extraction will run inside the app ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). Phase D2 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)) implements the first slice only: a shared direct HTTP(S) file download. Web fetches through a browser extension. Android may call pinned yt-dlp via Chaquopy under `apps/android`. Desktop keeps the installed CLI for non-direct URLs. Extractor translation is the next phase after D2.
+**Accepted direction.** Extraction will run inside the app ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). Phase D2 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)) is done: a shared direct HTTP(S) file download, web through a browser extension, Android Chaquopy for other URLs, desktop CLI for non-direct URLs. Phase D3 ([ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md)) translates one generic-extractor subset. The media toolkit is recorded there and not built. YouTube is still later.
 
 ## Local engine
 

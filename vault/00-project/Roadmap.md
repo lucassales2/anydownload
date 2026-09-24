@@ -21,14 +21,16 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-Phase **D1** is done. Phase **D2** is the implementation work in progress. Spec: [Phase 2 — Local HTTP engine](Phase-2-Local-Kotlin-Engine.md). Decision: [ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md).
+Phase **D1** and **D2** are done. Phase **D3** is the implementation work in progress. Spec: [Phase 3 — Generic extractor subset](Phase-3-Generic-Extractor.md). Decision: [ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md).
 
-1. Finish the T-006 license inventory and the Q-09 allowlist close on T-003.
-2. Shared HTTP-only `DownloadEngine` and platform file adapters (T-038, T-039).
-3. Wire desktop (Kotlin HTTP + existing CLI), Android (HTTP + Chaquopy), iOS (HTTP), and web (extension) — T-040–T-043.
-4. Verify all four hosts and close T-004 from that evidence (T-044).
+1. Idle screen is the link field only. No clipboard dialog or automatic clipboard check (T-052).
+2. A compatible link opens the metadata preview; Download and a collapsible Edit cover video or audio, quality, and format (T-053, T-054).
+3. Translate the generic subset and record the Unlicense notice (T-045).
+4. Teach the shared HTTP engine to download the one media URL that subset returns (T-046).
+5. Wire desktop (Kotlin for a matching page, CLI otherwise), Android (Kotlin or Chaquopy), iOS, and web (extension fetches) — T-047–T-050.
+6. Verify all four hosts (T-051).
 
-After D2, extractor translation and YouTube (yt-dlp-ejs) resume under ADR-004. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) still waits until a YouTube download works. D2 does not close T-009/T-010's extractor wording.
+The media toolkit is recorded in ADR-007 and is not built in D3. YouTube (yt-dlp-ejs) is the phase after a non-YouTube extractor exists. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) still waits until a YouTube download works. D3 does not close T-009/T-010.
 
 ## Sequencing rules
 

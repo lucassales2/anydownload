@@ -22,8 +22,19 @@ tags: [project, board]
 - [ ] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #M3 #P1
 - [ ] [T-022 — Audit MeTube parity with evidence](06-tasks/T-022-Parity-audit.md) #M3 #P0
 - [ ] [T-023 — Portfolio builds](06-tasks/T-023-Release-readiness.md) #M4 #P0
+- [ ] [T-053 — Validate, then metadata preview](06-tasks/T-053-Validate-then-preview.md) #D3 #P0
+- [ ] [T-054 — Download and collapsible edit](06-tasks/T-054-Download-and-edit.md) #D3 #P0
+- [ ] [T-045 — Generic extractor subset](06-tasks/T-045-Generic-extractor-subset.md) #D3 #P0
+- [ ] [T-046 — Engine uses the generic extractor](06-tasks/T-046-Engine-uses-generic-extractor.md) #D3 #P0
+- [ ] [T-047 — Desktop routes a matching page through Kotlin](06-tasks/T-047-Desktop-generic-route.md) #D3 #P0
+- [ ] [T-048 — Android routes a matching page through Kotlin](06-tasks/T-048-Android-generic-route.md) #D3 #P0
+- [ ] [T-049 — iOS downloads a matching HTML page](06-tasks/T-049-Ios-generic-download.md) #D3 #P0
+- [ ] [T-050 — Web extension fetches the page and the media](06-tasks/T-050-Web-extension-generic.md) #D3 #P0
+- [ ] [T-051 — Phase 3 verification](06-tasks/T-051-Phase-3-verification.md) #D3 #P0
 
 ## Ready
+
+- [ ] [T-052 — Home is the link field](06-tasks/T-052-Link-only-home.md) #D3 #P0
 
 ## In progress
 
