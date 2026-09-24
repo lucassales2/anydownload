@@ -35,11 +35,22 @@ Upstream `_extractors.py` at tag `2026.08.19` names 1,751 extractor classes. The
 
 ## Acceptance criteria
 
-- [ ] `./gradlew :tools:port-manifest:run` regenerates the coverage block with 1,751 upstream classes, 0 ported, 1 partial, 1 planned.
-- [ ] Validation fails on a missing Kotlin file path and on an extractor id not in the upstream list (unit tests).
-- [ ] No upstream source file is committed; only the names list, tag, and commit.
-- [ ] README and the equivalence note describe the manifest and the command.
+- [x] `./gradlew :tools:port-manifest:run` regenerates the coverage block with 1,751 upstream classes, 0 ported, 1 partial, 1 planned.
+- [x] Validation fails on a missing Kotlin file path and on an extractor id not in the upstream list (unit tests).
+- [x] No upstream source file is committed; only the names list, tag, and commit.
+- [x] README and the equivalence note describe the manifest and the command.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- `port/manifest.json` seeded with `GenericIE` (partial, HTML5 media subset, `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/GenericExtractor.kt`, T-045) and `YoutubeIE` (planned, single video, T-060), pinned to `yt-dlp/yt-dlp` tag `2026.08.19`, commit `3a08beaf031ab68f966401ead017ac81fe8486cf`, Unlicense.
+- `port/upstream-extractors.json`: 1,751 sorted class names read from a fetched `yt_dlp/extractor/_extractors.py` at the pin (GitHub raw at that commit), with repository, tag, commit, source path, and count. The fetched file was read from `/tmp` and is not committed; only the names data is.
+- New build-time-only JVM module `tools/port-manifest` (`com.anydownlod.portmanifest`): `run` validates the manifest then rewrites the coverage block, `validatePortManifest` is wired into `check` so an invalid manifest fails the build, and `generateUpstreamExtractors` regenerates the names list from `-PupstreamExtractorsSource=<path>`.
+- Verification run:
+  - `./gradlew :tools:port-manifest:generateUpstreamExtractors -PupstreamExtractorsSource=/tmp/_extractors.py` → `Wrote port/upstream-extractors.json: 1751 extractor classes from yt_dlp/extractor/_extractors.py at 2026.08.19 (3a08beaf...)`.
+  - `./gradlew :tools:port-manifest:run` → `port-manifest: ok — 1,751 upstream classes, 0 ported, 1 partial, 1 planned, 1,749 not started`, and rewrote the block between `<!-- port-manifest:coverage:start -->` and `<!-- port-manifest:coverage:end -->` in `vault/01-product/Ytdlp-equivalence.md`.
+  - `./gradlew :tools:port-manifest:check` → `validatePortManifest` green plus 25 tests, 0 failures (Coverage 7, ExtractorsPy 4, Validator 10, PortManifestRepo 4).
+  - Failure path: a temp copy with `shared/DoesNotExist.kt` and a stale note run with `--args="--root=/tmp/port-manifest-bad --check"` exits 1 and prints `module 'GenericIE' kotlinFiles is missing: 'shared/DoesNotExist.kt'` and the out-of-date coverage message.
+  - `./gradlew :shared:core:jvmTest` still green.
+- README (testing block and repository layout) and the equivalence note describe `port/manifest.json`, the counting rule, and both commands.

@@ -9,7 +9,12 @@ import androidx.compose.ui.window.rememberWindowState
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.CompositeMediaPreviewSource
+import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
+import com.anydownlod.core.extract.ExtractorHttp
+import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.youtube.YoutubeIE
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
@@ -23,6 +28,7 @@ import com.anydownlod.desktop.engine.CliProcessRunner
 import com.anydownlod.desktop.engine.DesktopFileStore
 import com.anydownlod.desktop.engine.DesktopRoute
 import com.anydownlod.desktop.engine.DesktopRouteClassifier
+import com.anydownlod.desktop.engine.DesktopPreviewSource
 import com.anydownlod.desktop.engine.DesktopRoutingEngine
 import com.anydownlod.desktop.engine.DownloadPaths
 import com.anydownlod.desktop.engine.ExecutableOnPath
@@ -30,7 +36,6 @@ import com.anydownlod.desktop.engine.JavaCliProcessRunner
 import com.anydownlod.desktop.engine.PathToolProbe
 import com.anydownlod.desktop.engine.ThumbnailBytes
 import com.anydownlod.desktop.engine.YtDlpCliEngine
-import com.anydownlod.desktop.engine.YtDlpMediaPreviewSource
 import com.anydownlod.desktop.store.DesktopCookieStore
 import com.anydownlod.desktop.store.DesktopStore
 import com.anydownlod.desktop.store.PersistingSettingsRepository
@@ -107,6 +112,16 @@ internal class DesktopApp(
             var routing: DesktopRoutingEngine? = null
             val persistAll: (List<DownloadJob>) -> Unit = { _ -> routing?.let { store.saveJobs(it.jobs.value) } }
 
+            // D4: the shared Kotlin extractor owns matched URLs on desktop; the
+            // installed CLI keeps every other URL. One transfer and registry
+            // serve routing, downloads, and the startup job split.
+            val transfer = com.anydownlod.core.platform.JavaNetHttpTransfer()
+            val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
+            val extractorRegistry = ExtractorRegistry(
+                listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
+            )
+            val classifier = DesktopRouteClassifier(registry = extractorRegistry)
+
             val cliEngine = YtDlpCliEngine(
                 settingsRepository = settings,
                 scope = scope,
@@ -116,24 +131,27 @@ internal class DesktopApp(
                 persist = persistAll,
                 cookieFilePath = { store.cookieFilePath() },
                 seedJobs = persisted.jobs.filter {
-                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl) == DesktopRoute.YTDLP_CLI
+                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) ==
+                        DesktopRoute.YTDLP_CLI
                 },
             )
             val httpEngine = HttpDownloadEngine(
-                transfer = JavaNetHttpTransfer(),
+                transfer = transfer,
                 fileStore = DesktopFileStore { settings.settings.value.downloadRoot },
                 settings = settings,
                 scope = scope,
                 ioDispatcher = ioDispatcher,
                 persist = persistAll,
+                registry = extractorRegistry,
                 seedJobs = persisted.jobs.filter {
-                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl) == DesktopRoute.DIRECT_FILE
+                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) !=
+                        DesktopRoute.YTDLP_CLI
                 },
             )
             routing = DesktopRoutingEngine(
                 http = httpEngine,
                 cli = cliEngine,
-                classify = { url -> DesktopRouteClassifier().route(url) },
+                classify = { url -> classifier.route(url) },
                 scope = scope,
             )
             val engine: DownloadEngine = routing
@@ -168,14 +186,14 @@ internal class DesktopApp(
                     downloadEngine = engine,
                     subscriptionRepository = subscriptions,
                     settingsRepository = settings,
-                    toolProbe = PathToolProbe(processRunner, resolveExecutable),
+                    toolProbe = PathToolProbe(processRunner, resolveExecutable, jsRuntime = jsRuntime),
                     cookieStore = cookieStore,
                     startupWarning = store.loadWarning,
-                    previews = YtDlpMediaPreviewSource(
+                    previews = DesktopPreviewSource.create(
                         runner = processRunner,
                         resolveExecutable = resolveExecutable,
                         workingDirectory = previewDirectory,
-                        ioDispatcher = ioDispatcher,
+                        jsRuntime = jsRuntime,
                     ),
                     loadThumbnail = { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } },
                 ),

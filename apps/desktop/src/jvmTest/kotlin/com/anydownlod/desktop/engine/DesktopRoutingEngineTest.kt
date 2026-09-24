@@ -12,6 +12,7 @@ import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
+import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
@@ -57,6 +58,7 @@ class DesktopRoutingEngineTest {
         root: Path,
         scope: CoroutineScope,
         urlCheck: (String) -> UrlCheck = UrlPolicy::check,
+        registry: com.anydownlod.core.extract.ExtractorRegistry? = null,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
         fileStore = fileStore,
@@ -64,6 +66,7 @@ class DesktopRoutingEngineTest {
         scope = scope,
         ioDispatcher = Dispatchers.Default,
         urlCheck = urlCheck,
+        registry = registry,
     )
 
     private fun routing(
@@ -102,6 +105,70 @@ class DesktopRoutingEngineTest {
             assertTrue(Files.isRegularFile(root.resolve("tiny.bin")))
             assertEquals(payload.size.toLong(), Files.size(root.resolve("tiny.bin")))
             assertFalse(processStarted.get(), "a direct file must never spawn yt-dlp")
+        } finally {
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun kotlinRouteDownloadsThroughTheSharedEngineAndNeverSpawnsAProcess() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-routing-kotlin")
+        val processStarted = AtomicBoolean(false)
+        val payload = ByteArray(2048) { 7 }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val fakeExtractor = object : com.anydownlod.core.extract.InfoExtractor(
+                ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+                http = com.anydownlod.core.extract.ExtractorHttp(
+                    FakeTransfer { HttpResponse.Final(404) },
+                ),
+                validUrl = Regex("""https?://fixtures\.example\.com/watch.*"""),
+            ) {
+                override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                    com.anydownlod.core.extract.InfoDict(
+                        id = "fixture",
+                        title = "Fixture Clip",
+                        formats = listOf(
+                            com.anydownlod.core.extract.MediaFormat(
+                                formatId = "18",
+                                url = "https://cdn.fixtures.example.com/clip.mp4",
+                                ext = "mp4",
+                                vcodec = "avc1",
+                                acodec = "mp4a",
+                            ),
+                        ),
+                    )
+            }
+            val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(fakeExtractor))
+            val classifier = DesktopRouteClassifier(registry = registry)
+            val mediaTransfer = FakeTransfer {
+                HttpResponse.Final(200, "application/octet-stream", payload.size.toLong(), FakeBody(listOf(payload)))
+            }
+            val http = httpEngine(mediaTransfer, JavaNetFileStore(root), root, scope, registry = registry)
+            val cli = cliEngine(
+                root,
+                CliProcessRunner { _, _ -> processStarted.set(true); FakeCliProcess(emptyList()) },
+                scope,
+            )
+            val engine = routing(http, cli, { url -> classifier.route(url) }, scope)
+
+            assertEquals(DesktopRoute.KOTLIN, classifier.route("https://fixtures.example.com/watch?v=fixture"))
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://fixtures.example.com/watch?v=fixture",
+                    options = DownloadOptions(),
+                    idempotencyKey = "kotlin-route",
+                ),
+            )
+            val finished = waitFor(engine, job.id, JobState.COMPLETED)
+
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("Fixture Clip", finished.title)
+            assertEquals("Fixture Clip.mp4", finished.artifacts.single().relativePath)
+            assertTrue(Files.isRegularFile(root.resolve("Fixture Clip.mp4")))
+            assertFalse(processStarted.get(), "a registry-matched URL must never spawn yt-dlp")
+            assertTrue(cli.jobs.value.isEmpty(), "the CLI engine must not own the job")
         } finally {
             scope.cancel()
             root.toFile().deleteRecursively()
@@ -439,9 +506,9 @@ private class FakeTransfer(
     val requested: MutableList<String> = mutableListOf(),
     private val responder: (url: String) -> HttpResponse,
 ) : HttpTransfer {
-    override suspend fun execute(url: String): HttpResponse {
-        requested.add(url)
-        return responder(url)
+    override suspend fun execute(request: HttpRequest): HttpResponse {
+        requested.add(request.url)
+        return responder(request.url)
     }
 }
 

@@ -3,6 +3,7 @@ package com.anydownlod.core.engine
 import com.anydownlod.core.domain.DownloadRequest
 import com.anydownlod.core.domain.JobErrorCode
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.core.platform.HttpRequest
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -24,11 +25,13 @@ class WebExtensionEngineTest {
     private fun engine(
         bridge: WebExtensionBridge,
         scope: TestScope,
+        registry: com.anydownlod.core.extract.ExtractorRegistry? = null,
     ) = WebExtensionEngine(
         bridge = bridge,
         scope = scope,
         idGenerator = { "id-${++idCounter}" },
         ioDispatcher = UnconfinedTestDispatcher(scope.testScheduler),
+        registry = registry,
     )
 
     private var idCounter = 0
@@ -40,9 +43,13 @@ class WebExtensionEngineTest {
         var page: WebPage = WebPage.Final("https://example.com/watch?v=x", "no media here"),
         val probeCalls: MutableList<String> = mutableListOf(),
         val pageCalls: MutableList<String> = mutableListOf(),
+        val fetchCalls: MutableList<HttpRequest> = mutableListOf(),
         val downloadCalls: MutableList<Pair<String, String>> = mutableListOf(),
+        val downloadHeaders: MutableList<Map<String, String>> = mutableListOf(),
+        val downloadSaveViaBlob: MutableList<Boolean> = mutableListOf(),
         val cancels: MutableList<String> = mutableListOf(),
         var downloadGate: Channel<Unit>? = null,
+        var fetchReply: WebFetch = WebFetch.Failed(WebFailureCode.OTHER, "not used"),
     ) : WebExtensionBridge {
         override suspend fun probe(url: String): WebProbe {
             probeCalls += url
@@ -54,8 +61,21 @@ class WebExtensionEngineTest {
             return page
         }
 
-        override suspend fun download(url: String, jobId: String, onProgress: (Long, Long?) -> Unit): WebDownload {
+        override suspend fun fetch(request: HttpRequest): WebFetch {
+            fetchCalls += request
+            return fetchReply
+        }
+
+        override suspend fun download(
+            url: String,
+            jobId: String,
+            headers: Map<String, String>,
+            saveViaBlob: Boolean,
+            onProgress: (Long, Long?) -> Unit,
+        ): WebDownload {
             downloadCalls += url to jobId
+            downloadHeaders += headers
+            downloadSaveViaBlob += saveViaBlob
             downloadGate?.receive()
             currentCoroutineContext().ensureActive()
             if (download is WebDownload.Completed) {
@@ -291,5 +311,78 @@ class WebExtensionEngineTest {
         val finished = engine.jobs.value.first { it.id == job.id }
         assertEquals(JobState.COMPLETED, finished.state)
         assertNull(finished.artifacts.single().sizeBytes)
+    }
+
+    @Test
+    fun aRegistryMatchedUrlExtractsThroughTheBridgeAndSavesTheFormat() = runTest {
+        val bridge = FakeBridge(available = true)
+        val extractor = object : com.anydownlod.core.extract.InfoExtractor(
+            ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+            http = com.anydownlod.core.extract.ExtractorHttp(UnusedTransfer),
+            validUrl = Regex("""https?://youtube\.example/watch.*"""),
+        ) {
+            override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                com.anydownlod.core.extract.InfoDict(
+                    id = "fixture",
+                    title = "Fixture Clip",
+                    thumbnails = listOf(
+                        com.anydownlod.core.extract.Thumbnail(url = "https://i.example/large.jpg", width = 1280, height = 720),
+                    ),
+                    formats = listOf(
+                        com.anydownlod.core.extract.MediaFormat(
+                            formatId = "18",
+                            url = "https://cdn.fixtures.example.net/clip.mp4",
+                            ext = "mp4",
+                            vcodec = "avc1",
+                            acodec = "mp4a",
+                            httpHeaders = mapOf("referer" to "https://youtube.example/", "cookie" to "secret"),
+                        ),
+                    ),
+                )
+        }
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(extractor))
+        val engine = engine(bridge, this, registry)
+
+        val job = engine.submit(request(url = "https://youtube.example/watch?v=fixture", key = "web-kotlin"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        assertEquals("Fixture Clip", finished.title)
+        assertEquals("https://i.example/large.jpg", finished.thumbnailUrl)
+        assertTrue(bridge.probeCalls.isEmpty(), "a matched URL must not probe")
+        assertEquals("https://cdn.fixtures.example.net/clip.mp4", bridge.downloadCalls.single().first)
+        // Only allowlisted headers ride along; the refused cookie is dropped.
+        assertEquals(mapOf("referer" to "https://youtube.example/"), bridge.downloadHeaders.single())
+        assertEquals(listOf(true), bridge.downloadSaveViaBlob, "matched formats use the offscreen saver")
+    }
+
+    @Test
+    fun aMatchedUrlThatFailsExtractionFailsTypedWithoutProbing() = runTest {
+        val bridge = FakeBridge(available = true)
+        val extractor = object : com.anydownlod.core.extract.InfoExtractor(
+            ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+            http = com.anydownlod.core.extract.ExtractorHttp(UnusedTransfer),
+            validUrl = Regex("""https?://youtube\.example/watch.*"""),
+        ) {
+            override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                throw com.anydownlod.core.extract.ExtractionError.LoginRequired()
+        }
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(extractor))
+        val engine = engine(bridge, this, registry)
+
+        val job = engine.submit(request(url = "https://youtube.example/watch?v=fixture", key = "web-login"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.LOGIN_REQUIRED, finished.error?.code)
+        assertTrue(bridge.probeCalls.isEmpty())
+        assertTrue(bridge.downloadCalls.isEmpty())
+    }
+
+    private object UnusedTransfer : com.anydownlod.core.platform.HttpTransfer {
+        override suspend fun execute(request: com.anydownlod.core.platform.HttpRequest): com.anydownlod.core.platform.HttpResponse =
+            error("unused")
     }
 }

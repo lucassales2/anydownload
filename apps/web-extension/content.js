@@ -23,7 +23,7 @@ window.addEventListener('message', (event) => {
     chrome.runtime.sendMessage(data, (response) => {
       if (chrome.runtime.lastError) {
         postToPage({
-          type: 'probe-reply',
+          type: `${data.type || 'probe'}-reply`,
           requestId: data.requestId,
           kind: 'failed',
           code: 'network',
@@ -38,7 +38,7 @@ window.addEventListener('message', (event) => {
     });
   } catch (_e) {
     postToPage({
-      type: 'probe-reply',
+      type: `${data.type || 'probe'}-reply`,
       requestId: data.requestId,
       kind: 'failed',
       code: 'network',

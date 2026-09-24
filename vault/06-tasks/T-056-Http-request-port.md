@@ -34,11 +34,21 @@ Today `HttpTransfer.execute(url)` performs one `GET` with no headers. YouTube's 
 
 ## Acceptance criteria
 
-- [ ] All four host adapters and the extension pass the shared request contract tests.
-- [ ] Direct-file and generic-page D2/D3 tests still pass unchanged.
-- [ ] Refused headers never leave the device; the allowlist is unit-tested.
-- [ ] Extension reply reports the effective header set; the README notes which headers MV3 cannot set.
+- [x] All four host adapters and the extension pass the shared request contract tests.
+- [x] Direct-file and generic-page D2/D3 tests still pass unchanged.
+- [x] Refused headers never leave the device; the allowlist is unit-tested.
+- [x] Extension reply reports the effective header set; the README notes which headers MV3 cannot set.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- Request contract in `com.anydownlod.core.platform`: `HttpRequest(url, method, headers, body, range)`, `HttpTransfer.execute(request)` plus the `execute(url)` convenience, `HttpHeaders` request/response allowlists, `HttpRedirects`, `ByteArrayHttpBody`, `ContentRange`. `HttpResponse.Final` now exposes `contentRange` and allowlisted `headers`; a typed `HttpResponse.Failed(reason, message)` covers permission/blocked/timeout/network.
+- JVM + Android: `JavaNetHttpTransfer` moved to the shared `jvmAndroidMain` source set (default-hierarchy group) so both hosts compile one implementation. Method, allowlisted headers, fixed-length body, and `Range` are set; `Content-Range` supplies the full total; response headers are allowlist-filtered. A refused request header never leaves the device and is reported once by name.
+- iOS: `IosHttpTransfer` sets method/headers/body/range on `NSMutableURLRequest`, returns filtered response headers, and takes the total from `Content-Range`.
+- Web: `WebExtensionTransfer` (common, bridge-backed) plus `WebExtensionBridge.fetch`. The extension's `fetch-request` message carries method, allowlisted headers, base64 body, and range, applies `checkUrl`, filters request and response headers, returns the effective `sentHeaders`, and fails typed when the body exceeds the 8 MiB port cap. `WebExtensionTransfer` reports allowlist-refused and MV3-refused names through `onDroppedHeaders` (names only).
+- Redirects: `HttpRedirects.afterRedirect` — 303 becomes a body-less `GET`, a `GET` keeps its headers, and a `POST` on any other 3xx fails typed.
+- Tests: `HttpRequestTest` (11, common) covers the allowlist, range, redirects, body streaming, and web mapping; `JavaNetRequestContractTest` (5, JVM, local `HttpServer`) covers method/headers/body/range, the response allowlist, and the POST-redirect refusal; `HttpDownloadEngineTest` gains the typed failed-transfer case; the extension adds 5 `fetch-request` tests (17 total); `IosEngineTest.realNSURLSessionCarriesTheExtractorRequestContract` runs behind the existing opt-in fixture port.
+- Verification: `./gradlew :shared:core:jvmTest` → 144 tests, 0 failures; `node --test apps/web-extension/test/bridge.test.mjs` → 17 pass; `./gradlew :apps:desktop:test :apps:android-engine-tests:test :shared:core:iosSimulatorArm64Test :apps:android:compileDebugKotlin :apps:web:compileKotlinWasmJs` → green. The D2/D3 suites are unchanged and green (`JavaNetPlatformTest` 6, `GenericExtractorTest` 15, `HttpDownloadEngineTest` 27).
+- Live iOS run (opt-in): started `node tools/fixture-server/server.mjs --port 8123` (new test tooling; it serves POST `/echo`, ranged files, and the D3 HTML routes), pointed `/tmp/anydownlod-ios-live.txt` at `127.0.0.1:8123`, and ran `:shared:core:iosSimulatorArm64Test` — `IosEngineTest` 7/7 passed; the server log recorded `POST /echo` and `GET /files/tiny.bin range=bytes=0-15`. Server and endpoint file were removed afterwards.
+- README and `apps/web-extension/README.md` record the message and the MV3-refused headers (`Origin`, `Referer`, `User-Agent`, `Cookie`, `Host`, `Content-Length`, `Accept-Encoding`, `Sec-*`, `Proxy-*`). No upstream module was translated, so `port/manifest.json` is unchanged.

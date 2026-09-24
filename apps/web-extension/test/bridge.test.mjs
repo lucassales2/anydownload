@@ -17,17 +17,17 @@ function textResponse(body, { status = 200, headers = {}, url = '' } = {}) {
   return response;
 }
 
-function makeBridge({ responses }) {
+function makeBridge({ responses, fetchMaxBytes, offscreen, runtime }) {
   const calls = [];
   const fetchImpl = async (url, init) => {
-    calls.push({ url, method: init?.method || 'GET' });
+    calls.push({ url, method: init?.method || 'GET', headers: init?.headers || {}, body: init?.body ?? null });
     const found = responses.find((r) => r.url === url && (r.method === (init?.method || 'GET') || !r.method));
     if (!found) throw new Error(`no fixture for ${url} ${init && init.method}`);
     return textResponse(found.body, { status: found.status, headers: found.headers, url: found.url });
   };
   const downloads = { download: async (opts) => { calls.push({ download: opts }); return true; } };
   const posted = [];
-  const bridge = createBridge({ fetchImpl, downloads, post: (payload) => posted.push(payload), revokeDelayMs: 0 });
+  const bridge = createBridge({ fetchImpl, downloads, post: (payload) => posted.push(payload), revokeDelayMs: 0, fetchMaxBytes, offscreen, runtime });
   return { bridge, calls, posted };
 }
 
@@ -173,4 +173,227 @@ test('fetch-page reports a non-ok page as failed without bytes', async () => {
   assert.equal(reply.kind, 'failed');
   assert.equal(reply.code, 'network');
   assert.equal(reply.html, undefined);
+});
+
+// ------------------------------------------------------------- T-056 requests
+
+test('fetch-request carries method, allowlisted headers, range, and base64 body', async () => {
+  const requestBody = '{"videoId":"fixture"}';
+  const { bridge, calls } = makeBridge({
+    responses: [
+      {
+        url: 'https://www.youtube.com/youtubei/v1/player',
+        method: 'POST',
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: '{"ok":true}',
+      },
+    ],
+  });
+  const reply = await bridge.handleMessage({
+    type: 'fetch-request',
+    requestId: 'f1',
+    url: 'https://www.youtube.com/youtubei/v1/player',
+    method: 'POST',
+    headers: {
+      'X-YouTube-Client-Name': '101',
+      'x-youtube-client-version': '1.02',
+      cookie: 'session=secret',
+      'user-agent': 'fixture-agent',
+      origin: 'https://www.youtube.com',
+      'x-custom': 'value',
+    },
+    range: 'bytes=0-1023',
+    bodyBase64: Buffer.from(requestBody, 'utf8').toString('base64'),
+  });
+
+  assert.equal(reply.type, 'fetch-request-reply');
+  assert.equal(reply.kind, 'final');
+  assert.equal(reply.status, 200);
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].headers['x-youtube-client-name'], '101');
+  assert.equal(calls[0].headers['x-youtube-client-version'], '1.02');
+  assert.equal(calls[0].headers.range, 'bytes=0-1023');
+  assert.equal(calls[0].headers.cookie, undefined, 'a refused header must never leave the extension');
+  assert.equal(calls[0].headers['x-custom'], undefined);
+  assert.equal(calls[0].headers['user-agent'], undefined, 'MV3 refuses User-Agent');
+  assert.equal(calls[0].headers.origin, undefined, 'MV3 refuses Origin');
+  assert.equal(Buffer.from(calls[0].body).toString('utf8'), requestBody);
+  assert.equal(reply.sentHeaders['x-youtube-client-name'], '101');
+  assert.equal(reply.sentHeaders['user-agent'], undefined);
+  assert.equal(reply.sentHeaders.origin, undefined);
+  assert.equal(reply.bodyBase64, Buffer.from('{"ok":true}').toString('base64'));
+  assert.equal(reply.finalUrl, 'https://www.youtube.com/youtubei/v1/player');
+});
+
+test('fetch-request filters response headers and reports a ranged total', async () => {
+  const { bridge } = makeBridge({
+    responses: [
+      {
+        url: 'https://example.com/files/ranged.bin',
+        method: 'GET',
+        status: 206,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-range': 'bytes 0-1/4096',
+          'set-cookie': 'session=secret',
+          'x-custom': 'value',
+        },
+        body: 'ok',
+      },
+    ],
+  });
+  const reply = await bridge.handleMessage({
+    type: 'fetch-request',
+    requestId: 'f2',
+    url: 'https://example.com/files/ranged.bin',
+    headers: { Range: 'bytes=0-1' },
+  });
+  assert.equal(reply.kind, 'final');
+  assert.equal(reply.status, 206);
+  assert.equal(reply.contentRange, 'bytes 0-1/4096');
+  assert.equal(reply.totalBytes, 4096);
+  assert.equal(reply.responseHeaders['content-range'], 'bytes 0-1/4096');
+  assert.equal(reply.responseHeaders['set-cookie'], undefined);
+  assert.equal(reply.responseHeaders['x-custom'], undefined);
+});
+
+test('fetch-request blocks a loopback URL without fetching', async () => {
+  const { bridge, calls } = makeBridge({ responses: [] });
+  const reply = await bridge.handleMessage({
+    type: 'fetch-request',
+    requestId: 'f3',
+    url: 'http://127.0.0.1/api',
+    method: 'POST',
+  });
+  assert.equal(reply.kind, 'failed');
+  assert.equal(reply.code, 'blocked');
+  assert.equal(calls.length, 0);
+});
+
+test('fetch-request fails typed when the response exceeds the port cap', async () => {
+  const { bridge } = makeBridge({
+    fetchMaxBytes: 4,
+    responses: [
+      { url: 'https://example.com/big', method: 'GET', status: 200, headers: { 'content-type': 'application/json' }, body: 'x'.repeat(10) },
+    ],
+  });
+  const reply = await bridge.handleMessage({ type: 'fetch-request', requestId: 'f4', url: 'https://example.com/big' });
+  assert.equal(reply.kind, 'failed');
+  assert.equal(reply.code, 'other');
+  assert.equal(reply.bodyBase64, undefined);
+});
+
+test('sanitizeRequestHeaders and effectiveRequestHeaders agree on the allowlist', () => {
+  const { sanitizeRequestHeaders, effectiveRequestHeaders } = createRequire(import.meta.url)('../background.js');
+  const requested = sanitizeRequestHeaders({
+    Accept: '*/*',
+    Cookie: 'secret',
+    'User-Agent': 'agent',
+    'X-Goog-Api-Key': 'secret',
+  });
+  assert.deepEqual(requested, { accept: '*/*', 'user-agent': 'agent' });
+  assert.deepEqual(effectiveRequestHeaders(requested), { accept: '*/*' });
+});
+
+test('download forwards allowlisted format headers and refuses the rest', async () => {
+  const { bridge, calls } = makeBridge({ responses: [] });
+  await bridge.handleMessage({
+    type: 'download',
+    requestId: 'r20',
+    jobId: 'job-20',
+    url: 'https://example.com/files/tiny.bin',
+    headers: {
+      Accept: '*/*',
+      Referer: 'https://example.com/',
+      Cookie: 'session=secret',
+      'User-Agent': 'fixture-agent',
+    },
+  });
+  const download = calls.find((c) => c.download);
+  assert.equal(download.download.headers.accept, '*/*');
+  assert.equal(download.download.headers.cookie, undefined);
+  assert.equal(download.download.headers.referer, undefined, 'MV3 refuses Referer');
+  assert.equal(download.download.headers['user-agent'], undefined, 'MV3 refuses User-Agent');
+});
+
+test('download with saveViaBlob uses the offscreen saver', async () => {
+  const offscreenCalls = [];
+  const runtimeCalls = [];
+  const downloadCalls = [];
+  const { createBridge } = createRequire(import.meta.url)('../background.js');
+  const bridge = createBridge({
+    fetchImpl: async () => { throw new Error('unused'); },
+    downloads: { download: async (options) => { downloadCalls.push(options); return 1; } },
+    post: () => {},
+    offscreen: { createDocument: async (options) => { offscreenCalls.push(options); } },
+    runtime: { sendMessage: async (message) => { runtimeCalls.push(message); return { ok: true, blobUrl: 'blob:chrome-extension://fixture/blob', sizeBytes: 4096 }; } },
+  });
+  const reply = await bridge.handleMessage({
+    type: 'download',
+    requestId: 'r21',
+    jobId: 'job-21',
+    url: 'https://cdn.fixtures.example.net/audio.m4a',
+    headers: { Accept: '*/*', Cookie: 'secret' },
+    saveViaBlob: true,
+  });
+  assert.equal(reply.kind, 'completed');
+  assert.equal(reply.sizeBytes, 4096);
+  assert.equal(downloadCalls[0].url, 'blob:chrome-extension://fixture/blob');
+  assert.equal(offscreenCalls[0].url, 'offscreen.html');
+  assert.equal(runtimeCalls[0].target, 'anydownload-offscreen');
+  assert.equal(runtimeCalls[0].headers.accept, '*/*');
+  assert.equal(runtimeCalls[0].headers.cookie, undefined);
+});
+
+test('offscreen save fetches the media and returns an extension Blob URL', async () => {
+  const { save } = createRequire(import.meta.url)('../offscreen.js');
+  globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3, 4]), {
+    status: 200,
+    headers: { 'content-type': 'audio/mp4' },
+  });
+  const result = await save({ url: 'https://cdn.fixtures.example.net/audio.m4a', fileName: 'audio.m4a', headers: {} });
+  assert.equal(result.ok, true);
+  assert.equal(result.sizeBytes, 4);
+  assert.ok(result.blobUrl.startsWith('blob:'), result.blobUrl);
+});
+
+test('the manifest rewrites the YouTube innertube origin and user agent', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.dirname(new URL(import.meta.url).pathname);
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, '../manifest.json'), 'utf8'));
+  assert.ok(manifest.permissions.includes('declarativeNetRequest'));
+  const resource = manifest.declarative_net_request.rule_resources.find((r) => r.id === 'youtube_headers');
+  assert.ok(resource && resource.enabled);
+  const rules = JSON.parse(fs.readFileSync(path.join(dir, '../rules.json'), 'utf8'));
+  assert.equal(rules[0].condition.urlFilter, '||youtube.com/youtubei/');
+  const headers = rules[0].action.requestHeaders;
+  assert.equal(headers.find((h) => h.header === 'origin').value, 'https://www.youtube.com');
+  assert.ok(headers.find((h) => h.header === 'user-agent').value.includes('Macintosh'));
+});
+
+test('the Compose/Wasm page source performs no fetch call', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
+  const roots = [
+    path.join(repoRoot, 'apps/web/src/wasmJsMain'),
+    path.join(repoRoot, 'shared/ui/src'),
+  ];
+  const offenders = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'build') continue;
+        visit(full);
+      } else if (entry.name.endsWith('.kt')) {
+        const source = fs.readFileSync(full, 'utf8').replace(/fun\s+fetch\s*\(/g, '');
+        if (/fetch\s*\(/.test(source)) offenders.push(full);
+      }
+    }
+  };
+  for (const root of roots) visit(root);
+  assert.deepEqual(offenders, [], 'the page must never call fetch itself');
 });

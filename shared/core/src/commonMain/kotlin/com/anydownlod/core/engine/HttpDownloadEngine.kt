@@ -15,12 +15,30 @@ import com.anydownlod.core.domain.JobProgress
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.StartPolicy
+import com.anydownlod.core.extract.ExtractionError
+import com.anydownlod.core.download.FragmentDownloader
+import com.anydownlod.core.download.FragmentOutcome
+import com.anydownlod.core.download.M3u8
+import com.anydownlod.core.download.ManifestResult
+import com.anydownlod.core.download.Mpd
+import com.anydownlod.core.download.MpdResult
+import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.MediaFragment
 import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractionFailure
 import com.anydownlod.core.extract.GenericExtractor
+import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.MediaFormat
+import com.anydownlod.core.format.CompiledSpec
+import com.anydownlod.core.format.FormatSelector
+import com.anydownlod.core.format.OptionsToSpec
+import com.anydownlod.core.format.Selection
+import com.anydownlod.core.platform.ContentRange
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
+import com.anydownlod.core.platform.HttpFailureReason
+import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.engineCriticalSection
@@ -69,6 +87,12 @@ class HttpDownloadEngine(
     private val idGenerator: () -> String = { "local-${Random.nextLong().toULong().toString(16)}" },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val persist: (List<DownloadJob>) -> Unit = {},
+    /**
+     * The extractor registry. When null (the D2/D3 wiring) every URL keeps
+     * the direct-file and generic-page probe path; hosts add the registry in
+     * the D4 host tasks.
+     */
+    private val registry: ExtractorRegistry? = null,
     private val maxRedirects: Int = UrlPolicy.MAX_REDIRECTS,
     private val chunkSize: Int = 64 * 1024,
     /**
@@ -84,6 +108,9 @@ class HttpDownloadEngine(
     companion object {
         /** Bounded page read for the HTML route; a huge page is never held whole. */
         const val MAX_HTML_BYTES = 512 * 1024
+
+        /** Largest HLS/DASH manifest the engine will read (T-073). */
+        const val MANIFEST_MAX_BYTES = 2 * 1024 * 1024
     }
 
     private val lock = Any()
@@ -254,11 +281,16 @@ class HttpDownloadEngine(
             }
             val url = findJob(jobId)?.request?.sourceUrl ?: return@withPermit
             val options = findJob(jobId)?.request?.options ?: DownloadOptions()
-            update(jobId, persistNow = false) {
-                it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
-            }
             try {
-                downloadDirectFile(jobId, url, options, extractHtml = true)
+                val extractor = registry?.suitableFor(url)
+                if (extractor != null) {
+                    extractAndDownload(jobId, url, options, extractor)
+                } else {
+                    update(jobId, persistNow = false) {
+                        it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+                    }
+                    downloadDirectFile(jobId, url, options, extractHtml = true)
+                }
             } catch (cancelled: CancellationException) {
                 if (isCancelRequested(jobId)) confirmCancelled(jobId) else throw cancelled
             } catch (failure: Throwable) {
@@ -271,18 +303,90 @@ class HttpDownloadEngine(
         }
     }
 
+    /**
+     * The D4 registry route: extract one [InfoDict], compile the typed options
+     * to a format spec, select exactly one format, and download it through the
+     * direct-file path. Merging, the media toolkit, and captions/thumbnails
+     * fail typed with an honest message.
+     */
+    private suspend fun extractAndDownload(
+        jobId: String,
+        url: String,
+        options: DownloadOptions,
+        extractor: com.anydownlod.core.extract.InfoExtractor,
+    ) {
+        update(jobId, persistNow = false) {
+            it.copy(state = JobState.RESOLVING, progress = JobProgress(phase = "extracting"))
+        }
+        val info = try {
+            withContext(ioDispatcher) { extractor.extract(url) }
+        } catch (error: ExtractionError) {
+            val mapped = extractionJobError(error)
+            fail(jobId, mapped.code, mapped.message, mapped.retryable)
+            return
+        }
+        update(jobId) {
+            it.copy(
+                title = info.title ?: it.title,
+                thumbnailUrl = info.thumbnails.lastOrNull()?.url ?: it.thumbnailUrl,
+                sourceHost = UrlPolicy.hostOf(url),
+                formatsNeedingJs = info.formatsNeedingJs,
+            )
+        }
+        when (val resolution = resolveFormat(info, options)) {
+            is FormatResolution.Unsupported -> {
+                fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
+            }
+
+            is FormatResolution.Ready -> {
+                val format = resolution.format
+                val formatUrl = format.url
+                if (formatUrl.isNullOrBlank()) {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "The selected format has no downloadable URL.",
+                        retryable = false,
+                    )
+                    return
+                }
+                update(jobId, persistNow = false) {
+                    it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+                }
+                downloadDirectFile(
+                    jobId = jobId,
+                    url = formatUrl,
+                    options = options,
+                    extractHtml = false,
+                    headers = format.httpHeaders.orEmpty(),
+                    chunkSize = format.downloaderOptions?.httpChunkSize,
+                    declaredSize = format.filesize ?: format.filesizeApprox,
+                    artifactTitle = info.title,
+                    artifactExt = format.ext,
+                )
+            }
+        }
+    }
+
+
     private suspend fun downloadDirectFile(
         jobId: String,
         url: String,
         options: DownloadOptions,
         extractHtml: Boolean,
+        headers: Map<String, String> = emptyMap(),
+        chunkSize: Long? = null,
+        declaredSize: Long? = null,
+        artifactTitle: String? = null,
+        artifactExt: String? = null,
     ) {
-        var current = url
+        val initialRange = chunkSize?.takeIf { it > 0 }?.let { 0L..(it - 1) }
+        var current = HttpRequest(url = url, headers = headers, range = initialRange)
         var hops = 0
         var body: HttpBody? = null
         try {
             while (true) {
-                when (val policy = urlCheck(current)) {
+                when (val policy = urlCheck(current.url)) {
                     is UrlCheck.Rejected -> {
                         fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, redactedUrlReason(policy.reason))
                         return
@@ -303,6 +407,26 @@ class HttpDownloadEngine(
                         return
                     }
 
+                    is HttpResponse.Failed -> {
+                        val error = when (response.reason) {
+                            HttpFailureReason.PERMISSION -> JobError(
+                                JobErrorCode.ENGINE_UNAVAILABLE,
+                                response.message,
+                                retryable = false,
+                            )
+
+                            HttpFailureReason.BLOCKED_DESTINATION -> JobError(
+                                JobErrorCode.INVALID_URL_OPTIONS,
+                                response.message,
+                                retryable = false,
+                            )
+
+                            else -> JobError(JobErrorCode.NETWORK_FAILURE, response.message, retryable = true)
+                        }
+                        fail(jobId, error.code, error.message, error.retryable)
+                        return
+                    }
+
                     is HttpResponse.Redirect -> {
                         if (response.location.isBlank()) {
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected without a destination.")
@@ -313,7 +437,7 @@ class HttpDownloadEngine(
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "Too many redirects.")
                             return
                         }
-                        current = response.location
+                        current = current.copy(url = response.location)
                         currentCoroutineContext().ensureActive()
                     }
 
@@ -326,7 +450,7 @@ class HttpDownloadEngine(
                             fail(jobId, error.code, error.message, error.retryable)
                             return
                         }
-                        when (UrlClassifier.classify(response.contentType)) {
+                        when (UrlClassifier.classify(response.contentType, current.url)) {
                             UrlClassifier.Classification.NEEDS_EXTRACTOR -> {
                                 if (!extractHtml) {
                                     body?.close()
@@ -345,7 +469,18 @@ class HttpDownloadEngine(
                                     return
                                 }
                                 body = null // ownership passes to the extraction step
-                                extractMediaFromPage(jobId, pageBody, current, options)
+                                extractMediaFromPage(jobId, pageBody, current.url, options)
+                                return
+                            }
+
+                            UrlClassifier.Classification.MANIFEST -> {
+                                val manifestBody = body
+                                if (manifestBody == null) {
+                                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
+                                    return
+                                }
+                                body = null // ownership passes to the manifest step
+                                streamManifestToFile(jobId, manifestBody, response.contentType, current.url, options)
                                 return
                             }
 
@@ -356,7 +491,31 @@ class HttpDownloadEngine(
                                     return
                                 }
                                 body = null // ownership passes to the streaming step
-                                streamToFile(jobId, fileBody, response.totalBytes, options, current)
+                                val chunked = chunkSize?.takeIf { it > 0 && response.statusCode == 206 }
+                                if (chunked != null) {
+                                    streamChunkedToFile(
+                                        jobId = jobId,
+                                        firstBody = fileBody,
+                                        firstRangeTotal = response.totalBytes ?: declaredSize,
+                                        declaredSize = declaredSize,
+                                        sourceUrl = current.url,
+                                        headers = headers,
+                                        chunkSize = chunked,
+                                        options = options,
+                                        artifactTitle = artifactTitle,
+                                        artifactExt = artifactExt,
+                                    )
+                                } else {
+                                    streamToFile(
+                                        jobId = jobId,
+                                        body = fileBody,
+                                        totalBytes = response.totalBytes ?: declaredSize,
+                                        options = options,
+                                        sourceUrl = current.url,
+                                        artifactTitle = artifactTitle,
+                                        artifactExt = artifactExt,
+                                    )
+                                }
                                 return
                             }
                         }
@@ -438,12 +597,216 @@ class HttpDownloadEngine(
         GenericExtractionFailure.MultipleMedia -> "This page has more than one media element, so the app cannot choose one."
     }
 
+    /**
+     * HLS/DASH manifest path (T-073): parse the playlist or MPD, pick the best
+     * variant by bandwidth, and concatenate its fragments into one temp file
+     * through [FragmentDownloader]. No FFmpeg, no merge step; live playlists,
+     * unsupported key methods, and DRM fail typed. `percent` is the fragment
+     * ratio and the phase marks it as an estimate.
+     */
+    private suspend fun streamManifestToFile(
+        jobId: String,
+        body: HttpBody,
+        contentType: String?,
+        sourceUrl: String,
+        options: DownloadOptions,
+    ) {
+        val manifestText = runCatching { readManifestText(body) }.getOrNull()
+        if (manifestText == null) {
+            fail(jobId, JobErrorCode.EXTRACTION_FAILURE, "The manifest could not be read.", retryable = false)
+            return
+        }
+        val isDash = contentType?.startsWith("application/dash+xml", ignoreCase = true) == true ||
+            sourceUrl.substringBefore('?').substringBefore('#').endsWith(".mpd", ignoreCase = true) ||
+            manifestText.contains("<MPD")
+        var fragments: List<MediaFragment> = emptyList()
+        var initSegment: MediaFragment? = null
+        var key: com.anydownlod.core.download.Aes128KeyInfo? = null
+        var artifactExt = "ts"
+        if (isDash) {
+            when (val result = Mpd.parse(sourceUrl, manifestText)) {
+                is MpdResult.Failed -> {
+                    fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, result.reason, retryable = false)
+                    return
+                }
+
+                is MpdResult.Formats -> {
+                    val format = selectBestManifestFormat(result.formats) ?: run {
+                        fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The MPD declared no downloadable representation.", retryable = false)
+                        return
+                    }
+                    fragments = format.fragments ?: emptyList()
+                    artifactExt = "mp4"
+                }
+            }
+        } else {
+            when (val first = M3u8.parse(sourceUrl, manifestText)) {
+                is ManifestResult.Failed -> {
+                    fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, first.reason, retryable = false)
+                    return
+                }
+
+                is ManifestResult.Master -> {
+                    val variant = selectBestManifestFormat(first.formats) ?: run {
+                        fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The master playlist declared no variant.", retryable = false)
+                        return
+                    }
+                    val variantUrl = variant.url ?: run {
+                        fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The master playlist variant had no URI.", retryable = false)
+                        return
+                    }
+                    val variantText = fetchManifestText(variantUrl) ?: run {
+                        fail(jobId, JobErrorCode.NETWORK_FAILURE, "The media playlist could not be fetched.")
+                        return
+                    }
+                    when (val second = M3u8.parse(variantUrl, variantText)) {
+                        is ManifestResult.Media -> {
+                            fragments = second.fragments
+                            initSegment = second.initSegment
+                            key = second.key
+                        }
+
+                        is ManifestResult.Master -> {
+                            fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The playlist nested another master playlist.", retryable = false)
+                            return
+                        }
+
+                        is ManifestResult.Failed -> {
+                            fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, second.reason, retryable = false)
+                            return
+                        }
+                    }
+                }
+
+                is ManifestResult.Media -> {
+                    fragments = first.fragments
+                    initSegment = first.initSegment
+                    key = first.key
+                }
+            }
+        }
+        if (fragments.isEmpty()) {
+            fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The manifest declared no fragments.", retryable = false)
+            return
+        }
+        val handle = runCatching { fileStore.createTempFile() }.getOrNull()
+        if (handle == null) {
+            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+            return
+        }
+        var published = false
+        var written = 0L
+        try {
+            val outcome = FragmentDownloader(transfer).download(
+                fragments = fragments,
+                initSegment = initSegment,
+                key = key,
+                onChunk = { chunk ->
+                    handle.write(chunk, chunk.size)
+                    written += chunk.size
+                },
+                onProgress = { completed, total, bytes ->
+                    update(jobId, persistNow = false) {
+                        it.copy(
+                            progress = JobProgress(
+                                phase = "fragments $completed/$total (estimated)",
+                                percent = (completed.toDouble() / total) * 100.0,
+                                downloadedBytes = bytes,
+                                totalBytes = null,
+                            ),
+                        )
+                    }
+                },
+                isCancelled = { isCancelRequested(jobId) },
+            )
+            currentCoroutineContext().ensureActive()
+            when (outcome) {
+                is FragmentOutcome.Cancelled -> {
+                    confirmCancelled(jobId)
+                    return
+                }
+
+                is FragmentOutcome.Failed -> {
+                    fail(jobId, JobErrorCode.NETWORK_FAILURE, outcome.reason)
+                    return
+                }
+
+                is FragmentOutcome.Completed -> Unit
+            }
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return
+            }
+            val manifestTitle = sourceUrl.substringAfterLast('/').substringBefore('?').substringBefore('#')
+                .substringBeforeLast('.', missingDelimiterValue = "")
+                .ifBlank { "media" }
+            val relativePath = artifactPath(options, sourceUrl, manifestTitle, artifactExt) ?: run {
+                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                return
+            }
+            published = publishAndComplete(jobId, handle, written, null, options, relativePath)
+        } finally {
+            if (!published) {
+                runCatching { handle.discard() }
+            }
+        }
+    }
+
+    private fun selectBestManifestFormat(formats: List<MediaFormat>): MediaFormat? =
+        formats.filter { it.fragments?.isNotEmpty() == true || it.protocol != "http_dash_segments" }
+            .maxByOrNull { it.tbr ?: -1.0 }
+
+    /** Reads at most 2 MiB of manifest text; larger playlists fail typed. */
+    private suspend fun readManifestText(body: HttpBody): String {
+        val chunks = mutableListOf<ByteArray>()
+        var total = 0
+        val buffer = ByteArray(64 * 1024)
+        try {
+            while (true) {
+                val read = withContext(ioDispatcher) { body.readNext(buffer) }
+                if (read < 0) break
+                if (read == 0) continue
+                total += read
+                if (total > MANIFEST_MAX_BYTES) throw IllegalArgumentException("manifest too large")
+                chunks += buffer.copyOf(read)
+            }
+        } finally {
+            runCatching { body.close() }
+        }
+        val bytes = ByteArray(total)
+        var offset = 0
+        for (chunk in chunks) {
+            chunk.copyInto(bytes, offset)
+            offset += chunk.size
+        }
+        return bytes.decodeToString()
+    }
+
+    private suspend fun fetchManifestText(url: String): String? {
+        var current = url
+        for (hop in 0..maxRedirects) {
+            when (val response = withContext(ioDispatcher) { transfer.execute(HttpRequest(current)) }) {
+                is HttpResponse.Redirect -> current = response.location
+                is HttpResponse.Final -> {
+                    if (response.statusCode !in 200..299) return null
+                    val body = response.body ?: return null
+                    return runCatching { readManifestText(body) }.getOrNull()
+                }
+
+                is HttpResponse.Failed, is HttpResponse.Unavailable -> return null
+            }
+        }
+        return null
+    }
+
     private suspend fun streamToFile(
         jobId: String,
         body: HttpBody,
         totalBytes: Long?,
         options: DownloadOptions,
         sourceUrl: String,
+        artifactTitle: String? = null,
+        artifactExt: String? = null,
     ) {
         val handle = runCatching { fileStore.createTempFile() }.getOrNull()
         if (handle == null) {
@@ -453,7 +816,7 @@ class HttpDownloadEngine(
         }
 
         var downloaded = 0L
-        var published: String? = null
+        var published = false
         try {
             val buffer = ByteArray(chunkSize)
             while (!isCancelRequested(jobId)) {
@@ -472,27 +835,186 @@ class HttpDownloadEngine(
                 return
             }
 
-            handle.close()
-            val relativePath = try {
-                ArtifactName.build(sourceUrl, options)
-            } catch (failure: IllegalArgumentException) {
+            val relativePath = artifactPath(options, sourceUrl, artifactTitle, artifactExt) ?: run {
                 fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
                 return
             }
-
-            published = try {
-                fileStore.publish(handle, relativePath)
-            } catch (failure: Throwable) {
-                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
-                return
-            }
-            complete(jobId, downloaded, totalBytes, options.mediaType, published, relativePath)
+            published = publishAndComplete(jobId, handle, downloaded, totalBytes, options, relativePath)
         } finally {
             runCatching { body.close() }
-            if (published == null) {
+            if (!published) {
                 runCatching { handle.discard() }
             }
         }
+    }
+
+    /**
+     * Ranged chunk reader for formats that declare `http_chunk_size`. Each
+     * chunk is one `Range` request appended to the same temp file; the total
+     * comes from the first chunk's `Content-Range` (or the declared format
+     * size). A non-2xx chunk status maps through the shared HTTP table, so a
+     * mid-stream 403 is `UNAVAILABLE_OR_PRIVATE`, not `NETWORK_FAILURE`.
+     */
+    private suspend fun streamChunkedToFile(
+        jobId: String,
+        firstBody: HttpBody,
+        firstRangeTotal: Long?,
+        declaredSize: Long?,
+        sourceUrl: String,
+        headers: Map<String, String>,
+        chunkSize: Long,
+        options: DownloadOptions,
+        artifactTitle: String?,
+        artifactExt: String?,
+    ) {
+        val handle = runCatching { fileStore.createTempFile() }.getOrNull()
+        if (handle == null) {
+            runCatching { firstBody.close() }
+            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+            return
+        }
+
+        var downloaded = 0L
+        var published = false
+        var body: HttpBody? = firstBody
+        var total = firstRangeTotal ?: declaredSize
+        try {
+            while (true) {
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return
+                }
+                val currentBody = body ?: break
+                body = null
+                val buffer = ByteArray(chunkSize.toInt().coerceIn(4096, 64 * 1024))
+                var chunkRead = 0L
+                while (true) {
+                    val count = withContext(ioDispatcher) { currentBody.readNext(buffer) }
+                    if (count == -1) break
+                    if (count == 0) continue
+                    handle.write(buffer, count)
+                    chunkRead += count
+                    downloaded += count
+                    reportProgress(jobId, downloaded, total)
+                    currentCoroutineContext().ensureActive()
+                }
+                runCatching { currentBody.close() }
+
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return
+                }
+                if (total != null && downloaded >= total) break
+                if (chunkRead <= 0L) {
+                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
+                    return
+                }
+
+                val start = downloaded
+                val end = if (total != null) {
+                    minOf(start + chunkSize - 1, total - 1)
+                } else {
+                    start + chunkSize - 1
+                }
+                val request = HttpRequest(url = sourceUrl, headers = headers, range = start..end)
+                when (val response = withContext(ioDispatcher) { transfer.execute(request) }) {
+                    is HttpResponse.Final -> {
+                        if (response.statusCode == 416) break // nothing left to fetch
+                        if (response.statusCode !in 200..299) {
+                            runCatching { response.body?.close() }
+                            val error = mapHttpStatus(response.statusCode)
+                            fail(jobId, error.code, error.message, error.retryable)
+                            return
+                        }
+                        if (total == null) {
+                            total = response.contentRange?.let { ContentRange.totalBytes(it) } ?: declaredSize
+                        }
+                        val nextBody = response.body
+                        if (nextBody == null) {
+                            fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
+                            return
+                        }
+                        body = nextBody
+                    }
+
+                    is HttpResponse.Redirect -> {
+                        fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected between chunks.")
+                        return
+                    }
+
+                    is HttpResponse.Failed -> {
+                        fail(jobId, JobErrorCode.NETWORK_FAILURE, response.message)
+                        return
+                    }
+
+                    is HttpResponse.Unavailable -> {
+                        fail(
+                            jobId,
+                            JobErrorCode.ENGINE_UNAVAILABLE,
+                            "A required download tool is missing on this device.",
+                            retryable = false,
+                        )
+                        return
+                    }
+                }
+            }
+
+            currentCoroutineContext().ensureActive()
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return
+            }
+            if (total != null && downloaded < total) {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
+                return
+            }
+
+            val relativePath = artifactPath(options, sourceUrl, artifactTitle, artifactExt) ?: run {
+                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                return
+            }
+            published = publishAndComplete(jobId, handle, downloaded, total, options, relativePath)
+        } finally {
+            runCatching { body?.close() }
+            if (!published) {
+                runCatching { handle.discard() }
+            }
+        }
+    }
+
+    private fun artifactPath(
+        options: DownloadOptions,
+        sourceUrl: String,
+        artifactTitle: String?,
+        artifactExt: String?,
+    ): String? = try {
+        if (artifactTitle != null) {
+            ArtifactName.build(artifactTitle, artifactExt, options)
+        } else {
+            ArtifactName.build(sourceUrl, options)
+        }
+    } catch (failure: IllegalArgumentException) {
+        null
+    }
+
+    /** Closes, publishes, and completes; false when the path was refused. */
+    private suspend fun publishAndComplete(
+        jobId: String,
+        handle: FileHandle,
+        downloaded: Long,
+        totalBytes: Long?,
+        options: DownloadOptions,
+        relativePath: String,
+    ): Boolean {
+        handle.close()
+        val published = try {
+            fileStore.publish(handle, relativePath)
+        } catch (failure: Throwable) {
+            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+            return false
+        }
+        complete(jobId, downloaded, totalBytes, options.mediaType, published, relativePath)
+        return true
     }
 
     private fun complete(
@@ -657,3 +1179,86 @@ class HttpDownloadEngine(
         }
     }
 }
+
+/** Selection outcome for the registry route, testable without a network. */
+internal sealed interface FormatResolution {
+    data class Ready(val format: MediaFormat) : FormatResolution
+    data class Unsupported(val message: String) : FormatResolution
+}
+
+internal fun resolveFormat(info: InfoDict, options: DownloadOptions): FormatResolution =
+    when (val compiled = OptionsToSpec.compile(options)) {
+        is CompiledSpec.NeedsToolkit -> FormatResolution.Unsupported(
+            "${compiled.message} Choose M4A or Opus audio, or a single-file video, instead.",
+        )
+
+        CompiledSpec.NotInPhase -> FormatResolution.Unsupported(
+            "Captions and thumbnails arrive in a later phase.",
+        )
+
+        is CompiledSpec.SingleFile -> resolveSelection(
+            FormatSelector.select(info, compiled.spec, compiled.sort),
+            info.formatsNeedingJs,
+        )
+    }
+
+internal fun resolveSelection(selection: Selection, formatsNeedingJs: Int): FormatResolution = when (selection) {
+    is Selection.Single -> FormatResolution.Ready(selection.format)
+    is Selection.Merge -> FormatResolution.Unsupported(
+        "This choice needs merging, and the media toolkit is not built yet. " +
+            "Choose M4A or Opus audio, or a single-file video.",
+    )
+
+    Selection.None -> FormatResolution.Unsupported(
+        buildString {
+            append("No single-file format matches this choice.")
+            if (formatsNeedingJs > 0) {
+                append(" $formatsNeedingJs more formats need the JavaScript runtime.")
+            }
+        },
+    )
+}
+
+internal fun extractionJobError(error: ExtractionError): JobError = when (error) {
+        is ExtractionError.LoginRequired -> JobError(
+            JobErrorCode.LOGIN_REQUIRED,
+            "This source needs a sign-in. Add cookies or pick another source.",
+            retryable = false,
+        )
+
+        is ExtractionError.AgeRestricted -> JobError(
+            JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+            "This video is age-restricted.",
+            retryable = false,
+        )
+
+        is ExtractionError.GeoRestricted -> JobError(
+            JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+            "This source is not available in your region.",
+            retryable = false,
+        )
+
+        is ExtractionError.Unavailable -> JobError(
+            JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+            error.message ?: "This source is unavailable.",
+            retryable = false,
+        )
+
+        is ExtractionError.NoFormats -> JobError(
+            JobErrorCode.UNSUPPORTED_FORMAT,
+            error.message ?: "No downloadable format was found.",
+            retryable = false,
+        )
+
+        is ExtractionError.Malformed -> JobError(
+            JobErrorCode.EXTRACTION_FAILURE,
+            "The source could not be read.",
+            retryable = false,
+        )
+
+        is ExtractionError.UnsupportedUrl -> JobError(
+            JobErrorCode.UNSUPPORTED_SOURCE,
+            "This URL has no extractor.",
+            retryable = false,
+        )
+    }

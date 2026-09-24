@@ -112,6 +112,8 @@ data class DownloadJob(
     val title: String? = null,
     val sourceHost: String? = null,
     val thumbnailUrl: String? = null,
+    /** Formats the extractor dropped because they need a JavaScript runtime. */
+    val formatsNeedingJs: Int = 0,
     val parentBatchId: String? = null,
     val subscriptionId: String? = null,
     /** Due time for [JobState.SCHEDULED] rows; null when unknown. */

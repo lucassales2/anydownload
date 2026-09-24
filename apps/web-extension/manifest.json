@@ -3,8 +3,17 @@
   "name": "AnyDownload page bridge",
   "version": "0.1.0",
   "description": "Fetches and saves direct-file downloads for the AnyDownload web page. The page itself never fetches a third-party origin; this extension holds the host permissions.",
-  "permissions": ["downloads"],
+  "permissions": ["downloads", "declarativeNetRequest", "offscreen"],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "youtube_headers",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },

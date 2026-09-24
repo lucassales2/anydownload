@@ -17,6 +17,8 @@ import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractionFailure
 import com.anydownlod.core.extract.GenericExtractor
+import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.platform.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +51,12 @@ class WebExtensionEngine(
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val idGenerator: () -> String = { "web-${Random.nextLong().toULong().toString(16)}" },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * The Kotlin registry. A matched URL is extracted through the bridge
+     * request port, one format is selected, and the browser downloader saves
+     * it. Unmatched URLs keep the D2/D3 probe path.
+     */
+    private val registry: ExtractorRegistry? = null,
     seedJobs: List<DownloadJob> = emptyList(),
 ) : DownloadEngine {
 
@@ -210,6 +218,11 @@ class WebExtensionEngine(
 
             is UrlCheck.Allowed -> Unit
         }
+        val extractor = registry?.suitableFor(url)
+        if (extractor != null) {
+            extractAndDownloadViaBridge(jobId, url, extractor)
+            return
+        }
         update(jobId, persistNow = false) {
             it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
         }
@@ -297,8 +310,76 @@ class WebExtensionEngine(
         }
     }
 
+    /**
+     * The D4 registry route over the extension: the extractor's requests go
+     * through the bridge request port (T-056), one format is selected, and the
+     * browser downloader saves that URL whole.
+     */
+    private suspend fun extractAndDownloadViaBridge(
+        jobId: String,
+        url: String,
+        extractor: com.anydownlod.core.extract.InfoExtractor,
+    ) {
+        val options = findJob(jobId)?.request?.options ?: DownloadOptions()
+        update(jobId, persistNow = false) {
+            it.copy(state = JobState.RESOLVING, progress = JobProgress(phase = "extracting"))
+        }
+        val info = try {
+            withContext(ioDispatcher) { extractor.extract(url) }
+        } catch (error: com.anydownlod.core.extract.ExtractionError) {
+            val mapped = extractionJobError(error)
+            fail(jobId, mapped.code, mapped.message, mapped.retryable)
+            return
+        }
+        update(jobId) {
+            it.copy(
+                title = info.title ?: it.title,
+                thumbnailUrl = info.thumbnails.lastOrNull()?.url ?: it.thumbnailUrl,
+                sourceHost = UrlPolicy.hostOf(url),
+                formatsNeedingJs = info.formatsNeedingJs,
+            )
+        }
+        when (val resolution = resolveFormat(info, options)) {
+            is FormatResolution.Unsupported -> {
+                fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
+            }
+
+            is FormatResolution.Ready -> {
+                val format = resolution.format
+                val formatUrl = format.url
+                if (formatUrl.isNullOrBlank()) {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "The selected format has no downloadable URL.",
+                        retryable = false,
+                    )
+                    return
+                }
+                update(jobId, persistNow = false) {
+                    it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+                }
+                downloadViaBridge(
+                    jobId = jobId,
+                    url = formatUrl,
+                    mediaType = options.mediaType,
+                    totalBytes = format.filesize ?: format.filesizeApprox,
+                    headers = format.httpHeaders.orEmpty(),
+                    saveViaBlob = true,
+                )
+            }
+        }
+    }
+
     /** The D2 save step: one validated URL handed to the extension downloader. */
-    private suspend fun downloadViaBridge(jobId: String, url: String, mediaType: MediaType, totalBytes: Long?) {
+    private suspend fun downloadViaBridge(
+        jobId: String,
+        url: String,
+        mediaType: MediaType,
+        totalBytes: Long?,
+        headers: Map<String, String> = emptyMap(),
+        saveViaBlob: Boolean = false,
+    ) {
         when (val policy = UrlPolicy.check(url)) {
             is UrlCheck.Rejected -> {
                 fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, redactedUrlReason(policy.reason))
@@ -307,8 +388,9 @@ class WebExtensionEngine(
 
             is UrlCheck.Allowed -> Unit
         }
+        val safeHeaders = HttpHeaders.sanitize(headers).accepted
         val outcome = withContext(ioDispatcher) {
-            bridge.download(url, jobId) { downloaded, total ->
+            bridge.download(url, jobId, safeHeaders, saveViaBlob) { downloaded, total ->
                 update(jobId, persistNow = false) {
                     it.copy(
                         progress = JobProgress(

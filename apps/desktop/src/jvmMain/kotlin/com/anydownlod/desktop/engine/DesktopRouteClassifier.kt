@@ -6,6 +6,7 @@ import com.anydownlod.core.engine.UrlClassifier
 import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractor
+import com.anydownlod.core.extract.ExtractorRegistry
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -39,6 +40,11 @@ class DesktopRouteClassifier(
     private val readTimeoutMillis: Int = 3_000,
     private val chunkSize: Int = 64 * 1024,
     private val urlCheck: (String) -> UrlCheck = UrlPolicy::check,
+    /**
+     * The Kotlin registry. A matched URL becomes [DesktopRoute.KOTLIN] before
+     * any probe request: no HEAD, no page GET, and no process.
+     */
+    private val registry: ExtractorRegistry? = null,
 ) {
     private sealed interface Head {
         data class File(val contentType: String) : Head
@@ -51,6 +57,7 @@ class DesktopRouteClassifier(
     private data class ProbePage(val url: String, val html: String)
 
     fun route(url: String): DesktopRoute {
+        if (registry?.suitableFor(url) != null) return DesktopRoute.KOTLIN
         if (urlCheck(url) !is UrlCheck.Allowed) return DesktopRoute.DIRECT_FILE
         var current = url
         try {
@@ -168,7 +175,7 @@ class DesktopRouteClassifier(
             return when {
                 status in 300..399 -> Head.Redirect(location ?: "")
                 status !in 200..299 -> Head.Error
-                UrlClassifier.classify(contentType) == UrlClassifier.Classification.NEEDS_EXTRACTOR ->
+                UrlClassifier.classify(contentType, url) == UrlClassifier.Classification.NEEDS_EXTRACTOR ->
                     Head.HtmlOrUnknown
 
                 contentType != null -> Head.File(contentType)
@@ -196,7 +203,8 @@ class DesktopRouteClassifier(
             "srt", "vtt", "ttml", "txt", "json",
         )
 
-        fun resumeRoute(url: String): DesktopRoute {
+        fun resumeRoute(url: String, registry: ExtractorRegistry? = null): DesktopRoute {
+            if (registry?.suitableFor(url) != null) return DesktopRoute.KOTLIN
             val path = url.substringAfter("://").substringBefore('?').substringBefore('#')
             val last = path.substringAfterLast('/')
             val extension = last.substringAfterLast('.', missingDelimiterValue = "")

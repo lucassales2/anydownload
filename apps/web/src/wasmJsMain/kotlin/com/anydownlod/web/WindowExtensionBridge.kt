@@ -3,8 +3,10 @@ package com.anydownlod.web
 import com.anydownlod.core.engine.WebDownload
 import com.anydownlod.core.engine.WebExtensionBridge
 import com.anydownlod.core.engine.WebFailureCode
+import com.anydownlod.core.engine.WebFetch
 import com.anydownlod.core.engine.WebPage
 import com.anydownlod.core.engine.WebProbe
+import com.anydownlod.core.platform.HttpRequest
 import kotlinx.browser.window
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
@@ -12,6 +14,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.w3c.dom.MessageEvent
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.js.JsString
 import kotlin.js.toJsReference
 import kotlin.time.Duration.Companion.minutes
@@ -79,7 +83,13 @@ class WindowExtensionBridge : WebExtensionBridge {
         }
     }
 
-    override suspend fun download(url: String, jobId: String, onProgress: (downloaded: Long, total: Long?) -> Unit): WebDownload {
+    override suspend fun download(
+        url: String,
+        jobId: String,
+        headers: Map<String, String>,
+        saveViaBlob: Boolean,
+        onProgress: (downloaded: Long, total: Long?) -> Unit,
+    ): WebDownload {
         ensureListener()
         val requestId = nextRequestId()
         val channel = Pending(Channel(capacity = Channel.UNLIMITED)).also { pending[requestId] = it }
@@ -92,6 +102,8 @@ class WindowExtensionBridge : WebExtensionBridge {
                         requestId = requestId,
                         url = url,
                         jobId = jobId,
+                        headers = headers.ifEmpty { null },
+                        saveViaBlob = saveViaBlob.takeIf { it },
                     )
                 )
                 while (true) {
@@ -135,6 +147,36 @@ class WindowExtensionBridge : WebExtensionBridge {
         }
     }
 
+    @OptIn(ExperimentalEncodingApi::class)
+    override suspend fun fetch(request: HttpRequest): WebFetch {
+        ensureListener()
+        val requestId = nextRequestId()
+        val channel = Pending(Channel(capacity = Channel.UNLIMITED)).also { pending[requestId] = it }
+        return try {
+            withTimeout<WebFetch>(2.minutes) {
+                postMessage(
+                    ExtensionMessage(
+                        source = "anydownload-page",
+                        type = "fetch-request",
+                        requestId = requestId,
+                        url = request.url,
+                        method = request.method,
+                        headers = request.headers,
+                        bodyBase64 = request.body?.let { Base64.encode(it) },
+                        range = request.range?.let { "bytes=${it.first}-${it.last}" },
+                    )
+                )
+                while (true) {
+                    val reply = channel.messages.receive()
+                    if (reply.type == "fetch-request-reply") return@withTimeout parseFetchReply(reply)
+                }
+                error("Unreachable")
+            }
+        } catch (timeout: Throwable) {
+            pending.remove(requestId)
+            WebFetch.Failed(WebFailureCode.TIMEOUT, "The extension did not answer in time.")
+        }
+    }
     private fun parsePageReply(reply: ExtensionMessage): WebPage = when (reply.kind) {
         "final" -> WebPage.Final(
             finalUrl = reply.finalUrl ?: "",
@@ -164,6 +206,30 @@ class WindowExtensionBridge : WebExtensionBridge {
             code = failureCode(reply.code),
             message = reply.message ?: "The extension could not probe this URL.",
         )
+    }
+
+    private fun parseFetchReply(reply: ExtensionMessage): WebFetch = when (reply.kind) {
+        "final" -> WebFetch.Final(
+            statusCode = reply.status ?: 0,
+            contentType = reply.contentType,
+            totalBytes = reply.totalBytes,
+            contentRange = reply.contentRange,
+            headers = reply.responseHeaders ?: emptyMap(),
+            body = decodeBase64(reply.bodyBase64),
+            finalUrl = reply.finalUrl ?: "",
+            sentHeaders = reply.sentHeaders ?: emptyMap(),
+        )
+
+        else -> WebFetch.Failed(
+            code = failureCode(reply.code),
+            message = reply.message ?: "The extension could not complete this request.",
+        )
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun decodeBase64(value: String?): ByteArray {
+        if (value.isNullOrEmpty()) return ByteArray(0)
+        return runCatching { Base64.decode(value) }.getOrDefault(ByteArray(0))
     }
 
     private fun parseDownloadReply(reply: ExtensionMessage): WebDownload = when (reply.kind) {
@@ -226,6 +292,17 @@ internal data class ExtensionMessage(
     val sizeBytes: Long? = null,
     /** Bounded page text from the extension (fetch-page reply). */
     val html: String? = null,
+    /** Request fields carried to the extension (fetch-request). */
+    val method: String? = null,
+    val headers: Map<String, String>? = null,
+    val bodyBase64: String? = null,
+    val range: String? = null,
+    /** Ask the extension to fetch the media itself and save a Blob URL. */
+    val saveViaBlob: Boolean? = null,
+    /** Response fields returned by the extension (fetch-request reply). */
+    val contentRange: String? = null,
+    val responseHeaders: Map<String, String>? = null,
+    val sentHeaders: Map<String, String>? = null,
     /** "permission", "blocked", "network", "timeout", "other". */
     val code: String? = null,
     val message: String? = null,

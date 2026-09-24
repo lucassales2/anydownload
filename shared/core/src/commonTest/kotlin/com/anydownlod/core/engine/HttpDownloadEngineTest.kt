@@ -13,6 +13,8 @@ import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
+import com.anydownlod.core.platform.HttpFailureReason
+import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import kotlinx.coroutines.currentCoroutineContext
@@ -63,9 +65,9 @@ class HttpDownloadEngineTest {
         val requested: MutableList<String> = mutableListOf(),
         private val responder: (url: String) -> HttpResponse,
     ) : HttpTransfer {
-        override suspend fun execute(url: String): HttpResponse {
-            requested.add(url)
-            return responder(url)
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            requested.add(request.url)
+            return responder(request.url)
         }
     }
 
@@ -205,6 +207,24 @@ class HttpDownloadEngineTest {
         assertTrue(written.bytes.toByteArray().contentEquals(payload))
         assertTrue(written.published)
         assertFalse(written.discarded)
+    }
+
+    @Test
+    fun transferFailureFromThePortFailsTypedWithoutTouchingFiles() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Failed(HttpFailureReason.BLOCKED_DESTINATION, "This address was refused.")
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = "https://fixtures.example.com/files/a.bin", key = "failed-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, finished.error?.code)
+        assertFalse(finished.error?.retryable ?: true)
+        assertTrue(store.created.isEmpty(), "a refused request must not create a temp file")
     }
 
     @Test

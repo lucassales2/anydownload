@@ -1,5 +1,7 @@
 package com.anydownlod.core.engine
 
+import com.anydownlod.core.platform.HttpRequest
+
 /**
  * The web page's only outward-facing seam: a Manifest V3 browser extension
  * with host permissions does the fetch and the save. The page never issues a
@@ -20,8 +22,22 @@ interface WebExtensionBridge {
      */
     suspend fun probe(url: String): WebProbe
 
-    /** Downloads [url] and streams progress; then the browser saves the file. */
-    suspend fun download(url: String, jobId: String, onProgress: (downloaded: Long, total: Long?) -> Unit): WebDownload
+    /**
+     * Downloads [url] and streams progress; then the browser saves the file.
+     * [headers] are the selected format's allowlisted request headers; MV3
+     * `fetch`/`downloads` may refuse some of them and the browser owns the
+     * progress it reports. [saveViaBlob] asks the extension to fetch the
+     * media itself and hand a Blob URL to the browser downloader (matched
+     * formats), because a direct `chrome.downloads` fetch of a signed media
+     * URL is not reliable everywhere.
+     */
+    suspend fun download(
+        url: String,
+        jobId: String,
+        headers: Map<String, String> = emptyMap(),
+        saveViaBlob: Boolean = false,
+        onProgress: (downloaded: Long, total: Long?) -> Unit,
+    ): WebDownload
 
     /**
      * Fetches [url] and returns a bounded, redacted page: the FINAL URL after
@@ -31,8 +47,33 @@ interface WebExtensionBridge {
      */
     suspend fun fetchPage(url: String): WebPage
 
+    /**
+     * Carries one extractor request (GET/POST, headers, body, range) through
+     * the extension fetch path. The reply includes the effective request
+     * header set the extension actually sent, so the caller can report the
+     * difference (names only) without guessing about MV3's header rules.
+     */
+    suspend fun fetch(request: HttpRequest): WebFetch
+
     /** Aborts an in-flight [download] for [jobId]. */
     suspend fun cancelDownload(jobId: String)
+}
+
+/** One extractor-request outcome over the extension bridge. */
+sealed interface WebFetch {
+    data class Final(
+        val statusCode: Int,
+        val contentType: String?,
+        val totalBytes: Long?,
+        val contentRange: String?,
+        val headers: Map<String, String>,
+        val body: ByteArray,
+        val finalUrl: String,
+        /** Request headers the browser fetch actually kept. */
+        val sentHeaders: Map<String, String>,
+    ) : WebFetch
+
+    data class Failed(val code: WebFailureCode, val message: String) : WebFetch
 }
 
 /** One bounded page-read outcome. */

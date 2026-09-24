@@ -281,6 +281,7 @@ fun <T> SegmentedChoice(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     optionTag: (T) -> String? = { null },
+    optionEnabled: (T) -> Boolean = { true },
 ) {
     Surface(
         modifier = modifier,
@@ -296,9 +297,11 @@ fun <T> SegmentedChoice(
         ) {
             options.forEach { option ->
                 val picked = option == selected
+                val enabled = optionEnabled(option)
                 val tag = optionTag(option)
                 FilterChip(
                     selected = picked,
+                    enabled = enabled,
                     onClick = { onSelect(option) },
                     label = { Text(optionLabel(option)) },
                     modifier = if (tag != null) Modifier.testTag(tag) else Modifier,
@@ -310,7 +313,7 @@ fun <T> SegmentedChoice(
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                     border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
+                        enabled = enabled,
                         selected = picked,
                         borderColor = Color.Transparent,
                         selectedBorderColor = Color.Transparent,

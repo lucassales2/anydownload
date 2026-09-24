@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D4 extractor core and YouTube · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
+**Phase:** D4 verified 2026-09-24 (extractor core and YouTube single video) · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,7 +14,7 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md), [ADR-008](03-decisions/ADR-008-Extractor-core-and-youtube-phase.md), and the [yt-dlp equivalence matrix](01-product/Ytdlp-equivalence.md). That is the current implementation work.
+1. Read [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md), [ADR-008](03-decisions/ADR-008-Extractor-core-and-youtube-phase.md), and the [yt-dlp equivalence matrix](01-product/Ytdlp-equivalence.md). D4 is verified; the next phase is the media toolkit build or the first named site.
 2. Take the first Ready D4 card on [Kanban](Kanban.md). [T-055](06-tasks/T-055-Port-manifest-and-equivalence-matrix.md) is first: the port manifest and the generated coverage table.
 3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. D4 builds the extractor core and translates YouTube for a single video, JS-less first, then with yt-dlp-ejs. The media toolkit stays later; downloads are single-file formats.
 
@@ -25,7 +25,7 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 - Targets are iOS, Compose/Wasm, Android, and desktop.
 - Store publication is out of scope; this is a portfolio project.
 
-License notes for translated extractor code are in T-006. D2 proved a direct-file download on each host. D3 shipped the link-only home screen and one generic subset. D4 builds the extractor core and YouTube single video. The end goal, recorded 2026-09-24 in ADR-008, is yt-dlp feature equivalence: the core engine plus the extractor catalog over time, measured in the equivalence matrix. The media toolkit is recorded in ADR-007 and not built yet.
+License notes for translated extractor code are in T-006. D2 proved a direct-file download on each host. D3 shipped the link-only home screen and one generic subset. D4 built the extractor core and YouTube single video and was verified on 2026-09-24. The end goal, recorded 2026-09-24 in ADR-008, is yt-dlp feature equivalence: the core engine plus the extractor catalog over time, measured in the equivalence matrix. The media toolkit is recorded in ADR-007 and not built yet.
 
 ## Documentation map
 
@@ -36,7 +36,7 @@ License notes for translated extractor code are in T-006. D2 proved a direct-fil
 - [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) — D1, done.
 - [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) — D2, done.
 - [Phase 3 — Generic extractor subset](00-project/Phase-3-Generic-Extractor.md) — D3, done.
-- [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md) — current handoff: core, then YouTube JS-less, then EJS.
+- [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md) — done 2026-09-24: core, YouTube JS-less, then EJS.
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 

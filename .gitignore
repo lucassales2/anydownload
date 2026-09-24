@@ -54,3 +54,6 @@ node_modules/
 dist/
 Pods/
 DerivedData/
+
+# Chrome/Brave generated extension ruleset cache
+apps/web-extension/_metadata/

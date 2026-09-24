@@ -601,6 +601,8 @@ internal fun <T> ChoiceRow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     optionTag: (T) -> String? = { null },
+    optionEnabled: (T) -> Boolean = { true },
+    optionReason: (T) -> String? = { null },
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -614,7 +616,17 @@ internal fun <T> ChoiceRow(
             optionLabel = optionLabel,
             onSelect = onSelect,
             optionTag = optionTag,
+            optionEnabled = optionEnabled,
         )
+        val reasons = options.filterNot(optionEnabled).mapNotNull(optionReason).distinct()
+        if (reasons.isNotEmpty()) {
+            Text(
+                text = reasons.joinToString(" "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("choice-disabled-reason"),
+            )
+        }
     }
 }
 

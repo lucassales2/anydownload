@@ -2,8 +2,16 @@ package com.anydownlod.desktop.engine
 
 import com.anydownlod.core.engine.UrlCheck
 import com.anydownlod.core.engine.UrlPolicy
+import com.anydownlod.core.extract.ExtractorHttp
+import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.InfoExtractor
+import com.anydownlod.core.platform.HttpRequest
+import com.anydownlod.core.platform.HttpResponse
+import com.anydownlod.core.platform.HttpTransfer
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -146,5 +154,41 @@ class DesktopRouteClassifierTest {
         assertEquals(DesktopRoute.YTDLP_CLI, DesktopRouteClassifier.resumeRoute("https://example.com/watch?v=abc"))
         assertEquals(DesktopRoute.YTDLP_CLI, DesktopRouteClassifier.resumeRoute("https://example.com/podcast/episode"))
         assertEquals(DesktopRoute.YTDLP_CLI, DesktopRouteClassifier.resumeRoute("https://example.com/playlist?list=xyz"))
+    }
+
+    @Test
+    fun aRegistryMatchedUrlSkipsTheProbeEntirely() {
+        val server = server()
+        val requests = AtomicInteger(0)
+        server.createContext("/youtube/watch") { exchange ->
+            requests.incrementAndGet()
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val matchedUrl = "$base/youtube/watch"
+            val ie = object : InfoExtractor(
+                ieKey = ExtractorRegistry.GENERIC_KEY,
+                http = ExtractorHttp(NoopTransfer),
+                validUrl = Regex("""http://127\.0\.0\.1:\d+/youtube/.*"""),
+            ) {
+                override suspend fun extract(url: String): InfoDict = InfoDict()
+            }
+            val registry = ExtractorRegistry(listOf(ie))
+            val classifier = DesktopRouteClassifier(registry = registry)
+
+            assertEquals(DesktopRoute.KOTLIN, classifier.route(matchedUrl))
+            assertEquals(0, requests.get(), "a matched URL must not send HEAD or page requests")
+
+            assertEquals(DesktopRoute.KOTLIN, DesktopRouteClassifier.resumeRoute(matchedUrl, registry))
+            assertEquals(DesktopRoute.YTDLP_CLI, DesktopRouteClassifier.resumeRoute(matchedUrl))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    private object NoopTransfer : HttpTransfer {
+        override suspend fun execute(request: HttpRequest): HttpResponse = error("unused")
     }
 }

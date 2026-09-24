@@ -35,6 +35,7 @@ class DesktopRoutingEngine(
     override fun submit(request: DownloadRequest): DownloadJob =
         when (classify(request.sourceUrl)) {
             DesktopRoute.DIRECT_FILE -> http.submit(request)
+            DesktopRoute.KOTLIN -> http.submit(request)
             DesktopRoute.YTDLP_CLI -> cli.submit(request)
         }
 

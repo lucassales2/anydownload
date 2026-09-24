@@ -196,6 +196,9 @@
     <string name="preview_views">%1$s views</string>
     <string name="preview_uploaded">Uploaded %1$s</string>
     <string name="preview_playlist_count">Playlist · %1$s items</string>
+    <string name="preview_needs_toolkit">Needs the media toolkit (not built yet)</string>
+    <string name="preview_not_available_source">Not available from this source</string>
+    <string name="preview_formats_needing_js">%1$s more formats need the JavaScript runtime</string>
     <string name="paste_one_url">Paste at least one source URL.</string>
     <string name="no_valid_urls">No valid URLs in the batch.</string>
     <string name="subscribe_needs_url">Paste a channel or playlist URL to subscribe.</string>
@@ -263,6 +266,9 @@
     <string name="section_appearance">Appearance</string>
     <string name="section_tools">Tools</string>
     <string name="tools_hint">Versions come from the local PATH probe. A simple media page needs neither yt-dlp nor ffmpeg; direct file downloads work without them too, and site and other video URLs still need them.</string>
+    <string name="settings_kotlin_extractors">Kotlin extractors: YouTube (single video)</string>
+    <string name="settings_js_runtime">JavaScript runtime: %1$s</string>
+    <string name="tool_js_none">none — some YouTube formats hidden</string>
     <string name="tool_not_checked">Not checked</string>
     <string name="tool_available">Available</string>
     <string name="tool_not_found">Not found</string>

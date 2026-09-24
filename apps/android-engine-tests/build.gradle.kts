@@ -24,6 +24,7 @@ kotlin {
 dependencies {
     implementation(project(":shared:core"))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.zipline)
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
 }

@@ -44,6 +44,14 @@ tasks.withType<Test>().configureEach {
     // change those lookups while values-pt-rBR is present.
     systemProperty("user.language", "en")
     systemProperty("user.country", "US")
+    // The T-062 differential oracle runs only with -PytDlpOracle=true.
+    providers.gradleProperty("ytDlpOracle").orNull?.let { value ->
+        systemProperty("ytDlpOracle", value)
+    }
+    // T-064's live Kotlin download check runs only with -PliveExtractorTests=true.
+    providers.gradleProperty("liveExtractorTests").orNull?.let { value ->
+        systemProperty("liveExtractorTests", value)
+    }
     listOf(
         "anydownlod.live.url",
         "anydownlod.live.cancelUrl",

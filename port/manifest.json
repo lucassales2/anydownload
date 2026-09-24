@@ -1,0 +1,206 @@
+{
+  "upstream": {
+    "repository": "yt-dlp/yt-dlp",
+    "tag": "2026.08.19",
+    "commit": "3a08beaf031ab68f966401ead017ac81fe8486cf",
+    "license": "Unlicense"
+  },
+  "modules": [
+    {
+      "id": "GenericIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/generic.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/GenericExtractor.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/GenericIE.kt"
+      ],
+      "status": "partial",
+      "scope": "HTML5 media subset: <video src>, <audio src>, and nested <source src>; relative URL resolution; UrlPolicy on every candidate; now reached through the `GenericIE` base and the registry. No playlists, embeds, iframes, JSON-LD, meta refresh, HLS, or DASH.",
+      "tasks": [
+        "T-045",
+        "T-057"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "YoutubeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_video.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Single video via the JS-less visionos innertube client: watch?v=, youtu.be/, /shorts/, /embed/, /live/, youtube-nocookie.com/embed/, music.youtube.com/watch?v=; metadata and streamingData formats; signature-cipher and n-transformed formats dropped and counted. No playlists, channels, live streams, comments, subtitles, cookies, PO tokens, JS challenge solving, or other clients.",
+      "tasks": [
+        "T-060"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "common.py",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/common.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/InfoExtractor.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/InfoDict.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractionError.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractorHttp.kt"
+      ],
+      "status": "partial",
+      "scope": "InfoExtractor base (`_VALID_URL`, `suitable`, `_match_id`, `_real_extract`), info dict and format model, typed errors, HTTP helper (`_download_webpage`, `_download_json`), and the helper subset D4's extractors call. No extractor decorators, geo bypass, player JS handling, subtitles, or postprocessing.",
+      "tasks": [
+        "T-057"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "YoutubeDL.py",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/YoutubeDL.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSpec.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSelector.kt"
+      ],
+      "status": "partial",
+      "scope": "`build_format_selector` grammar (SINGLE, GROUP, PICKFIRST, MERGE) and `_build_format_filter`; best/worst/type/`*`/`.N` selection, filters, `/` fallback, and the incomplete-format fallback. No `all`/`mergeall`, no multiple simultaneous streams, no extractor sort fields, no option surface.",
+      "tasks": [
+        "T-058"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "_utils.py",
+      "kind": "utils",
+      "upstreamPath": "yt_dlp/utils/_utils.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractorUtils.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSorter.kt"
+      ],
+      "status": "partial",
+      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, parseIso8601, unifiedStrdate, parseFilesize, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
+      "tasks": [
+        "T-057",
+        "T-058"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "youtube/_base.py",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/youtube/_base.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The visionos INNERTUBE_CLIENTS entry, `_extract_context` language/UTC handling, `generate_api_headers` (client name/version, origin, visitor id, user agent), and the `youtubei/v1/player` call shape. All other clients, cookies, PO tokens, and the initial webpage/ytcfg extraction beyond visitor data are not translated. The `web` client context (client name 1, version 2.20260708.00.00) and its player request are translated for the stage-2 path; cookies, PO tokens, and other clients stay out.",
+      "tasks": [
+        "T-060"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "youtube/_video.py",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/youtube/_video.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Single-video URL subset, visionos player request, `_get_checkok_params`, playbackContext, playability-status error mapping, streamingData to format fields, http_chunk_size, and single-video metadata. No playlists, channels, live, comments, subtitles, cookies, PO tokens, signature/n solving, storyboards, or storyboard/MULTIFEED paths. Stage 2 adds the `web` client query, the watch-page player JS URL/STS extraction, the player JS fetch and session cache, `signatureCipher`/`n` resolution through the bundled solver, and the visionos-first dedupe merge. No playlists, channels, live, comments, subtitles, cookies, PO tokens, storyboards, or non-web clients.",
+      "tasks": [
+        "T-060"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "jsc/provider.py",
+      "kind": "jsc",
+      "upstreamPath": "yt_dlp/extractor/youtube/jsc/provider.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/jsc/JsRuntime.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/jsc/JsChallengeProvider.kt"
+      ],
+      "status": "partial",
+      "scope": "The public challenge request/response model (`JsChallengeType.N`/`SIG`, N/Sig challenge inputs and outputs) and the batch solve contract. The provider plugin registry, preferences, and the other provider kinds are not translated.",
+      "tasks": [
+        "T-070"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "jsc/_builtin/ejs.py",
+      "kind": "jsc",
+      "upstreamPath": "yt_dlp/extractor/youtube/jsc/_builtin/ejs.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/jsc/JsChallengeProvider.kt"
+      ],
+      "status": "partial",
+      "scope": "The stdin/stdout solver protocol: player/preprocessed input, batched n/sig requests, responses, `preprocessed_player` reuse, and typed errors. The bundled yt-dlp-ejs 0.8.0 scripts, their Unlicense, and the upstream SHA3-512 hashes are in `third_party/yt-dlp-ejs/0.8.0/`; the NPM/Deno/Bun script sources, cache files, and runtime updates are not translated.",
+      "tasks": [
+        "T-070"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "test/helpers.py",
+      "kind": "utils",
+      "upstreamPath": "test/helpers.py",
+      "kotlinFiles": [
+        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/ExtractorTestHarness.kt",
+        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/FixtureHttpTransfer.kt",
+        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/FixtureRedactor.kt",
+        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/Md5.kt"
+      ],
+      "status": "partial",
+      "scope": "expect_info_dict/expect_value matcher semantics from test/test_download.py and test/helpers.py: exact values, md5:, int/str/float, re:, count:, startswith:, mincount:, maxcount:, nested dicts; the fixture-store transfer and the redactor. The Python test runner is not translated.",
+      "tasks": [
+        "T-059"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "downloader/hls.py",
+      "kind": "downloader",
+      "upstreamPath": "yt_dlp/downloader/hls.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/download/M3u8.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/download/FragmentDownloader.kt"
+      ],
+      "status": "partial",
+      "scope": "Non-live media and master playlists: variants, byte ranges, EXT-X-MAP, EXT-X-KEY AES-128 (explicit IV or media sequence), EXT-X-DISCONTINUITY concatenation, sequential fragment fetch with bounded retries, and AES-128-CBC decryption in Kotlin. Live playlists, SAMPLE-AES, other key methods, and FFmpeg remuxing fail typed.",
+      "tasks": [
+        "T-073"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "downloader/dash.py",
+      "kind": "downloader",
+      "upstreamPath": "yt_dlp/downloader/dash.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/download/Mpd.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/download/FragmentDownloader.kt"
+      ],
+      "status": "partial",
+      "scope": "Static MPD subset: Period/AdaptationSet/Representation to formats, SegmentTemplate with $Number$/$Time$ and timelines, SegmentList with media ranges, and SegmentBase initialization ranges; fragments concatenate through the same downloader. DRM (ContentProtection) and live (dynamic) manifests fail typed; no FFmpeg.",
+      "tasks": [
+        "T-073"
+      ],
+      "portedAt": "2026-09-24"
+    },
+    {
+      "id": "downloader/fragment.py",
+      "kind": "downloader",
+      "upstreamPath": "yt_dlp/downloader/fragment.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/download/FragmentDownloader.kt"
+      ],
+      "status": "partial",
+      "scope": "Sequential fragment fetch through the request port into one temp file: init segment first, per-fragment ranges, AES-128-CBC decryption, bounded retries, fragment-ratio progress marked as an estimate, and cancellation between fragments that discards the file. No concurrent fragment downloads, no merge/mux, no FFmpeg.",
+      "tasks": [
+        "T-073"
+      ],
+      "portedAt": "2026-09-24"
+    }
+  ]
+}

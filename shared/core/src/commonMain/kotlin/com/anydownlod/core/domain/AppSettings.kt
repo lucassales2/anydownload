@@ -105,4 +105,6 @@ data class ToolAvailability(
 data class ToolStatus(
     val ytDlp: ToolAvailability = ToolAvailability(),
     val ffmpeg: ToolAvailability = ToolAvailability(),
+    /** Embedded JavaScript runtime for the EJS challenge solver (T-071). */
+    val jsRuntime: ToolAvailability = ToolAvailability(),
 )

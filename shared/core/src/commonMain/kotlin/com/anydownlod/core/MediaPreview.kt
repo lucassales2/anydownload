@@ -19,6 +19,12 @@ data class MediaPreview(
     val uploadDate: String? = null,
     val playlist: Boolean = false,
     val entryCount: Int? = null,
+    /**
+     * What the Kotlin extractor can satisfy as one download. Null for sources
+     * that do not extract formats (the CLI fallback, legacy previews); the
+     * Edit panel then keeps its static choices.
+     */
+    val availableFormats: FormatChoices? = null,
 )
 
 /** Why a preview could not be shown. The UI maps each case to a short message. */

@@ -26,10 +26,112 @@
 
   // ---------------------------------------------------------------- policy
 
+  // T-056: the extractor request-header allowlist. The extension drops
+  // anything else before fetch. Response headers are filtered too, so a
+  // Set-Cookie never crosses the extension boundary.
+  const REQUEST_HEADER_ALLOWLIST = new Set([
+    'accept',
+    'accept-language',
+    'content-type',
+    'origin',
+    'referer',
+    'user-agent',
+    'range',
+    'x-youtube-client-name',
+    'x-youtube-client-version',
+    'x-goog-visitor-id',
+    'x-origin',
+  ]);
+
+  const RESPONSE_HEADER_ALLOWLIST = new Set([
+    'content-type',
+    'content-length',
+    'content-range',
+    'accept-ranges',
+    'location',
+    'etag',
+    'last-modified',
+  ]);
+
+  // Header names MV3 fetch refuses to send even when declared. The reply
+  // reports the effective set, so the page can log the difference redacted
+  // (names only, never values) instead of assuming the request was intact.
+  const MV3_FORBIDDEN_HEADERS = new Set([
+    'accept-charset',
+    'accept-encoding',
+    'access-control-request-headers',
+    'access-control-request-method',
+    'connection',
+    'content-length',
+    'cookie',
+    'cookie2',
+    'date',
+    'dnt',
+    'expect',
+    'host',
+    'keep-alive',
+    'origin',
+    'permissions-policy',
+    'proxy-authorization',
+    'proxy-authenticate',
+    'referer',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'user-agent',
+    'via',
+  ]);
+
+  const FETCH_REQUEST_MAX_BYTES = 8 * 1024 * 1024;
+
+  function sanitizeRequestHeaders(headers) {
+    const requested = {};
+    for (const [name, value] of Object.entries(headers || {})) {
+      const lower = String(name).trim().toLowerCase();
+      if (!REQUEST_HEADER_ALLOWLIST.has(lower)) continue;
+      if (value == null) continue;
+      requested[lower] = String(value);
+    }
+    return requested;
+  }
+
+  function effectiveRequestHeaders(requested) {
+    const sent = {};
+    for (const [name, value] of Object.entries(requested)) {
+      if (MV3_FORBIDDEN_HEADERS.has(name)) continue;
+      if (name.startsWith('sec-') || name.startsWith('proxy-')) continue;
+      sent[name] = value;
+    }
+    return sent;
+  }
+
+  function responseHeaderMap(headers) {
+    const filtered = {};
+    if (!headers || typeof headers.forEach !== 'function') return filtered;
+    headers.forEach((value, name) => {
+      const lower = String(name).toLowerCase();
+      if (RESPONSE_HEADER_ALLOWLIST.has(lower) && value != null) filtered[lower] = String(value);
+    });
+    return filtered;
+  }
+
+  function base64FromBytes(bytes) {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
   function isPrivateIpv4(host) {
     const parts = host.split('.');
     if (parts.length !== 4) return false;
-    const p = parts.map((s) => (/^\d+$/.test(s) ? Number(s) : 255));
+    // Only a numeric four-part host is an IPv4 literal; a four-label DNS name
+    // such as cdn.fixtures.example.net must not be misread as one.
+    if (!parts.every((s) => /^\d+$/.test(s))) return false;
+    const p = parts.map((s) => Number(s));
     if (p.some((n) => n > 255)) return true;
     const [a, b, c] = p;
     return (
@@ -86,6 +188,11 @@
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
 
+  function totalFromContentRange(contentRange, contentLength) {
+    const total = contentRange ? parseLength(String(contentRange).split('/').pop()) : null;
+    return total != null ? total : contentLength;
+  }
+
   /** Safe filename from the URL's last path segment. */
   function fileNameFromUrl(url) {
     try {
@@ -107,7 +214,12 @@
       fetchImpl: deps.fetchImpl,
       downloads: deps.downloads,
       post: deps.post,
+      runtime: deps.runtime,
+      offscreen: deps.offscreen,
     };
+    const fetchMaxBytes = Number.isFinite(deps.fetchMaxBytes) && deps.fetchMaxBytes > 0
+      ? deps.fetchMaxBytes
+      : FETCH_REQUEST_MAX_BYTES;
     const downloadsByJob = new Map();
 
     async function probeOnce(url) {
@@ -132,10 +244,8 @@
       return { status: response.status, contentType, totalBytes, finalUrl };
     }
 
-    function downloadOnce(message) {
-      // The browser's own downloader streams and saves; the SW never reads a
-      // body byte. Progress is reported as unknown until the browser reports
-      // the download complete.
+    async function downloadViaOffscreen(message, fileName) {
+      const headers = effectiveRequestHeaders(sanitizeRequestHeaders(message.headers));
       providers.post({
         source: 'anydownload-extension',
         type: 'progress',
@@ -144,11 +254,165 @@
         downloadedBytes: null,
         totalBytes: null,
       });
+      if (!providers.offscreen || !providers.runtime) {
+        return { type: 'download-reply', requestId: message.requestId, kind: 'failed', code: 'other', message: 'The offscreen saver is unavailable.' };
+      }
+      try {
+        await providers.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: ['BLOBS'],
+          justification: 'Save the selected media through the extension.',
+        });
+      } catch (_e) {
+        // One offscreen document at a time; an existing one is fine.
+      }
+      let reply = null;
+      try {
+        reply = await providers.runtime.sendMessage({
+          target: 'anydownload-offscreen',
+          type: 'save',
+          url: message.url,
+          fileName,
+          headers,
+        });
+      } catch (_e) {
+        reply = null;
+      }
+      if (reply && reply.ok && reply.blobUrl) {
+        try {
+          const downloadId = await providers.downloads.download({
+            url: reply.blobUrl,
+            filename: fileName,
+            saveAs: false,
+          });
+          downloadsByJob.set(message.jobId, downloadId);
+          return {
+            type: 'download-reply',
+            requestId: message.requestId,
+            kind: 'completed',
+            fileName,
+            sizeBytes: Number.isFinite(reply.sizeBytes) ? reply.sizeBytes : null,
+          };
+        } catch (_e) {
+          return {
+            type: 'download-reply',
+            requestId: message.requestId,
+            kind: 'failed',
+            code: 'other',
+            message: 'The browser could not save the media.',
+          };
+        }
+      }
+      return {
+        type: 'download-reply',
+        requestId: message.requestId,
+        kind: 'failed',
+        code: (reply && reply.code) || 'network',
+        message: (reply && reply.message) || 'The media could not be saved.',
+      };
+    }
+
+    function downloadOnce(message) {
+      // The browser's own downloader streams and saves; the SW never reads a
+      // body byte. Progress is reported as unknown until the browser reports
+      // the download complete. The selected format's allowlisted headers ride
+      // along; the browser may refuse some of them. When the page asks for the
+      // offscreen saver (matched formats), the extension fetches the media
+      // itself and hands a Blob URL to the same downloader.
       const fileName = fileNameFromUrl(message.url);
-      return providers.downloads.download({ url: message.url, filename: fileName, saveAs: false }).then((downloadId) => {
+      if (message.saveViaBlob) {
+        return downloadViaOffscreen(message, fileName);
+      }
+      providers.post({
+        source: 'anydownload-extension',
+        type: 'progress',
+        requestId: message.requestId,
+        jobId: message.jobId,
+        downloadedBytes: null,
+        totalBytes: null,
+      });
+      const options = { url: message.url, filename: fileName, saveAs: false };
+      const headers = effectiveRequestHeaders(sanitizeRequestHeaders(message.headers));
+      if (Object.keys(headers).length > 0) options.headers = headers;
+      return providers.downloads.download(options).then((downloadId) => {
         downloadsByJob.set(message.jobId, downloadId);
         return { type: 'download-reply', requestId: message.requestId, kind: 'completed', fileName, sizeBytes: null };
       });
+    }
+
+    async function readBoundedBytes(response, cap) {
+      if (!response.body) return new Uint8Array(0);
+      const reader = response.body.getReader();
+      const chunks = [];
+      let total = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          if (total + value.length > cap) {
+            await reader.cancel();
+            return null;
+          }
+          chunks.push(value);
+          total += value.length;
+        }
+      } finally {
+        try {
+          await reader.cancel();
+        } catch (_e) {
+          // Already closed.
+        }
+      }
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return out;
+    }
+
+    async function fetchRequestOnce(message) {
+      const requested = sanitizeRequestHeaders(message.headers);
+      if (typeof message.range === 'string' && /^bytes=\d*-\d*$/.test(message.range)) {
+        requested.range = message.range;
+      }
+      const sent = effectiveRequestHeaders(requested);
+      const method = message.method === 'POST' ? 'POST' : 'GET';
+      const init = { method, redirect: 'follow', credentials: 'omit', headers: sent };
+      if (typeof message.bodyBase64 === 'string' && message.bodyBase64.length > 0 && method !== 'GET') {
+        const binary = atob(message.bodyBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        init.body = bytes;
+      }
+      const response = await providers.fetchImpl(message.url, init);
+      const bytes = await readBoundedBytes(response, fetchMaxBytes);
+      if (bytes == null) {
+        return {
+          type: 'fetch-request-reply',
+          requestId: message.requestId,
+          kind: 'failed',
+          code: 'other',
+          message: 'The response is too large for the extension port.',
+        };
+      }
+      const headers = responseHeaderMap(response.headers);
+      const contentRange = headers['content-range'] || null;
+      return {
+        type: 'fetch-request-reply',
+        requestId: message.requestId,
+        kind: 'final',
+        status: response.status,
+        contentType: headers['content-type'] || null,
+        totalBytes: totalFromContentRange(contentRange, parseLength(headers['content-length'])),
+        contentRange,
+        finalUrl: response.url || message.url,
+        responseHeaders: headers,
+        sentHeaders: sent,
+        bodyBase64: base64FromBytes(bytes),
+      };
     }
 
     async function fetchPageOnce(url) {
@@ -217,6 +481,24 @@
           }
         }
 
+        case 'fetch-request': {
+          const blocked = checkUrl(message.url);
+          if (blocked) {
+            return { type: 'fetch-request-reply', requestId: message.requestId, kind: 'failed', code: blocked };
+          }
+          try {
+            return await fetchRequestOnce(message);
+          } catch (_e) {
+            return {
+              type: 'fetch-request-reply',
+              requestId: message.requestId,
+              kind: 'failed',
+              code: 'network',
+              message: 'The request could not be completed.',
+            };
+          }
+        }
+
         case 'download': {
           const blocked = checkUrl(message.url);
           if (blocked) {
@@ -248,11 +530,19 @@
       }
     }
 
-    return { handleMessage, checkUrl, fileNameFromUrl, isPrivateHost };
+    return { handleMessage, checkUrl, fileNameFromUrl, isPrivateHost, sanitizeRequestHeaders, effectiveRequestHeaders };
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { createBridge, checkUrl, fileNameFromUrl };
+    module.exports = {
+      createBridge,
+      checkUrl,
+      fileNameFromUrl,
+      sanitizeRequestHeaders,
+      effectiveRequestHeaders,
+      base64FromBytes,
+      MV3_FORBIDDEN_HEADERS,
+    };
     return;
   }
 
@@ -262,6 +552,8 @@
     const bridge = createBridge({
       fetchImpl: (url, init) => fetch(url, init),
       downloads: chrome.downloads,
+      runtime: chrome.runtime,
+      offscreen: chrome.offscreen,
       post: (payload) => {
         if (tabId !== undefined) {
           chrome.tabs.sendMessage(tabId, { source: 'anydownload-background', payload });
@@ -283,6 +575,8 @@
   self.__anydownloadBridge = createBridge({
     fetchImpl: (url, init) => fetch(url, init),
     downloads: chrome.downloads,
+    runtime: chrome.runtime,
+    offscreen: chrome.offscreen,
     post: () => undefined,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -6,6 +6,7 @@ import com.anydownlod.core.engine.UrlClassifier
 import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractor
+import com.anydownlod.core.extract.ExtractorRegistry
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -32,6 +33,11 @@ class AndroidRouteClassifier(
     private val readTimeoutMillis: Int = 3_000,
     private val chunkSize: Int = 64 * 1024,
     private val urlCheck: (String) -> UrlCheck = UrlPolicy::check,
+    /**
+     * The Kotlin registry. A matched URL becomes [AndroidRoute.KOTLIN] before
+     * any probe request, so no HEAD, no page GET, and no Python.
+     */
+    private val registry: ExtractorRegistry? = null,
 ) {
     private sealed interface Head {
         data class File(val contentType: String) : Head
@@ -44,6 +50,7 @@ class AndroidRouteClassifier(
     private data class ProbePage(val url: String, val html: String)
 
     fun route(url: String): AndroidRoute {
+        if (registry?.suitableFor(url) != null) return AndroidRoute.KOTLIN
         if (urlCheck(url) !is UrlCheck.Allowed) return AndroidRoute.DIRECT_FILE
         var current = url
         try {
@@ -161,7 +168,7 @@ class AndroidRouteClassifier(
             return when {
                 status in 300..399 -> Head.Redirect(location ?: "")
                 status !in 200..299 -> Head.Error
-                UrlClassifier.classify(contentType) == UrlClassifier.Classification.NEEDS_EXTRACTOR ->
+                UrlClassifier.classify(contentType, url) == UrlClassifier.Classification.NEEDS_EXTRACTOR ->
                     Head.HtmlOrUnknown
 
                 contentType != null -> Head.File(contentType)

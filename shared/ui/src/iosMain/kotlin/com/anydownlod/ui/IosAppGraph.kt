@@ -3,16 +3,18 @@ package com.anydownlod.ui
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
-import com.anydownlod.core.UnavailableMediaPreviewSource
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.engine.HttpDownloadEngine
+import com.anydownlod.core.extract.ExtractorHttp
+import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.youtube.YoutubeIE
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
-import com.anydownlod.core.fake.InMemoryToolProbe
 import com.anydownlod.core.platform.IosFileStore
 import com.anydownlod.core.platform.IosHttpTransfer
 import kotlinx.coroutines.CoroutineScope
@@ -43,16 +45,38 @@ class IosAppGraph : AppGraph {
         AppSettings(downloadRoot = sandboxRoot)
     )
 
+    // D4: the shared Kotlin extractor owns matched URLs on iOS. One
+    // NSURLSession transfer and registry serve downloads and previews.
+    private val transfer = IosHttpTransfer()
+    private val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
+    private val extractorRegistry = ExtractorRegistry(
+        listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
+    )
+
     override val engine: DownloadEngine = HttpDownloadEngine(
-        transfer = IosHttpTransfer(),
+        transfer = transfer,
         fileStore = IosFileStore(sandboxRoot),
         settings = settingsRepository,
         scope = scope,
+        registry = extractorRegistry,
     )
 
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = settingsRepository
-    override val toolProbe: ToolProbe = InMemoryToolProbe
-    override val previews: MediaPreviewSource = UnavailableMediaPreviewSource
+    override val toolProbe: ToolProbe = IosToolProbe(jsRuntime)
+    override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
     override val cookieStore: CookieStore = CookieStore.Unavailable
+}
+
+/** Reports the embedded Zipline QuickJS runtime as the Settings row (T-071). */
+private class IosToolProbe(
+    private val jsRuntime: com.anydownlod.core.jsc.JsRuntime,
+) : ToolProbe {
+    override suspend fun probe(): com.anydownlod.core.domain.ToolStatus =
+        com.anydownlod.core.domain.ToolStatus(
+            jsRuntime = com.anydownlod.core.domain.ToolAvailability(
+                available = jsRuntime.available,
+                version = if (jsRuntime.available) "${jsRuntime.name} ${jsRuntime.version ?: ""} (embedded)".trim() else null,
+            ),
+        )
 }

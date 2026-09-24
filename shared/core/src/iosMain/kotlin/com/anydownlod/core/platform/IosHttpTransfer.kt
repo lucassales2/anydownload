@@ -8,9 +8,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import platform.Foundation.NSError
+import kotlinx.coroutines.withTimeoutOrNull
 import platform.Foundation.NSData
+import platform.Foundation.NSError
 import platform.Foundation.NSHTTPURLResponse
+import platform.Foundation.NSMutableData
 import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
@@ -24,7 +26,10 @@ import platform.Foundation.NSURLSessionDelegateProtocol
 import platform.Foundation.NSURLSessionResponseAllow
 import platform.Foundation.NSURLSessionTask
 import platform.Foundation.NSURLSessionTaskDelegateProtocol
+import platform.Foundation.appendBytes
+import platform.Foundation.setHTTPBody
 import platform.Foundation.setHTTPMethod
+import platform.Foundation.setValue
 import platform.darwin.NSObject
 import platform.posix.memcpy
 import kotlin.math.min
@@ -34,23 +39,37 @@ import kotlin.math.min
  *
  * One hop per [execute]: the data-task delegate never follows redirects, so a
  * 3xx is surfaced as [HttpResponse.Redirect] with an absolute resolved
- * `Location` and the shared engine re-validates every destination (per-hop
- * policy holds on iOS too). 2xx bodies stream through a channel into the
- * engine's fixed-size buffer; a whole file is never buffered in memory.
+ * `Location` and the caller re-validates every destination (per-hop policy
+ * holds on iOS too). T-056 adds method, allowlisted request headers, a
+ * request body (`setHTTPBody`), and a byte range. Refused header names are
+ * reported through [onDroppedHeaders] by name only; response headers are
+ * filtered through [HttpHeaders.RESPONSE_ALLOWLIST], so a `Set-Cookie` never
+ * crosses this boundary. 2xx bodies stream through a channel into the
+ * caller's fixed-size buffer; a whole file is never buffered in memory.
  * Cancelling the coroutine cancels the underlying data task.
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosHttpTransfer(
     private val timeoutSeconds: Double = 15.0,
+    private val onDroppedHeaders: (List<String>) -> Unit = {},
 ) : HttpTransfer {
 
     private val delegate = IosSessionDelegate()
     private val delegateQueue = NSOperationQueue().apply { maxConcurrentOperationCount = 1 }
 
-    override suspend fun execute(url: String): HttpResponse {
-        val baseUrl = NSURL.URLWithString(url) ?: return HttpResponse.Final(statusCode = 0)
-        val request = NSMutableURLRequest.requestWithURL(baseUrl).apply {
-            setHTTPMethod("GET")
+    override suspend fun execute(request: HttpRequest): HttpResponse {
+        val sanitized = request.sanitized()
+        if (sanitized.droppedHeaders.isNotEmpty()) onDroppedHeaders(sanitized.droppedHeaders)
+        val outgoing = sanitized.request
+
+        val baseUrl = NSURL.URLWithString(outgoing.url)
+            ?: return HttpResponse.Failed(HttpFailureReason.NETWORK, "This URL is malformed.")
+        val urlRequest = NSMutableURLRequest.requestWithURL(baseUrl).apply {
+            setHTTPMethod(outgoing.method)
+            for ((name, value) in outgoing.headers) {
+                setValue(value, forHTTPHeaderField = name)
+            }
+            outgoing.body?.let { setHTTPBody(it.toNSData()) }
             setTimeoutInterval(timeoutSeconds)
         }
         val session = NSURLSession.sessionWithConfiguration(
@@ -58,7 +77,7 @@ class IosHttpTransfer(
             delegate,
             delegateQueue,
         )
-        val task = session.dataTaskWithRequest(request)
+        val task = session.dataTaskWithRequest(urlRequest)
         val state = delegate.register(task, baseUrl)
         task.resume()
         return state.awaitResponse()
@@ -70,26 +89,41 @@ class IosHttpTransfer(
         var statusCode: Int? = null
         var contentType: String? = null
         var totalBytes: Long? = null
+        var contentRange: String? = null
+        var headers: Map<String, String> = emptyMap()
         var redirectLocation: String? = null
         var failure: Throwable? = null
     }
 
     private suspend fun TaskState.awaitResponse(): HttpResponse {
-        settled.await()
+        // A hard upper bound: NSURLSession can leave a request without any
+        // delegate callback, so waiting on [settled] alone can hang forever.
+        val settledInTime = withTimeoutOrNull(
+            (timeoutSeconds * 1_000).toLong().coerceAtLeast(5_000) + 5_000,
+        ) {
+            settled.await()
+            true
+        } ?: false
+        if (!settledInTime) {
+            task.cancel()
+            return HttpResponse.Failed(HttpFailureReason.TIMEOUT, "The request timed out.")
+        }
         val redirect = redirectLocation
         if (redirect != null) {
             val resolved = NSURL.URLWithString(redirect, relativeToURL = baseUrl)?.absoluteString ?: redirect
-            return HttpResponse.Redirect(resolved)
+            return HttpResponse.Redirect(resolved, statusCode)
         }
         val status = statusCode ?: 0
         if (status !in 200..299) {
-            return HttpResponse.Final(statusCode = status)
+            return HttpResponse.Final(statusCode = status, headers = headers)
         }
         return HttpResponse.Final(
             statusCode = status,
             contentType = contentType,
             totalBytes = totalBytes,
             body = IosHttpBody(this),
+            contentRange = contentRange,
+            headers = headers,
         )
     }
 
@@ -116,13 +150,20 @@ class IosHttpTransfer(
             }
             val http = didReceiveResponse as? NSHTTPURLResponse
             state.statusCode = http?.statusCode?.toInt()
-            val headers = http?.allHeaderFields
-            state.contentType = (headers?.get("Content-Type") as? String)
-                ?: (headers?.get("Content-type") as? String)
-            state.totalBytes = http?.expectedContentLength?.toLong()?.takeIf { it >= 0 }
+            val headerFields = linkedMapOf<String, String>()
+            http?.allHeaderFields?.forEach { (key, value) ->
+                val name = key as? String ?: return@forEach
+                val text = value as? String ?: return@forEach
+                headerFields[name] = text
+            }
+            state.headers = HttpHeaders.filterResponse(headerFields)
+            state.contentType = state.headers["content-type"]
+            state.contentRange = state.headers["content-range"]
+            state.totalBytes = ContentRange.totalBytes(state.contentRange)
+                ?: http?.expectedContentLength?.toLong()?.takeIf { it >= 0 }
             val status = state.statusCode ?: 0
             if (status in 300..399) {
-                state.redirectLocation = (headers?.get("Location") as? String)
+                state.redirectLocation = state.headers["location"]
                 state.task.cancel()
             }
             completionHandler(NSURLSessionResponseAllow)
@@ -150,6 +191,11 @@ class IosHttpTransfer(
             didCompleteWithError: NSError?,
         ) {
             val state = tasks.remove(task.taskIdentifier.toLong()) ?: return
+            // A transport error after the response headers (for example a
+            // dropped connection mid-body) must surface on the body read so a
+            // truncated file is never published as complete. Redirects and
+            // non-2xx responses never expose the body, so the stored failure
+            // is simply unused there.
             if (didCompleteWithError != null) {
                 state.failure = IllegalStateException("network")
             }
@@ -158,7 +204,7 @@ class IosHttpTransfer(
 
         override fun URLSession(session: NSURLSession, didBecomeInvalidWithError: NSError?) = Unit
 
-        // Never follow a redirect automatically; the engine decides per hop.
+        // Never follow a redirect automatically; the caller decides per hop.
         override fun URLSession(
             session: NSURLSession,
             task: NSURLSessionTask,
@@ -196,4 +242,13 @@ class IosHttpTransfer(
             state.task.cancel()
         }
     }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun ByteArray.toNSData(): NSData {
+    val data = NSMutableData()
+    if (isNotEmpty()) {
+        usePinned { pinned -> data.appendBytes(pinned.addressOf(0), size.toULong()) }
+    }
+    return data
 }

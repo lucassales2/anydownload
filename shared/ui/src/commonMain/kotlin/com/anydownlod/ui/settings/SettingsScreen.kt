@@ -103,12 +103,15 @@ import com.anydownlod.ui.generated.resources.section_presets
 import com.anydownlod.ui.generated.resources.section_queue
 import com.anydownlod.ui.generated.resources.section_storage
 import com.anydownlod.ui.generated.resources.section_tools
+import com.anydownlod.ui.generated.resources.settings_js_runtime
+import com.anydownlod.ui.generated.resources.settings_kotlin_extractors
 import com.anydownlod.ui.generated.resources.settings
 import com.anydownlod.ui.generated.resources.settings_subtitle
 import com.anydownlod.ui.generated.resources.templates_hint
 import com.anydownlod.ui.generated.resources.theme
 import com.anydownlod.ui.generated.resources.tool_available
 import com.anydownlod.ui.generated.resources.tool_not_checked
+import com.anydownlod.ui.generated.resources.tool_js_none
 import com.anydownlod.ui.generated.resources.tool_not_found
 import com.anydownlod.ui.generated.resources.tools_hint
 import com.anydownlod.ui.generated.resources.up
@@ -611,11 +614,34 @@ private fun ToolsSection(tools: ToolStatus?) {
     SettingsSection(stringResource(Res.string.section_tools)) {
         ToolRow("yt-dlp", tools?.ytDlp, "settings-tool-ytdlp")
         ToolRow("ffmpeg", tools?.ffmpeg, "settings-tool-ffmpeg")
+        JsRuntimeRow(tools?.jsRuntime, "settings-tool-jsruntime")
+        Text(
+            text = stringResource(Res.string.settings_kotlin_extractors),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("settings-tool-kotlin"),
+        )
         Text(
             text = stringResource(Res.string.tools_hint),
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+/** The embedded solver runtime: its version, or an honest "none" with the cost. */
+@Composable
+private fun JsRuntimeRow(availability: ToolAvailability?, testTag: String) {
+    val value = when {
+        availability == null -> stringResource(Res.string.tool_not_checked)
+        availability.available -> availability.version ?: stringResource(Res.string.tool_available)
+        else -> stringResource(Res.string.tool_js_none)
+    }
+    Text(
+        text = stringResource(Res.string.settings_js_runtime, value),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(testTag),
+    )
 }
 
 @Composable

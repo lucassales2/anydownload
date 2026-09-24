@@ -239,6 +239,182 @@ class IosEngineTest {
         assertTrue(failed.artifacts.isEmpty())
     }
 
+    @Test
+    fun realNSURLSessionCarriesTheExtractorRequestContract() = runBlocking {
+        // Same opt-in as the other live fixture checks: IOS_LIVE_FIXTURE env or
+        // /tmp/anydownlod-ios-live.txt names the host:port of the local fixture
+        // server (tools/fixture-server/server.mjs). It serves POST /echo
+        // (body echo + X-Fixture-Client-Name), ranged /files/tiny.bin, and the
+        // D3 HTML routes.
+        val endpoint = NSProcessInfo.processInfo.environment["IOS_LIVE_FIXTURE"]
+            ?.toString()
+            ?: readHostText("/tmp/anydownlod-ios-live.txt")?.trim()
+        if (endpoint.isNullOrBlank()) {
+            println("Skipped: set IOS_LIVE_FIXTURE or write /tmp/anydownlod-ios-live.txt (host:port of a local fixture server) to run the live request contract check.")
+            return@runBlocking
+        }
+        val base = "http://$endpoint"
+        val dropped = mutableListOf<List<String>>()
+        val transfer = IosHttpTransfer(timeoutSeconds = 15.0, onDroppedHeaders = { dropped += it })
+
+        // 1) POST body, declared headers, and a refused header.
+        val payload = """{"videoId":"fixture"}""".encodeToByteArray()
+        val posted = kotlin.test.assertIs<HttpResponse.Final>(
+            transfer.execute(
+                HttpRequest(
+                    url = "$base/echo",
+                    method = HttpMethods.POST,
+                    headers = mapOf(
+                        "Content-Type" to "application/json",
+                        "X-YouTube-Client-Name" to "101",
+                        "Cookie" to "session=secret",
+                    ),
+                    body = payload,
+                ),
+            ),
+        )
+        assertEquals(200, posted.statusCode)
+        assertEquals("\"101\"", posted.headers["etag"], "the declared header must reach the fixture server")
+        assertTrue(posted.contentType?.startsWith("application/json") == true)
+        assertTrue(readBodyBytes(posted.body).contentEquals(payload), "the POST body must arrive unchanged")
+        assertEquals(listOf(listOf("cookie")), dropped, "the refused header must be reported by name once")
+
+        // 2) Byte range: 206, Content-Range, and the full total from it.
+        val ranged = kotlin.test.assertIs<HttpResponse.Final>(
+            transfer.execute(HttpRequest(url = "$base/files/tiny.bin", range = 0L..15L)),
+        )
+        assertEquals(206, ranged.statusCode)
+        assertEquals("bytes 0-15/${ranged.totalBytes}", ranged.contentRange)
+        assertEquals(ContentRange.totalBytes(ranged.contentRange), ranged.totalBytes)
+        assertEquals(16, readBodyBytes(ranged.body).size)
+    }
+
+    @Test
+    fun extractorRouteDownloadsTheSelectedFormatIntoTheSandbox() = runBlocking {
+        val root = tempRoot("extractor")
+        val fileStore = IosFileStore(root)
+        val payload = ByteArray(2048) { 5 }
+        val extractor = object : com.anydownlod.core.extract.InfoExtractor(
+            ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+            http = com.anydownlod.core.extract.ExtractorHttp(FakeTransfer { HttpResponse.Final(404) }),
+            validUrl = Regex("""https?://fixtures\.example\.com/watch.*"""),
+        ) {
+            override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                com.anydownlod.core.extract.InfoDict(
+                    id = "fixture",
+                    title = "Fixture Clip",
+                    formats = listOf(
+                        com.anydownlod.core.extract.MediaFormat(
+                            formatId = "18",
+                            url = "https://cdn.fixtures.example.com/clip.bin",
+                            ext = "mp4",
+                            vcodec = "avc1",
+                            acodec = "mp4a",
+                        ),
+                    ),
+                )
+        }
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(extractor))
+        val transfer = FakeTransfer {
+            HttpResponse.Final(200, "application/octet-stream", payload.size.toLong(), FakeBody(listOf(payload)))
+        }
+        val http = HttpDownloadEngine(
+            transfer = transfer,
+            fileStore = fileStore,
+            settings = InMemorySettingsRepository(AppSettings(downloadRoot = root)),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+            registry = registry,
+        )
+
+        val job = http.submit(DownloadRequest(
+            sourceUrl = "https://fixtures.example.com/watch?v=fixture",
+            idempotencyKey = "ios-extractor-route",
+        ))
+        val finished = waitFor(http, job.id, JobState.COMPLETED)
+
+        assertEquals("Fixture Clip", finished.title)
+        assertEquals("Fixture Clip.mp4", finished.artifacts.single().relativePath)
+        assertEquals(payload.size.toLong(), fileStore.size("Fixture Clip.mp4"))
+    }
+
+    @Test
+    fun realNSURLSessionPreviewsAndDownloadsALiveYoutubeAudioStream() = runBlocking {
+        // Opt-in: IOS_LIVE_YOUTUBE=1 or a host file with `1`. The public URL is
+        // the Big Buck Bunny video from T-060; only counts and sizes print.
+        val enabled = NSProcessInfo.processInfo.environment["IOS_LIVE_YOUTUBE"]?.toString() == "1" ||
+            readHostText("/tmp/anydownlod-ios-youtube-live.txt")?.trim() == "1"
+        if (!enabled) {
+            println("Skipped: set IOS_LIVE_YOUTUBE=1 or write /tmp/anydownlod-ios-youtube-live.txt to run the live YouTube check.")
+            return@runBlocking
+        }
+        val url = "https://www.youtube.com/watch?v=YE7VzlLtp-4"
+        val root = tempRoot("live-youtube")
+        val fileStore = IosFileStore(root)
+        val transfer = IosHttpTransfer(timeoutSeconds = 60.0)
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(
+            listOf(com.anydownlod.core.extract.youtube.YoutubeIE(com.anydownlod.core.extract.ExtractorHttp(transfer))),
+        )
+
+        val preview = com.anydownlod.core.ExtractorMediaPreviewSource(registry, timeoutMillis = 180_000).load(url)
+        if (preview !is com.anydownlod.core.MediaPreviewResult.Ready) {
+            // Redacted diagnostics only: typed failure names and counts.
+            val direct = runCatching {
+                com.anydownlod.core.extract.youtube.YoutubeIE(com.anydownlod.core.extract.ExtractorHttp(transfer)).extract(url)
+            }
+            println(
+                "live ios preview failed: ${preview::class.simpleName} " +
+                    "direct=${direct.exceptionOrNull()?.let { it::class.simpleName + ": " + it.message }} " +
+                    "formats=${direct.getOrNull()?.formats?.size ?: -1}",
+            )
+        }
+        val ready = kotlin.test.assertIs<com.anydownlod.core.MediaPreviewResult.Ready>(preview)
+        println(
+            "live ios preview: titleLength=${ready.preview.title.length} " +
+                "audioContainers=${ready.preview.availableFormats?.audioContainers?.size ?: 0}",
+        )
+
+        val http = HttpDownloadEngine(
+            transfer = transfer,
+            fileStore = fileStore,
+            settings = InMemorySettingsRepository(AppSettings(downloadRoot = root)),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+            registry = registry,
+        )
+        val job = http.submit(DownloadRequest(
+            sourceUrl = url,
+            options = DownloadOptions(
+                mediaType = com.anydownlod.core.domain.MediaType.AUDIO,
+                audioContainer = com.anydownlod.core.domain.AudioContainer.M4A,
+            ),
+            idempotencyKey = "ios-live-youtube",
+        ))
+        val finished = withTimeout(180_000) {
+            http.jobs.first { jobs -> jobs.any { it.id == job.id && it.state.isTerminal } }
+                .first { it.id == job.id }
+        }
+        println(
+            "live ios youtube: state=${finished.state} titleLength=${finished.title?.length ?: 0} " +
+                "artifacts=${finished.artifacts.size}",
+        )
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        val artifact = finished.artifacts.single()
+        assertTrue(artifact.relativePath.endsWith(".m4a"), artifact.relativePath)
+        assertTrue((fileStore.size(artifact.relativePath) ?: 0L) > 0L)
+    }
+
+    private suspend fun readBodyBytes(body: HttpBody?): ByteArray {
+        if (body == null) return ByteArray(0)
+        val out = mutableListOf<Byte>()
+        val buffer = ByteArray(4096)
+        while (true) {
+            val count = body.readNext(buffer)
+            if (count == -1) break
+            for (index in 0 until count) out += buffer[index]
+        }
+        body.close()
+        return out.toByteArray()
+    }
+
     private suspend fun waitFor(engine: HttpDownloadEngine, jobId: String, state: JobState): DownloadJob =
         withTimeout(20_000) {
             engine.jobs.first { jobs -> jobs.any { it.id == jobId && it.state == state } }
@@ -274,9 +450,9 @@ private class FakeTransfer(
     val requested: MutableList<String> = mutableListOf(),
     private val responder: (url: String) -> HttpResponse,
 ) : HttpTransfer {
-    override suspend fun execute(url: String): HttpResponse {
-        requested.add(url)
-        return responder(url)
+    override suspend fun execute(request: HttpRequest): HttpResponse {
+        requested.add(request.url)
+        return responder(request.url)
     }
 }
 

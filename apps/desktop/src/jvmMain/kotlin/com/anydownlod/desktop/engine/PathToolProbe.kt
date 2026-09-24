@@ -16,12 +16,21 @@ class PathToolProbe(
     private val resolveExecutable: (String) -> String? = ExecutableOnPath::find,
     private val timeoutMillis: Long = 5_000,
     private val workingDirectory: Path = Path.of(System.getProperty("user.home")),
+    private val jsRuntime: com.anydownlod.core.jsc.JsRuntime = com.anydownlod.core.jsc.NoJsRuntime,
 ) : ToolProbe {
 
     override suspend fun probe(): ToolStatus = withContext(Dispatchers.IO) {
         ToolStatus(
             ytDlp = probe("yt-dlp", "--version"),
             ffmpeg = probe("ffmpeg", "-version"),
+            jsRuntime = com.anydownlod.core.domain.ToolAvailability(
+                available = jsRuntime.available,
+                version = if (jsRuntime.available) {
+                    "${jsRuntime.name} ${jsRuntime.version ?: ""} (embedded)".trim()
+                } else {
+                    null
+                },
+            ),
         )
     }
 

@@ -22,6 +22,20 @@ class PathToolProbeTest {
     }
 
     @Test
+    fun reportsTheEmbeddedJavaScriptRuntimeWithoutStartingAnything() = runBlocking {
+        val probe = PathToolProbe(
+            runner = CliProcessRunner { _, _ -> error("must not start") },
+            resolveExecutable = { null },
+            jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime(),
+        )
+
+        val status = probe.probe()
+
+        assertTrue(status.jsRuntime.available)
+        assertTrue(status.jsRuntime.version?.contains("QuickJS") == true, status.jsRuntime.version)
+    }
+
+    @Test
     fun onlyTheFirstVersionLineIsCaptured() = runBlocking {
         val probe = PathToolProbe(
             runner = CliProcessRunner { command, _ ->

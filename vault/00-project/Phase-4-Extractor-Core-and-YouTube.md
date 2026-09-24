@@ -1,6 +1,6 @@
 ---
 type: phase
-status: active
+status: done
 milestone: D4
 tags: [project, engine, kmp, youtube, delivery]
 ---
@@ -55,6 +55,19 @@ apps/web-extension          fetch with method, headers, body, range; policy on e
 ```
 
 Packages: `com.anydownlod.core.extract`, `com.anydownlod.core.extract.youtube`, `com.anydownlod.core.format`, `com.anydownlod.core.download`, `com.anydownlod.core.jsc`. Engines stay in `com.anydownlod.core.engine`.
+
+## Verification (2026-09-24)
+
+The phase gate is [T-074](T-074-Phase-4-verification.md); the full record is in its Evidence section. Summary:
+
+| Target | Runtime | With runtime | Without runtime | Result |
+| --- | --- | --- | --- | --- |
+| Desktop | Zipline QuickJS 2021-03-27 | 27 formats (web + visionos) | 27 (visionos) | **Pass** — live Kotlin M4A download, no CLI process; oracle diffs 0; unmatched URLs still CLI; local HLS fixture byte-exact. |
+| Android | Zipline QuickJS 2021-03-27 | shared engine | shared engine | **Pass (JVM-equivalent)** — 14 tests + Debug APK; no emulator available. |
+| iOS | Zipline QuickJS 2021-03-27 | shared engine | shared engine | **Pass (fixtures)** — 279 simulator tests; simulator live YouTube blocked by NSURLSession reachability (recorded); foreground-only. |
+| Web | The page's own JavaScript | 27 (web client) | 27 (visionos) | **Pass** — real Chromium: extension carried every request, page solved in its own Worker, 0 page YouTube requests, Add refuses without the extension. |
+
+Suites: core JVM 297, iOS simulator 279, UI 78, desktop 113, android-engine 14, extension node 22. Live stage 1 = 27 formats/needsJs 0; live stage 2 = 27/0 with no regression; oracle 27/27 diffs 0 for both clients and 10/10 diffs 0 for the audio-only selection. Honest limits: single-file only (typed failure or disabled choice when a merge/transcode is needed; MP3/WAV/FLAC disabled), PO-token formats dropped, no playlists/live/subtitles/cookies, iOS foreground-only, web progress is the browser's, QuickJS 2021-03-27 is older than EJS's recommended build, and YouTube changes faster than the `2026.08.19` pin.
 
 ## Task order
 

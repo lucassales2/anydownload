@@ -9,11 +9,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anydownlod.core.FormatChoices
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.QualityPreference
@@ -28,21 +30,76 @@ import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.auto
 import com.anydownlod.ui.generated.resources.format
 import com.anydownlod.ui.generated.resources.media_type
+import com.anydownlod.ui.generated.resources.preview_needs_toolkit
+import com.anydownlod.ui.generated.resources.preview_not_available_source
 import com.anydownlod.ui.generated.resources.quality_preference
 import com.anydownlod.ui.i18n.text
+import org.jetbrains.compose.resources.stringResource
 
 /**
- * T-054: the collapsible download editor inside the metadata preview. It is a
- * strict allowlist: media type (video or audio), quality, and format. Captions,
- * clips, cookies, destination, and custom yt-dlp JSON never appear here. The
- * choices write through the same [AddFormPresenter] state that Download uses.
+ * T-054/T-063: the collapsible download editor inside the metadata preview.
+ * When the Kotlin extractor supplied [availableFormats], only the qualities
+ * and containers those formats can satisfy as a single file are enabled;
+ * everything else is disabled with a short reason, and the defaults are the
+ * best single-file video or the best native audio. Captions, clips, cookies,
+ * destination, and custom yt-dlp JSON never appear here.
  */
 @Composable
 internal fun PreviewEditPanel(
     editor: AddFormPresenter,
+    availableFormats: FormatChoices? = null,
     modifier: Modifier = Modifier,
 ) {
     val state by editor.state.collectAsState()
+    val toolkit = stringResource(Res.string.preview_needs_toolkit)
+    val notAvailable = stringResource(Res.string.preview_not_available_source)
+
+    // Defaults from the extracted formats: best single-file video, or the best
+    // native audio when the source only offers split streams in this stage.
+    LaunchedEffect(availableFormats) {
+        if (availableFormats != null &&
+            !availableFormats.hasSingleFileVideo &&
+            availableFormats.audioContainers.isNotEmpty()
+        ) {
+            editor.setMediaType(MediaType.AUDIO)
+            availableFormats.preferredAudioContainer?.let(editor::setAudioContainer)
+        }
+    }
+
+    val qualityEnabled: (QualityPreference) -> Boolean = { quality ->
+        when {
+            availableFormats == null -> true
+            quality is QualityPreference.Resolution ->
+                quality.token.toIntOrNull()?.let { it in availableFormats.videoHeights } == true
+
+            else -> availableFormats.hasSingleFileVideo
+        }
+    }
+    val qualityReason: (QualityPreference) -> String? = { quality ->
+        when {
+            qualityEnabled(quality) -> null
+            availableFormats == null -> null
+            !availableFormats.hasSingleFileVideo -> toolkit
+            quality is QualityPreference.Resolution &&
+                (quality.token.toIntOrNull() ?: 0) > (availableFormats.bestVideoHeight ?: 0) -> toolkit
+
+            else -> notAvailable
+        }
+    }
+    val containerEnabled: (AudioContainer) -> Boolean = { container ->
+        availableFormats == null || container in availableFormats.audioContainers
+    }
+    val containerReason: (AudioContainer) -> String? = { container ->
+        if (containerEnabled(container)) {
+            null
+        } else {
+            when (container) {
+                AudioContainer.MP3, AudioContainer.WAV, AudioContainer.FLAC -> toolkit
+                AudioContainer.M4A, AudioContainer.OPUS -> notAvailable
+            }
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth().testTag("preview-edit-panel"),
         shape = RoundedCornerShape(12.dp),
@@ -83,6 +140,8 @@ internal fun PreviewEditPanel(
                                 is QualityPreference.Resolution -> "preview-edit-quality-res-${quality.token}"
                             }
                         },
+                        optionEnabled = qualityEnabled,
+                        optionReason = qualityReason,
                     )
                     ChoiceRow(
                         label = text(Res.string.format),
@@ -94,6 +153,7 @@ internal fun PreviewEditPanel(
                         optionTag = { profile -> "preview-edit-format-${profile.name.lowercase()}" },
                     )
                 }
+
                 MediaType.AUDIO -> {
                     ChoiceRow(
                         label = text(Res.string.format),
@@ -103,6 +163,8 @@ internal fun PreviewEditPanel(
                         onSelect = editor::setAudioContainer,
                         modifier = Modifier.testTag("preview-edit-format"),
                         optionTag = { container -> "preview-edit-format-${container.name.lowercase()}" },
+                        optionEnabled = containerEnabled,
+                        optionReason = containerReason,
                     )
                     if (state.audioContainer.isLossy) {
                         ChoiceRow(
@@ -116,6 +178,7 @@ internal fun PreviewEditPanel(
                         )
                     }
                 }
+
                 MediaType.CAPTIONS, MediaType.THUMBNAIL -> Unit
             }
         }

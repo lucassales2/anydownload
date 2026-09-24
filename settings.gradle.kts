@@ -71,3 +71,7 @@ include(":apps:web")
 
 // JVM-equivalent tests for the Android engine sources. See vault T-041.
 include(":apps:android-engine-tests")
+
+// Repository tooling (build-time only): port manifest validation and the
+// generated extractor coverage block. See vault T-055.
+include(":tools:port-manifest")

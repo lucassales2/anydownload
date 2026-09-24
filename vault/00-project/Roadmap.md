@@ -21,7 +21,7 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-Phases **D1**, **D2**, and **D3** are done. Phase **D4** is the implementation work in progress. Spec: [Phase 4 — Extractor core and YouTube](Phase-4-Extractor-Core-and-YouTube.md). Decision: [ADR-008](../03-decisions/ADR-008-Extractor-core-and-youtube-phase.md). Target: [yt-dlp equivalence](../01-product/Ytdlp-equivalence.md).
+Phases **D1** through **D4** are done. Phase **D4** was verified on 2026-09-24 (extractor core + YouTube single video with and without the embedded runtime; the web extension carries requests and the page runs the solver itself). Spec: [Phase 4 — Extractor core and YouTube](Phase-4-Extractor-Core-and-YouTube.md). Decision: [ADR-008](../03-decisions/ADR-008-Extractor-core-and-youtube-phase.md). Target: [yt-dlp equivalence](../01-product/Ytdlp-equivalence.md).
 
 1. Port manifest and generated coverage table; the HTTP request port (T-055, T-056).
 2. Extractor core: `InfoExtractor` base, `InfoDict`/`MediaFormat`, registry, helpers, format-spec selector, `_TESTS` harness (T-057–T-059).
@@ -30,7 +30,7 @@ Phases **D1**, **D2**, and **D3** are done. Phase **D4** is the implementation w
 5. Bundle yt-dlp-ejs 0.8.0, `JsRuntime` port, Zipline QuickJS spike, challenge solving with the `web` client, runtime adapters on every host (T-069–T-072).
 6. Native HLS and DASH downloaders (T-073). Verify all four hosts (T-074).
 
-The media toolkit stays recorded in ADR-007 and is not built in D4: single-file formats only. After D4 the next phase is either the toolkit build (merge, audio extract) or the first named site, X/Twitter. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) becomes possible once a YouTube audio download works but stays outside D4. D4 does not close T-009/T-010.
+The media toolkit stays recorded in ADR-007 and is not built in D4: single-file formats only. With D4 verified, the next phase is either the toolkit build (merge, audio extract) or the first named site, X/Twitter. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) becomes possible once a YouTube audio download works but stays outside D4. D4 does not close T-009/T-010.
 
 ## Sequencing rules
 

@@ -3,6 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- T-072: the page runs the bundled solver in a Worker blob; no remote
+         script origin is allowed and the page never connects to an origin
+         (network requests go through the extension). -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'">
     <title>AnyDownload</title>
     <style>
         html, body {

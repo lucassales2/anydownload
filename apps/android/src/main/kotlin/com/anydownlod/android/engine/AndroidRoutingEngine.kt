@@ -31,6 +31,7 @@ class AndroidRoutingEngine(
     override fun submit(request: DownloadRequest): DownloadJob =
         when (classify(request.sourceUrl)) {
             AndroidRoute.DIRECT_FILE -> http.submit(request)
+            AndroidRoute.KOTLIN -> http.submit(request)
             AndroidRoute.CHAQUOPY -> chaquopy.submit(request)
         }
 

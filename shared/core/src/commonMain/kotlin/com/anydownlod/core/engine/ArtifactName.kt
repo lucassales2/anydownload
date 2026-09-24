@@ -24,6 +24,28 @@ object ArtifactName {
         return if (folder == null) name else "$folder/$name"
     }
 
+    /**
+     * Builds the artifact path from extracted metadata: the sanitized title
+     * and the selected format's container. Used by the registry download path
+     * instead of the URL tail; the collision policy lives in the file store
+     * and is unchanged.
+     */
+    fun build(title: String?, ext: String?, options: DownloadOptions): String {
+        val folder = normalizeFolder(options.destinationFolder)
+        val base = fileNameFromTitle(title, ext)
+        val name = if (options.filenamePrefix.isNullOrBlank()) base else "${options.filenamePrefix} $base"
+        return if (folder == null) name else "$folder/$name"
+    }
+
+    private fun fileNameFromTitle(title: String?, ext: String?): String {
+        val sanitized = sanitize(title.orEmpty().trim())
+        val base = sanitized.ifEmpty { "download" }
+        val suffix = ext?.lowercase()?.takeIf { candidate ->
+            candidate.isNotEmpty() && candidate.length <= 8 && candidate.all { it.isLetterOrDigit() }
+        }
+        return if (suffix == null) base else "$base.$suffix"
+    }
+
     private fun fileNameFromUrl(url: String): String {
         val path = url.substringAfter("://").substringAfter('/', missingDelimiterValue = "")
             .substringBefore('?').substringBefore('#')

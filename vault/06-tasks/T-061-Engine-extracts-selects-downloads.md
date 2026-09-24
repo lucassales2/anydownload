@@ -30,11 +30,20 @@ tags: [task, engine, kmp]
 
 ## Acceptance criteria
 
-- [ ] Engine tests above pass; D2/D3 engine tests unchanged.
-- [ ] No compiled spec with `+` reaches the downloader (assertion in tests).
-- [ ] Job rows show title and thumbnail from extraction; error messages are redacted and typed.
-- [ ] `shared/core` still has no process, Python, or Chaquopy references.
+- [x] Engine tests above pass; D2/D3 engine tests unchanged.
+- [x] No compiled spec with `+` reaches the downloader (assertion in tests).
+- [x] Job rows show title and thumbnail from extraction; error messages are redacted and typed.
+- [x] `shared/core` still has no process, Python, or Chaquopy references.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- `HttpDownloadEngine` takes an optional `registry: ExtractorRegistry?`. `runJob` branches: a matched URL goes through `extractAndDownload`, an unmatched URL keeps the D2/D3 probe path unchanged.
+- `extractAndDownload`: `RESOLVING` → `extractor.extract` → the job row gains `title`, `thumbnailUrl` (largest thumbnail), `sourceHost`, and `formatsNeedingJs` → `resolveFormat` compiles the typed options and selects exactly one format → `DOWNLOADING` → `downloadDirectFile` with the format's `httpHeaders`, `httpChunkSize`, declared size, and title/ext for naming. `ExtractionError` maps per the note: `LoginRequired`→`LOGIN_REQUIRED`, `AgeRestricted`/`Unavailable`/`GeoRestricted`→`UNAVAILABLE_OR_PRIVATE`, `NoFormats`→`UNSUPPORTED_FORMAT`, `Malformed`→`EXTRACTION_FAILURE`, `UnsupportedUrl`→`UNSUPPORTED_SOURCE`.
+- `resolveFormat`/`resolveSelection` are internal and directly tested. `NeedsToolkit`, `NotInPhase`, `Selection.Merge`, and an empty selection all fail `UNSUPPORTED_FORMAT`: the toolkit message suggests M4A/Opus or a single-file video, and an empty selection mentions how many formats need the JavaScript runtime when there are any.
+- Ranged chunks: when a format declares `http_chunk_size`, the first request is `Range: bytes=0-(chunk-1)` and `streamChunkedToFile` appends sequential ranges into the same temp file; the total comes from the first chunk's `Content-Range` or the declared `filesize`. A non-2xx chunk status maps through the shared HTTP table, so a mid-stream 403 is `UNAVAILABLE_OR_PRIVATE`, not `NETWORK_FAILURE`. Cancel and failures discard the temp file at any point, including between chunks.
+- `ArtifactName.build(title, ext, options)` sanitizes the extracted title and appends the container; the collision policy in the file store is unchanged. `DownloadJob` gained `formatsNeedingJs`.
+- Tests: `EngineExtractionTest` 8 (matched extract/select/download with title+ext naming and job metadata; all seven typed error mappings; MP3 `NeedsToolkit`; Merge and empty-selection messages; every compiled spec checked for `+`; a format without a URL; the unmatched probe path), `JavaNetChunkedDownloadTest` 3 (9000 bytes in 2048-byte ranges assembled byte-exact over five local-server requests; a mid-chunk 403 → `UNAVAILABLE_OR_PRIVATE` with no file; cancel between chunks leaves no file). The existing `HttpDownloadEngineTest` (27) and all D2/D3 tests are unchanged and green.
+- Verification: `./gradlew :shared:core:jvmTest` → 249 tests, 0 failures; `:apps:desktop:test` and `:apps:android-engine-tests:test` green; `:shared:core:iosSimulatorArm64Test` green; `:shared:core:compileTestKotlinWasmJs`, `:apps:web:compileKotlinWasmJs`, `:apps:android:compileDebugKotlin` green; `:tools:port-manifest:check` green. Grep confirms `shared/core` has no `ProcessBuilder`/Chaquopy imports (one KDoc comment names the Chaquopy pip pin).
+- No manifest change: this task wires the engine to the T-055–T-060 modules rather than translating an upstream file.

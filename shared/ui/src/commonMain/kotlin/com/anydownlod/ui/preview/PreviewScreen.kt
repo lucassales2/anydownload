@@ -45,6 +45,7 @@ import com.anydownlod.ui.generated.resources.preview_back
 import com.anydownlod.ui.generated.resources.preview_edit
 import com.anydownlod.ui.generated.resources.preview_edit_hide
 import com.anydownlod.ui.generated.resources.preview_failed
+import com.anydownlod.ui.generated.resources.preview_formats_needing_js
 import com.anydownlod.ui.generated.resources.preview_heading
 import com.anydownlod.ui.generated.resources.preview_loading
 import com.anydownlod.ui.generated.resources.preview_playlist_count
@@ -159,7 +160,10 @@ fun PreviewScreen(
                 }
             }
             if (editExpanded && editor != null) {
-                PreviewEditPanel(editor = editor)
+                PreviewEditPanel(
+                    editor = editor,
+                    availableFormats = (phase as? PreviewPhase.Ready)?.preview?.availableFormats,
+                )
             }
         }
     }
@@ -227,6 +231,18 @@ private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?) {
                     stringResource(Res.string.preview_playlist_count, "—")
                 },
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        val formatsNeedingJs = preview.availableFormats?.formatsNeedingJs ?: 0
+        if (formatsNeedingJs > 0) {
+            Text(
+                text = stringResource(
+                    Res.string.preview_formats_needing_js,
+                    formatCount(formatsNeedingJs.toLong()),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("preview-js-formats"),
             )
         }
         preview.description?.let { description ->

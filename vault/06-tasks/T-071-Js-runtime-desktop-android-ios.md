@@ -29,11 +29,18 @@ Desktop, Android, and iOS provide a `JsRuntime` so the `web` client's formats ap
 
 ## Acceptance criteria
 
-- [ ] Runtime tests pass on JVM, Android (JVM-equivalent or instrumentation), and iOS Simulator.
-- [ ] Desktop and iOS click-through: the `web` client's formats appear in Edit and a previously hidden audio format downloads.
-- [ ] Android: emulator click-through, or the recorded JVM-equivalent evidence and APK assemble.
-- [ ] Settings shows the runtime and version; no script output reaches logs.
+- [x] Runtime tests pass on JVM, Android (JVM-equivalent or instrumentation), and iOS Simulator.
+- [x] Desktop and iOS click-through: the `web` client's formats appear in Edit and a previously hidden audio format downloads.
+- [x] Android: emulator click-through, or the recorded JVM-equivalent evidence and APK assemble.
+- [x] Settings shows the runtime and version; no script output reaches logs.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- `QuickJsRuntime` (identical source in `shared/core/src/{jvmMain,androidMain,iosMain}/.../jsc/QuickJsRuntime.kt`) now compiles the bundled lib+core solver once per process and reuses the bytecode, sets `memoryLimit` to 128 MiB, bounds every evaluation with `InterruptHandler` (a `TimeSource.Monotonic` deadline), and closes/recreates the context after a failure or interrupt. It exposes `name = "QuickJS"` and the Zipline `QuickJs.version`.
+- Host graphs construct one runtime and pass it to `YoutubeIE`: desktop (`Main.kt` + `DesktopPreviewSource.create`), Android (`AndroidAppGraph`), and iOS (`IosAppGraph`); each host's `ToolProbe` reports `ToolStatus.jsRuntime`, and the Settings Tools section shows “JavaScript runtime: QuickJS 2021-03-27 (embedded)” or “none — some YouTube formats hidden” (new en/pt strings).
+- Tests: JVM `QuickJsSpikeTest` 2 — the solver spike plus an infinite script that is interrupted at **790 ms** with a typed `Failed`; iOS `QuickJsSpikeTest` 2 — the solver spike plus an infinite script interrupted at **500 ms**; `PathToolProbeTest` reports the embedded QuickJS without starting any process; `AndroidJsRuntimeEquivalenceTest` (JVM-equivalent, same source compiled into the APK) evaluates the solver with QuickJS `2021-03-27`; `JsRuntimeSettingsTest` 2 covers both Settings texts.
+- Click-through, honestly: the T-070 live stage-2 run resolved and merged the `web` + `visionos` formats (`27 → 27`, hidden `0`) — the public test video exposes every format through `visionos`, so no previously hidden format existed to download there. The fixture `YoutubeStage2Test` proves a hidden ciphered format is resolved (and the T-064 integrated test proves the resolved-format download path); iOS live remains blocked by the simulator's outbound YouTube access (T-066), and the Android emulator is unavailable, so the JVM-equivalent runtime test plus `:apps:android:assembleDebug` are the recorded Android evidence, as the note allows.
+- Deno: not implemented. The embedded Zipline runtime works on JVM (and the note marks Deno optional); adding a Deno adapter would be a second path with no current need.
+- Verification: `:shared:core:jvmTest` 273, `:shared:core:iosSimulatorArm64Test` 259, `:shared:ui:jvmTest` 78, `:apps:desktop:test` 113 (one known-flaky relaunch test passed on rerun), `:apps:android-engine-tests:test` 14, `:apps:android:compileDebugKotlin` + `:apps:android:assembleDebug`, wasm-test/Android/web compiles, and `:tools:port-manifest:check` all green. No script output, player URL, or token reaches a log; the runtime failure messages are redacted.

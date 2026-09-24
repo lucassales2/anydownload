@@ -12,6 +12,7 @@ import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
+import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
@@ -51,6 +52,7 @@ class AndroidEngineTest {
         root: Path,
         scope: CoroutineScope,
         urlCheck: (String) -> UrlCheck = UrlPolicy::check,
+        registry: com.anydownlod.core.extract.ExtractorRegistry? = null,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
         fileStore = fileStore,
@@ -58,6 +60,7 @@ class AndroidEngineTest {
         scope = scope,
         ioDispatcher = Dispatchers.Default,
         urlCheck = urlCheck,
+        registry = registry,
     )
 
     private fun chaquopyEngine(
@@ -101,6 +104,110 @@ class AndroidEngineTest {
         } finally {
             scope.cancel()
             root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun kotlinRouteCompletesThroughTheHttpEngineAndNeverTouchesPython() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-android-kotlin")
+        val payload = ByteArray(2048) { 3 }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val fakeExtractor = object : com.anydownlod.core.extract.InfoExtractor(
+                ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+                http = com.anydownlod.core.extract.ExtractorHttp(
+                    FakeTransfer { HttpResponse.Final(404) },
+                ),
+                validUrl = Regex("""https?://fixtures\.example\.com/watch.*"""),
+            ) {
+                override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                    com.anydownlod.core.extract.InfoDict(
+                        id = "fixture",
+                        title = "Fixture Clip",
+                        formats = listOf(
+                            com.anydownlod.core.extract.MediaFormat(
+                                formatId = "18",
+                                url = "https://cdn.fixtures.example.com/clip.mp4",
+                                ext = "mp4",
+                                vcodec = "avc1",
+                                acodec = "mp4a",
+                            ),
+                        ),
+                    )
+            }
+            val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(fakeExtractor))
+            val classifier = AndroidRouteClassifier(registry = registry)
+            val mediaTransfer = FakeTransfer {
+                HttpResponse.Final(200, "application/octet-stream", payload.size.toLong(), FakeBody(listOf(payload)))
+            }
+            val port = FakeChaquopyPort(available = true)
+            val http = httpEngine(mediaTransfer, JavaNetFileStore(root), root, scope, registry = registry)
+            val chaquopy = chaquopyEngine(port, root, scope)
+            val routing = AndroidRoutingEngine(
+                http = http,
+                chaquopy = chaquopy,
+                classify = { url -> classifier.route(url) },
+                scope = scope,
+            )
+            val url = "https://fixtures.example.com/watch?v=fixture"
+            assertEquals(AndroidRoute.KOTLIN, classifier.route(url))
+
+            val job = routing.submit(
+                DownloadRequest(sourceUrl = url, options = DownloadOptions(), idempotencyKey = "android-kotlin"),
+            )
+            val finished = waitFor(routing, job.id, JobState.COMPLETED)
+
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("Fixture Clip", finished.title)
+            assertEquals("Fixture Clip.mp4", finished.artifacts.single().relativePath)
+            assertTrue(Files.isRegularFile(root.resolve("Fixture Clip.mp4")))
+            assertEquals(0, port.received.size, "a registry-matched URL must never reach Chaquopy")
+        } finally {
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aRegistryMatchedUrlSkipsTheProbeAndKeepsUnmatchedUrlsOnChaquopy() = runBlocking {
+        val server = HttpServer.create(InetSocketAddress(0), 0).also { it.start() }
+        val requests = java.util.concurrent.atomic.AtomicInteger(0)
+        server.createContext("/youtube/watch") { exchange ->
+            requests.incrementAndGet()
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        try {
+            val matchedUrl = "http://127.0.0.1:${server.address.port}/youtube/watch"
+            val fakeExtractor = object : com.anydownlod.core.extract.InfoExtractor(
+                ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+                http = com.anydownlod.core.extract.ExtractorHttp(FakeTransfer { HttpResponse.Final(404) }),
+                validUrl = Regex("""http://127\.0\.0\.1:\d+/youtube/.*"""),
+            ) {
+                override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+                    com.anydownlod.core.extract.InfoDict()
+            }
+            val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(fakeExtractor))
+            val classifier = AndroidRouteClassifier(registry = registry)
+
+            assertEquals(AndroidRoute.KOTLIN, classifier.route(matchedUrl))
+            assertEquals(0, requests.get(), "a registry-matched URL must not probe")
+
+            val unmatched = AndroidRouteClassifier(
+                urlCheck = { url ->
+                    if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                        UrlCheck.Allowed(url)
+                    } else {
+                        UrlPolicy.check(url)
+                    }
+                },
+            )
+            assertEquals(
+                AndroidRoute.CHAQUOPY,
+                unmatched.route("http://127.0.0.1:${server.address.port}/other"),
+            )
+        } finally {
+            server.stop(0)
         }
     }
 
@@ -428,9 +535,9 @@ private class FakeTransfer(
     val requested: MutableList<String> = mutableListOf(),
     private val responder: (url: String) -> HttpResponse,
 ) : HttpTransfer {
-    override suspend fun execute(url: String): HttpResponse {
-        requested.add(url)
-        return responder(url)
+    override suspend fun execute(request: HttpRequest): HttpResponse {
+        requested.add(request.url)
+        return responder(request.url)
     }
 }
 
