@@ -21,16 +21,16 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-Phase **D1** and **D2** are done. Phase **D3** is the implementation work in progress. Spec: [Phase 3 — Generic extractor subset](Phase-3-Generic-Extractor.md). Decision: [ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md).
+Phases **D1**, **D2**, and **D3** are done. Phase **D4** is the implementation work in progress. Spec: [Phase 4 — Extractor core and YouTube](Phase-4-Extractor-Core-and-YouTube.md). Decision: [ADR-008](../03-decisions/ADR-008-Extractor-core-and-youtube-phase.md). Target: [yt-dlp equivalence](../01-product/Ytdlp-equivalence.md).
 
-1. Idle screen is the link field only. No clipboard dialog or automatic clipboard check (T-052).
-2. A compatible link opens the metadata preview; Download and a collapsible Edit cover video or audio, quality, and format (T-053, T-054).
-3. Translate the generic subset and record the Unlicense notice (T-045).
-4. Teach the shared HTTP engine to download the one media URL that subset returns (T-046).
-5. Wire desktop (Kotlin for a matching page, CLI otherwise), Android (Kotlin or Chaquopy), iOS, and web (extension fetches) — T-047–T-050.
-6. Verify all four hosts (T-051).
+1. Port manifest and generated coverage table; the HTTP request port (T-055, T-056).
+2. Extractor core: `InfoExtractor` base, `InfoDict`/`MediaFormat`, registry, helpers, format-spec selector, `_TESTS` harness (T-057–T-059).
+3. YouTube single video without JavaScript (`visionos` client); engine extracts, selects one single-file format, downloads it; desktop oracle; preview and Edit from real formats (T-060–T-063).
+4. Route matched URLs through Kotlin on desktop, Android, iOS, and web (T-064–T-067), then the **gate**: JS-less YouTube on four hosts (T-068).
+5. Bundle yt-dlp-ejs 0.8.0, `JsRuntime` port, Zipline QuickJS spike, challenge solving with the `web` client, runtime adapters on every host (T-069–T-072).
+6. Native HLS and DASH downloaders (T-073). Verify all four hosts (T-074).
 
-The media toolkit is recorded in ADR-007 and is not built in D3. YouTube (yt-dlp-ejs) is the phase after a non-YouTube extractor exists. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) still waits until a YouTube download works. D3 does not close T-009/T-010.
+The media toolkit stays recorded in ADR-007 and is not built in D4: single-file formats only. After D4 the next phase is either the toolkit build (merge, audio extract) or the first named site, X/Twitter. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) becomes possible once a YouTube audio download works but stays outside D4. D4 does not close T-009/T-010.
 
 ## Sequencing rules
 

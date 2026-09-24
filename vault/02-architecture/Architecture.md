@@ -8,7 +8,7 @@ tags: [architecture, kmp]
 
 [Home](../Home.md) · [Platform matrix](Platform-matrix.md) · [Lifecycle](Download-lifecycle.md) · [API outline](API-outline.md) · [Decision log](../03-decisions/Decision-log.md)
 
-**Accepted direction.** Extraction will run inside the app ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). Phase D2 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)) is done: a shared direct HTTP(S) file download, web through a browser extension, Android Chaquopy for other URLs, desktop CLI for non-direct URLs. Phase D3 ([ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md)) translates one generic-extractor subset. The media toolkit is recorded there and not built. YouTube is still later.
+**Accepted direction.** Extraction will run inside the app ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). Phase D2 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)) is done: a shared direct HTTP(S) file download, web through a browser extension, Android Chaquopy for other URLs, desktop CLI for non-direct URLs. Phase D3 ([ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md)) translated one generic-extractor subset; the media toolkit is recorded there and not built. Phase D4 ([ADR-008](../03-decisions/ADR-008-Extractor-core-and-youtube-phase.md)) builds the extractor core (`InfoExtractor` base, `InfoDict`/`MediaFormat`, registry, format-spec selector, HLS/DASH fragment downloaders, `_TESTS` harness, port manifest) and YouTube single video: JS-less `visionos` first, then yt-dlp-ejs through a `JsRuntime` port (Zipline QuickJS on JVM/Android/iOS, the page's own JavaScript on web). Progress toward yt-dlp is measured in the [equivalence matrix](../01-product/Ytdlp-equivalence.md).
 
 ## Local engine
 
@@ -21,12 +21,13 @@ flowchart TD
     Meta --> Match[YouTube match]
     Match --> E
     E --> HTTP[Platform HTTP adapter]
+    E --> JS[JsRuntime: QuickJS or page JS]
     E --> MEDIA[Platform media toolkit]
     APP --> FILES[Platform file storage]
 ```
 
 - **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI. A Spotify URL is metadata plus a YouTube or YouTube Music match, then the same engine. See [T-037](../06-tasks/T-037-Spotify-youtube-match.md).
-- **Platform adapters:** HTTP, file write, share/open, and lifecycle. Common code does not spawn a process or assume Python.
+- **Platform adapters:** HTTP (method, headers, body, range), file write, JavaScript runtime for the bundled challenge solver, share/open, and lifecycle. Common code does not spawn a process or assume Python.
 - **Web:** Compose/Wasm UI. Downloads go through a local MV3 extension with host permissions ([T-043](../06-tasks/T-043-Web-extension-download.md)). The page does not fetch arbitrary origins.
 - **iOS:** the same shared engine, with sandbox file export and no guarantee of work after suspension.
 

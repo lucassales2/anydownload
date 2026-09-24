@@ -30,6 +30,13 @@ Shared unit tests exist for the draft client. This plan defines evidence needed 
 - Keep secrets out of fixtures, snapshots, recordings, logs, screenshots and GitHub Actions artifacts. Use synthetic cookie files for ordinary tests.
 - Capture exact engine/runtime versions and expected output checksums/metadata where deterministic.
 
+### Extractor tests (D4 onward)
+
+- Extractor cases follow yt-dlp's `_TESTS` shape and run through the shared harness ([T-059](../06-tasks/T-059-Extractor-test-harness.md)): fixture mode by default, live mode only with `-PliveExtractorTests=true` against the public URLs listed in the owning task note.
+- Fixtures for sites that return signed media URLs (YouTube's `googlevideo`), visitor ids, or tokens are synthesized, never recorded raw. The recorder redacts before writing and a test greps fixtures for real hosts.
+- The installed `yt-dlp` on desktop is an opt-in oracle ([T-062](../06-tasks/T-062-Desktop-ytdlp-oracle.md), `-PytDlpOracle=true`): `yt-dlp -J` output is normalized and compared with the Kotlin `InfoDict`; the diff prints field names and values, never URLs. Version drift from the pin skips the test and says so.
+- JavaScript runtime adapters are tested on each host with a synthetic challenge against the bundled solver; script output never appears in test logs.
+
 ## Platform evidence matrix
 
 | Target family | Minimum evidence before release |

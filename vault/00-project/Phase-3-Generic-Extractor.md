@@ -1,6 +1,6 @@
 ---
 type: phase
-status: active
+status: done
 milestone: D3
 tags: [project, engine, kmp, delivery]
 ---
@@ -9,7 +9,7 @@ tags: [project, engine, kmp, delivery]
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [ADR-007](../03-decisions/ADR-007-Generic-extractor-phase.md) · [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) · [Phase 2](Phase-2-Local-Kotlin-Engine.md)
 
-**Start here if you are implementing.** This note is the handoff for Phase D3. ADR-004 remains the end state. D2's direct-file path stays. This phase first simplifies the home screen, then translates one small slice of yt-dlp's generic extractor and runs it on all four hosts.
+**Done 2026-09-24** ([T-051](../06-tasks/T-051-Phase-3-verification.md)). The current handoff is [Phase 4](Phase-4-Extractor-Core-and-YouTube.md). This note is kept as the record of Phase D3. ADR-004 remains the end state. D2's direct-file path stays. This phase first simplifies the home screen, then translates one small slice of yt-dlp's generic extractor and runs it on all four hosts.
 
 Owner direction, 2026-09-23: the idle screen is only a link field. The app does not check the clipboard or show that dialog. A compatible link opens a metadata preview with Download and a collapsible Edit (video or audio, quality, format). After that UI, an HTML page with a single `<video>`, `<audio>`, or inner `<source>` downloads on iOS, Android, web, and desktop. The existing HTTP engine saves that media URL. No YouTube. No merge.
 

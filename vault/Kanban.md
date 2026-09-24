@@ -5,6 +5,25 @@ tags: [project, board]
 
 ## Backlog
 
+- [ ] [T-056 — HTTP request port: method, headers, body, range](06-tasks/T-056-Http-request-port.md) #D4 #P0
+- [ ] [T-057 — Extractor core: InfoExtractor base, InfoDict, registry, helpers](06-tasks/T-057-Extractor-core.md) #D4 #P0
+- [ ] [T-058 — Format-spec selector and typed-options compiler](06-tasks/T-058-Format-selector.md) #D4 #P0
+- [ ] [T-059 — Extractor test harness](06-tasks/T-059-Extractor-test-harness.md) #D4 #P0
+- [ ] [T-060 — YouTube extractor, stage 1: JS-less visionos client](06-tasks/T-060-Youtube-jsless-extractor.md) #D4 #P0
+- [ ] [T-061 — Engine extracts, selects one format, downloads it](06-tasks/T-061-Engine-extracts-selects-downloads.md) #D4 #P0
+- [ ] [T-062 — Desktop yt-dlp oracle: differential tests](06-tasks/T-062-Desktop-ytdlp-oracle.md) #D4 #P1
+- [ ] [T-063 — Preview and Edit driven by the Kotlin extractor](06-tasks/T-063-Preview-from-extractor.md) #D4 #P0
+- [ ] [T-064 — Desktop routes matched URLs through Kotlin](06-tasks/T-064-Desktop-routes-youtube.md) #D4 #P0
+- [ ] [T-065 — Android routes matched URLs through Kotlin](06-tasks/T-065-Android-routes-youtube.md) #D4 #P0
+- [ ] [T-066 — iOS downloads a YouTube video](06-tasks/T-066-Ios-youtube-download.md) #D4 #P0
+- [ ] [T-067 — Web: extension carries extractor requests](06-tasks/T-067-Web-extension-carries-requests.md) #D4 #P0
+- [ ] [T-068 — Gate: JS-less YouTube on four hosts](06-tasks/T-068-Gate-jsless-youtube-four-hosts.md) #D4 #P0
+- [ ] [T-069 — Bundle yt-dlp-ejs, JsRuntime port, Zipline QuickJS spike](06-tasks/T-069-Ejs-bundle-and-jsruntime-port.md) #D4 #P0
+- [ ] [T-070 — EJS challenge solving and the web client](06-tasks/T-070-Ejs-challenge-solving-web-client.md) #D4 #P0
+- [ ] [T-071 — JavaScript runtime on desktop, Android, iOS](06-tasks/T-071-Js-runtime-desktop-android-ios.md) #D4 #P0
+- [ ] [T-072 — Web page runs the solver in its own JavaScript](06-tasks/T-072-Js-runtime-web-page.md) #D4 #P0
+- [ ] [T-073 — Native HLS and DASH fragment downloaders](06-tasks/T-073-Native-hls-dash-downloaders.md) #D4 #P1
+- [ ] [T-074 — Phase 4 verification](06-tasks/T-074-Phase-4-verification.md) #D4 #P0
 - [ ] [T-007 — Define UX and review the contract](06-tasks/T-007-Define-UX-and-contract.md) #M0 #P1
 
 - [ ] [T-009 — Local engine vertical slice](06-tasks/T-009-Backend-vertical-slice.md) #M1 #P0
@@ -25,6 +44,7 @@ tags: [project, board]
 
 ## Ready
 
+- [ ] [T-055 — Port manifest and equivalence coverage generator](06-tasks/T-055-Port-manifest-and-equivalence-matrix.md) #D4 #P0
 
 ## In progress
 
