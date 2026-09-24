@@ -13,6 +13,10 @@ import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.clipboard_empty
+import com.anydownlod.ui.generated.resources.url_error_blank
+import com.anydownlod.ui.generated.resources.url_error_one_only
+import com.anydownlod.ui.generated.resources.url_error_scheme
+import com.anydownlod.ui.generated.resources.url_error_userinfo
 import com.anydownlod.ui.i18n.UiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,6 +24,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.jetbrains.compose.resources.StringResource
 
 class AddFormPresenterTest {
 
@@ -327,6 +332,37 @@ class AddFormPresenterTest {
     }
 
     @Test
+    fun validateForPreviewAcceptsOneCompatibleUrlAndNeverStartsAJob() {
+        val f = fixture()
+        f.presenter.setUrl("https://example.com/watch?v=one")
+
+        assertEquals("https://example.com/watch?v=one", f.presenter.validateForPreview())
+        assertTrue(f.engine.jobs.value.isEmpty())
+    }
+
+    @Test
+    fun validateForPreviewRejectsBlankSchemeUserinfoAndBatches() {
+        val f = fixture()
+
+        f.presenter.setUrl("   ")
+        assertEquals(null, f.presenter.validateForPreview())
+        assertEquals(Res.string.url_error_blank, f.presenter.status.value?.message?.resourceOrNull())
+
+        f.presenter.setUrl("not-a-url")
+        assertEquals(null, f.presenter.validateForPreview())
+        assertEquals(Res.string.url_error_scheme, f.presenter.status.value?.message?.resourceOrNull())
+
+        f.presenter.setUrl("https://user:pass@example.com/watch")
+        assertEquals(null, f.presenter.validateForPreview())
+        assertEquals(Res.string.url_error_userinfo, f.presenter.status.value?.message?.resourceOrNull())
+
+        f.presenter.setUrl("https://example.com/a\nhttps://example.com/b")
+        assertEquals(null, f.presenter.validateForPreview())
+        assertEquals(Res.string.url_error_one_only, f.presenter.status.value?.message?.resourceOrNull())
+        assertTrue(f.engine.jobs.value.isEmpty())
+    }
+
+    @Test
     fun detectedLinkFillsOnlyAnEmptyField() {
         val f = fixture()
 
@@ -361,3 +397,6 @@ class AddFormPresenterTest {
         assertNull(parseClipTimestamp(":"))
     }
 }
+
+/** The resource key of a resource-backed status message, for assertions. */
+private fun UiText?.resourceOrNull(): StringResource? = (this as? UiText.Of)?.resource

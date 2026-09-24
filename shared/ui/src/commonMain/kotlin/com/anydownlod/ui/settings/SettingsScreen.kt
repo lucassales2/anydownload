@@ -184,10 +184,6 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                 theme = settings.theme,
                 onThemeChange = presenter::setTheme,
             )
-            ClipboardSection(
-                access = settings.clipboardAccess,
-                onChange = presenter::setClipboardAccess,
-            )
 
             StorageSection(
                 downloadRoot = settings.downloadRoot,

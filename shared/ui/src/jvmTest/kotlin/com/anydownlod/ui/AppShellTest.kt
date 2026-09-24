@@ -10,7 +10,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Headless click-through of the shell. This replaces the manual desktop
+ * Headless click-through of the shell (composed directly, since the T-052
+ * idle screen is the link field alone). This replaces the manual desktop
  * click-through on machines where OS input automation is not permitted: the
  * same composables receive real click events through the Compose test runtime.
  */
@@ -20,7 +21,7 @@ class AppShellTest {
     @Test
     fun tabsShowDistinctEmptyStatesAndSettingsReturnsToTheSameTab() = runComposeUiTest {
         val graph = InMemoryAppGraph()
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         onNodeWithText("Add a URL above to start a download.").assertExists()
 
@@ -43,7 +44,7 @@ class AppShellTest {
     @Test
     fun themeControlIsLabeledAndWritesThroughSettings() = runComposeUiTest {
         val graph = InMemoryAppGraph()
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         onNodeWithText("Theme").assertExists()
         onNodeWithText("Dark").performClick()

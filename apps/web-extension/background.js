@@ -8,6 +8,9 @@
  *     response. The page engine re-validates that final URL with its own
  *     policy; intermediate redirects are hidden by the browser, which is the
  *     recorded web limitation (see vault T-043).
+ *   - fetch-page: bounded GET of an HTML page (≤ 512 KiB, redacted text). The
+ *     page runs the shared Kotlin extractor on those bytes; this script never
+ *     runs a second extractor.
  *   - download: hand the already-validated final URL to `chrome.downloads`.
  *     The browser's own downloader streams and saves the file; the service
  *     worker never reads the body, so no private bytes cross the extension
@@ -148,6 +151,35 @@
       });
     }
 
+    async function fetchPageOnce(url) {
+      const response = await providers.fetchImpl(url, { method: 'GET', redirect: 'follow', credentials: 'omit' });
+      const finalUrl = response.url || url;
+      if (!response.ok) {
+        return { type: 'fetch-page-reply', requestId: null, kind: 'failed', code: 'network', status: response.status, message: 'The page could not be reached.' };
+      }
+      // Bounded read: never hold a huge page in the extension context.
+      const cap = 512 * 1024;
+      const buffer = new Uint8Array(cap);
+      let total = 0;
+      if (response.body) {
+        const reader = response.body.getReader();
+        try {
+          while (total < cap) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value) continue;
+            const take = Math.min(value.length, cap - total);
+            buffer.set(value.subarray(0, take), total);
+            total += take;
+          }
+        } finally {
+          await reader.cancel();
+        }
+      }
+      const html = new TextDecoder('utf-8', { fatal: false }).decode(buffer.subarray(0, total));
+      return { type: 'fetch-page-reply', requestId: null, kind: 'final', finalUrl, html, bounded: total >= cap };
+    }
+
     async function handleMessage(message) {
       switch (message && message.type) {
         case 'probe': {
@@ -168,6 +200,20 @@
             };
           } catch (_e) {
             return { type: 'probe-reply', requestId: message.requestId, kind: 'failed', code: 'network', message: 'The source could not be reached.' };
+          }
+        }
+
+        case 'fetch-page': {
+          const blocked = checkUrl(message.url);
+          if (blocked) {
+            return { type: 'fetch-page-reply', requestId: message.requestId, kind: 'failed', code: blocked };
+          }
+          try {
+            const reply = await fetchPageOnce(message.url);
+            reply.requestId = message.requestId;
+            return reply;
+          } catch (_e) {
+            return { type: 'fetch-page-reply', requestId: message.requestId, kind: 'failed', code: 'network', message: 'The page could not be reached.' };
           }
         }
 
@@ -228,5 +274,15 @@
       return true;
     }
     sendResponse(result);
+  });
+
+  // CDP verification hook (T-050 evidence): exposes the exact bridge instance
+  // the page uses so a real-browser run can drive fetch-page/download without
+  // touching chrome.runtime. Web pages cannot reach the service worker
+  // context, so this adds no page-reachable surface.
+  self.__anydownloadBridge = createBridge({
+    fetchImpl: (url, init) => fetch(url, init),
+    downloads: chrome.downloads,
+    post: () => undefined,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

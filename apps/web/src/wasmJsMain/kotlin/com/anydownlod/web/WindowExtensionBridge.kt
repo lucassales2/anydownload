@@ -3,6 +3,7 @@ package com.anydownlod.web
 import com.anydownlod.core.engine.WebDownload
 import com.anydownlod.core.engine.WebExtensionBridge
 import com.anydownlod.core.engine.WebFailureCode
+import com.anydownlod.core.engine.WebPage
 import com.anydownlod.core.engine.WebProbe
 import kotlinx.browser.window
 import kotlinx.coroutines.channels.Channel
@@ -108,6 +109,44 @@ class WindowExtensionBridge : WebExtensionBridge {
         }
     }
 
+    override suspend fun fetchPage(url: String): WebPage {
+        ensureListener()
+        val requestId = nextRequestId()
+        val channel = Pending(Channel(capacity = Channel.UNLIMITED)).also { pending[requestId] = it }
+        return try {
+            withTimeout<WebPage>(60.seconds) {
+                postMessage(
+                    ExtensionMessage(
+                        source = "anydownload-page",
+                        type = "fetch-page",
+                        requestId = requestId,
+                        url = url,
+                    )
+                )
+                while (true) {
+                    val reply = channel.messages.receive()
+                    if (reply.type == "fetch-page-reply") return@withTimeout parsePageReply(reply)
+                }
+                error("Unreachable")
+            }
+        } catch (timeout: Throwable) {
+            pending.remove(requestId)
+            WebPage.Failed(WebFailureCode.TIMEOUT, "The extension did not answer in time.")
+        }
+    }
+
+    private fun parsePageReply(reply: ExtensionMessage): WebPage = when (reply.kind) {
+        "final" -> WebPage.Final(
+            finalUrl = reply.finalUrl ?: "",
+            html = reply.html ?: "",
+        )
+
+        else -> WebPage.Failed(
+            code = failureCode(reply.code),
+            message = reply.message ?: "The extension could not fetch this page.",
+        )
+    }
+
     override suspend fun cancelDownload(jobId: String) {
         ensureListener()
         postMessage(ExtensionMessage(source = "anydownload-page", type = "cancel", jobId = jobId))
@@ -185,6 +224,8 @@ internal data class ExtensionMessage(
     val downloadedBytes: Long? = null,
     val fileName: String? = null,
     val sizeBytes: Long? = null,
+    /** Bounded page text from the extension (fetch-page reply). */
+    val html: String? = null,
     /** "permission", "blocked", "network", "timeout", "other". */
     val code: String? = null,
     val message: String? = null,

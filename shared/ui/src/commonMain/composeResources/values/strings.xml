@@ -191,6 +191,8 @@
     <string name="preview_unavailable">A preview could not be loaded on this device. You can still start the download.</string>
     <string name="preview_timed_out">The preview took too long. You can still start the download.</string>
     <string name="preview_back">Back</string>
+    <string name="preview_edit">Edit download</string>
+    <string name="preview_edit_hide">Hide edit</string>
     <string name="preview_views">%1$s views</string>
     <string name="preview_uploaded">Uploaded %1$s</string>
     <string name="preview_playlist_count">Playlist · %1$s items</string>
@@ -210,6 +212,8 @@
     <string name="url_error_whitespace">The URL must not contain whitespace.</string>
     <string name="url_error_scheme">Only http:// and https:// sources are supported.</string>
     <string name="url_error_host">The URL is missing a host.</string>
+    <string name="url_error_userinfo">This URL embeds credentials and was refused.</string>
+    <string name="url_error_one_only">Enter one source URL.</string>
     <string name="path_error_absolute">Choose a folder inside the download root, not an absolute path.</string>
     <string name="path_error_empty_segment">The folder path has an empty segment.</string>
     <string name="path_error_dot">The folder path cannot use "." or "..".</string>
@@ -258,7 +262,7 @@
     <string name="preset_no_options">No options</string>
     <string name="section_appearance">Appearance</string>
     <string name="section_tools">Tools</string>
-    <string name="tools_hint">Versions come from the local PATH probe. yt-dlp and ffmpeg are needed for site and video URLs; direct file downloads work without them.</string>
+    <string name="tools_hint">Versions come from the local PATH probe. A simple media page needs neither yt-dlp nor ffmpeg; direct file downloads work without them too, and site and other video URLs still need them.</string>
     <string name="tool_not_checked">Not checked</string>
     <string name="tool_available">Available</string>
     <string name="tool_not_found">Not found</string>

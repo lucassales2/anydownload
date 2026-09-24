@@ -29,6 +29,7 @@ import com.anydownlod.ui.generated.resources.rejected_lines
 import com.anydownlod.ui.generated.resources.subscribe_needs_url
 import com.anydownlod.ui.generated.resources.subscribe_not_batch
 import com.anydownlod.ui.generated.resources.subscribed
+import com.anydownlod.ui.generated.resources.url_error_one_only
 import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.i18n.toUiText
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -116,6 +117,28 @@ class AddFormPresenter(
         val lines = current.urlText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.size != 1) return null
         return (SourceUrlValidator.validate(lines.single()) as? SourceUrlValidation.Valid)?.url
+    }
+
+    /**
+     * T-053 idle-field submit: accepts exactly one compatible HTTP(S) URL.
+     * Returns that URL (the caller then opens the metadata preview), or
+     * records the validator message on the status line and returns null. This
+     * never starts a job and never clears the field.
+     */
+    fun validateForPreview(): String? {
+        val current = _state.value
+        val lines = current.urlText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.size > 1) {
+            _status.value = AddStatus(UiText.of(Res.string.url_error_one_only), isError = true)
+            return null
+        }
+        return when (val validation = SourceUrlValidator.validate(lines.singleOrNull().orEmpty())) {
+            is SourceUrlValidation.Valid -> validation.url
+            is SourceUrlValidation.Invalid -> {
+                _status.value = AddStatus(validation.error.toUiText(), isError = true)
+                null
+            }
+        }
     }
 
     fun setMediaType(value: MediaType) = mutate { it.copy(mediaType = value, lineErrors = emptyList()) }

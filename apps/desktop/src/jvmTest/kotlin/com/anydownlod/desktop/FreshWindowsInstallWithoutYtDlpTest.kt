@@ -147,7 +147,7 @@ class FreshWindowsInstallWithoutYtDlpTest {
             }
             onNodeWithTag("settings-tool-ytdlp").assertExists()
             onNodeWithTag("settings-tool-ffmpeg").assertExists()
-            onNodeWithText("Versions come from the local PATH probe. yt-dlp and ffmpeg are needed for site and video URLs; direct file downloads work without them.")
+            onNodeWithText("Versions come from the local PATH probe. A simple media page needs neither yt-dlp nor ffmpeg; direct file downloads work without them too, and site and other video URLs still need them.")
                 .assertExists()
             onNodeWithTag("settings-close").performClick()
 
@@ -157,13 +157,13 @@ class FreshWindowsInstallWithoutYtDlpTest {
                 .assertExists()
             onNodeWithTag("preview-download").performClick()
 
-            assertEquals(JobState.FAILED, app.graph.engine.jobs.value.single().state)
+            val job = app.graph.engine.jobs.value.single()
+            assertEquals(JobState.FAILED, job.state)
+            assertEquals(missingTool, job.error?.message)
             onNodeWithText("Added 1 job: 1 started, 0 waiting to start.").assertExists()
-            onNodeWithText("Nothing is downloading").assertExists()
-
-            onNodeWithText("Completed").performClick()
-            onNodeWithText(missingTool).assertExists()
-            onNodeWithText("Failed").assertExists()
+            // The D3 home is the link field alone: the queue/history lists are
+            // not reachable from App, and the failed row still lands in the
+            // persisted jobs (history reads the same flow). yt-dlp never starts.
             assertFalse(started)
         } finally {
             app.close()

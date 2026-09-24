@@ -15,6 +15,9 @@ import com.anydownlod.core.domain.JobProgress
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.StartPolicy
+import com.anydownlod.core.extract.GenericExtraction
+import com.anydownlod.core.extract.GenericExtractionFailure
+import com.anydownlod.core.extract.GenericExtractor
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
@@ -47,11 +50,15 @@ import kotlin.time.Clock
  * yt-dlp JSON field ([DownloadRequest.options] carries only allowlisted
  * values).
  *
- * URLs that would need an extractor (an HTML response) fail with a typed
- * [JobErrorCode.EXTRACTION_FAILURE] so the UI can map it, instead of
- * pretending a download started. Progress reports bytes exactly as received;
- * percent only follows Content-Length. Speed and ETA stay null: unknown stays
- * unknown.
+ * URLs that would need an extractor run this engine's HTML route: a bounded
+ * read of the page, the shared generic extractor subset, then the chosen
+ * media URL through the same direct-file path (policy, redirects, stream).
+ * HTML that the extractor cannot resolve to exactly one media URL fails with
+ * a typed [JobErrorCode.EXTRACTION_FAILURE] so the UI can map it, instead of
+ * pretending a download started. The media hop never recurses: if it returns
+ * HTML again, the job fails typed. Progress reports bytes exactly as
+ * received; percent only follows Content-Length. Speed and ETA stay null:
+ * unknown stays unknown.
  */
 class HttpDownloadEngine(
     private val transfer: HttpTransfer,
@@ -73,6 +80,11 @@ class HttpDownloadEngine(
     private val urlCheck: (String) -> UrlCheck = UrlPolicy::check,
     seedJobs: List<DownloadJob> = emptyList(),
 ) : DownloadEngine {
+
+    companion object {
+        /** Bounded page read for the HTML route; a huge page is never held whole. */
+        const val MAX_HTML_BYTES = 512 * 1024
+    }
 
     private val lock = Any()
     private val _jobs = MutableStateFlow(seedJobs)
@@ -246,7 +258,7 @@ class HttpDownloadEngine(
                 it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
             }
             try {
-                downloadDirectFile(jobId, url, options)
+                downloadDirectFile(jobId, url, options, extractHtml = true)
             } catch (cancelled: CancellationException) {
                 if (isCancelRequested(jobId)) confirmCancelled(jobId) else throw cancelled
             } catch (failure: Throwable) {
@@ -259,7 +271,12 @@ class HttpDownloadEngine(
         }
     }
 
-    private suspend fun downloadDirectFile(jobId: String, url: String, options: DownloadOptions) {
+    private suspend fun downloadDirectFile(
+        jobId: String,
+        url: String,
+        options: DownloadOptions,
+        extractHtml: Boolean,
+    ) {
         var current = url
         var hops = 0
         var body: HttpBody? = null
@@ -311,14 +328,24 @@ class HttpDownloadEngine(
                         }
                         when (UrlClassifier.classify(response.contentType)) {
                             UrlClassifier.Classification.NEEDS_EXTRACTOR -> {
-                                body?.close()
-                                body = null
-                                fail(
-                                    jobId,
-                                    JobErrorCode.EXTRACTION_FAILURE,
-                                    "This URL needs an extractor, which this build does not include.",
-                                    retryable = false,
-                                )
+                                if (!extractHtml) {
+                                    body?.close()
+                                    body = null
+                                    fail(
+                                        jobId,
+                                        JobErrorCode.EXTRACTION_FAILURE,
+                                        "The media URL returned another page instead of a file.",
+                                        retryable = false,
+                                    )
+                                    return
+                                }
+                                val pageBody = body
+                                if (pageBody == null) {
+                                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
+                                    return
+                                }
+                                body = null // ownership passes to the extraction step
+                                extractMediaFromPage(jobId, pageBody, current, options)
                                 return
                             }
 
@@ -339,6 +366,76 @@ class HttpDownloadEngine(
         } finally {
             runCatching { body?.close() }
         }
+    }
+
+    /**
+     * The T-045 HTML route: reads a bounded page body, asks the generic
+     * extractor subset for exactly one media URL, and downloads that URL with
+     * the same direct-file path. The media hop may not extract again; a page
+     * that resolves to another page fails typed.
+     */
+    private suspend fun extractMediaFromPage(
+        jobId: String,
+        pageBody: HttpBody,
+        pageUrl: String,
+        options: DownloadOptions,
+    ) {
+        try {
+            val html = withContext(ioDispatcher) { readBoundedHtml(pageBody) }
+            when (
+                val extraction = GenericExtractor.extract(
+                    pageUrl = pageUrl,
+                    html = html,
+                    // Same policy seam as the download loop: UrlPolicy in
+                    // production, a strictly local fixture exception in tests.
+                    candidateCheck = urlCheck,
+                )
+            ) {
+                is GenericExtraction.Direct -> {
+                    downloadDirectFile(jobId, extraction.url, options, extractHtml = false)
+                }
+
+                is GenericExtraction.Failed -> {
+                    fail(
+                        jobId,
+                        JobErrorCode.EXTRACTION_FAILURE,
+                        redactedExtractionMessage(extraction.reason),
+                        retryable = false,
+                    )
+                }
+            }
+        } finally {
+            runCatching { pageBody.close() }
+        }
+    }
+
+    /**
+     * Reads at most [MAX_HTML_BYTES] of a page body so a hostile or huge page
+     * is never held in memory whole. Invalid UTF-8 tails decode with the
+     * replacement character, which the HTML scanner ignores.
+     */
+    private suspend fun readBoundedHtml(body: HttpBody, cap: Int = MAX_HTML_BYTES): String {
+        val out = StringBuilder()
+        val chunk = ByteArray(chunkSize)
+        var total = 0
+        while (total < cap) {
+            val count = withContext(ioDispatcher) { body.readNext(chunk) }
+            if (count == -1) break
+            if (count == 0) continue
+            currentCoroutineContext().ensureActive()
+            val keep = minOf(count, cap - total)
+            if (keep > 0) {
+                out.append(chunk.decodeToString(0, keep))
+                total += keep
+            }
+        }
+        return out.toString()
+    }
+
+    private fun redactedExtractionMessage(reason: GenericExtractionFailure): String = when (reason) {
+        GenericExtractionFailure.UnsupportedPageUrl -> "The page URL is not an HTTP(S) address this app can read."
+        GenericExtractionFailure.NoMedia -> "This page has no media this app can download."
+        GenericExtractionFailure.MultipleMedia -> "This page has more than one media element, so the app cannot choose one."
     }
 
     private suspend fun streamToFile(

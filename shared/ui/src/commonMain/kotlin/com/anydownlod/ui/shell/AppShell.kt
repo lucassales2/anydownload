@@ -20,10 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -32,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -46,9 +43,6 @@ import com.anydownlod.core.domain.Preset
 import com.anydownlod.ui.add.AddForm
 import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.generated.resources.Res
-import com.anydownlod.ui.generated.resources.clipboard_link_banner
-import com.anydownlod.ui.generated.resources.clipboard_preview_link
-import com.anydownlod.ui.generated.resources.clipboard_use_link
 import com.anydownlod.ui.generated.resources.files_stay_on_device
 import com.anydownlod.ui.generated.resources.library
 import com.anydownlod.ui.history.HistoryScreen
@@ -83,9 +77,6 @@ fun AppShell(
     onTabSelected: (ShellTab) -> Unit,
     onOpenSettings: () -> Unit,
     onPreviewSingleUrl: (String) -> Unit,
-    clipboardSuggestion: String? = null,
-    onUseClipboardSuggestion: () -> Unit = {},
-    onPreviewClipboardSuggestion: () -> Unit = {},
 ) {
     val settings by graph.settings.settings.collectAsState()
     val jobs by graph.engine.jobs.collectAsState()
@@ -114,9 +105,6 @@ fun AppShell(
                         cookiesConfigured = settings.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
-                        clipboardSuggestion = clipboardSuggestion,
-                        onUseClipboardSuggestion = onUseClipboardSuggestion,
-                        onPreviewClipboardSuggestion = onPreviewClipboardSuggestion,
                     )
                 }
             } else {
@@ -133,9 +121,6 @@ fun AppShell(
                         cookiesConfigured = settings.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
-                        clipboardSuggestion = clipboardSuggestion,
-                        onUseClipboardSuggestion = onUseClipboardSuggestion,
-                        onPreviewClipboardSuggestion = onPreviewClipboardSuggestion,
                     )
                 }
             }
@@ -284,9 +269,6 @@ private fun Workspace(
     cookiesConfigured: Boolean,
     selectedTab: ShellTab,
     onPreviewSingleUrl: (String) -> Unit,
-    clipboardSuggestion: String?,
-    onUseClipboardSuggestion: () -> Unit,
-    onPreviewClipboardSuggestion: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         graph.startupWarning?.let { warning ->
@@ -294,12 +276,6 @@ private fun Workspace(
                 text = warning,
                 tone = StatusTone.Negative,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
-        }
-        if (clipboardSuggestion != null) {
-            ClipboardSuggestion(
-                onUse = onUseClipboardSuggestion,
-                onPreview = onPreviewClipboardSuggestion,
             )
         }
         AddForm(
@@ -318,29 +294,3 @@ private fun Workspace(
     }
 }
 
-@Composable
-private fun ClipboardSuggestion(
-    onUse: () -> Unit,
-    onPreview: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .testTag("clipboard-suggestion"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(Res.string.clipboard_link_banner),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onUse, modifier = Modifier.testTag("clipboard-use-link")) {
-            Text(stringResource(Res.string.clipboard_use_link))
-        }
-        Button(onClick = onPreview, modifier = Modifier.testTag("clipboard-preview-link")) {
-            Text(stringResource(Res.string.clipboard_preview_link))
-        }
-    }
-}

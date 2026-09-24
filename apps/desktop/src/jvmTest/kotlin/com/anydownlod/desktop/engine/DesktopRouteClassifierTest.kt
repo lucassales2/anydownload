@@ -43,17 +43,41 @@ class DesktopRouteClassifierTest {
     }
 
     @Test
-    fun htmlPageIsRoutedToTheCli() {
+    fun htmlWithoutMediaIsRoutedToTheCli() {
         val server = server()
         server.createContext("/watch") { exchange ->
+            val body = "<html><body><p>no media element</p></body></html>".toByteArray()
             exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
-            exchange.sendResponseHeaders(200, 12)
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
             exchange.close()
         }
         try {
             val classifier = DesktopRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck(server))
             assertEquals(
                 DesktopRoute.YTDLP_CLI,
+                classifier.route("http://127.0.0.1:${server.address.port}/watch"),
+            )
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun htmlFixtureWithOneMediaElementIsRoutedToTheHttpEngine() {
+        val server = server()
+        server.createContext("/watch") { exchange ->
+            val body =
+                """<html><body><video src="https://fixtures.example.net/clip.bin"></video></body></html>""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+            exchange.close()
+        }
+        try {
+            val classifier = DesktopRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck(server))
+            assertEquals(
+                DesktopRoute.DIRECT_FILE,
                 classifier.route("http://127.0.0.1:${server.address.port}/watch"),
             )
         } finally {

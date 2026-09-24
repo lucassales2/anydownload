@@ -61,7 +61,7 @@ fun main() = application {
         title = "AnyDownload",
         state = rememberWindowState(size = DpSize(1280.dp, 860.dp)),
     ) {
-        App(desktop.graph, offerClipboardCheck = true)
+        App(desktop.graph)
     }
 }
 

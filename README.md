@@ -2,7 +2,7 @@
 
 **A planned Kotlin Multiplatform app for downloading video and audio from yt-dlp-supported sites on Android, iOS, desktop, and web.**
 
-> **Status: Phase D2 verified (2026-09-23).** One direct HTTP(S) file download now completes on every host family, per [ADR-006](vault/03-decisions/ADR-006-Local-http-engine-phase.md) and [Phase 2](vault/00-project/Phase-2-Local-Kotlin-Engine.md): desktop uses the **shared Kotlin HTTP engine** (installed `yt-dlp` stays only for site URLs), iOS downloads into its sandbox via in-process NSURLSession (foreground-only), web downloads through a **Manifest V3 extension** whose page never fetches an origin, and Android has the same shared engine wired in its app graph (its APK remains blocked in this build environment by a pre-existing AGP 9.0.0 vs Compose-1.12 AAR metadata mismatch — T-041 records the Chaquopy/pinned-yt-dlp adapter config and the exact blocker). The next phase is [D3](vault/00-project/Phase-3-Generic-Extractor.md) ([ADR-007](vault/03-decisions/ADR-007-Generic-extractor-phase.md)): one generic-extractor subset, planned and not started. YouTube and postprocessing stay later. Prior phase: [Phase 1](vault/00-project/Phase-1-Desktop-MeTube.md) / [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
+> **Status: Phase D3 verified (2026-09-24).** The [generic extractor subset](vault/00-project/Phase-3-Generic-Extractor.md) ([ADR-007](vault/03-decisions/ADR-007-Generic-extractor-phase.md)) works on every host family: one local HTML fixture with a single `<video>`/`<audio>`/`<source>` downloads on desktop (shared Kotlin HTTP engine), iOS (sandbox, foreground-only), web (Manifest V3 extension fetches the page and the media; the Compose/Wasm page never fetches an origin), and Android (same shared engine; the pre-existing AGP 9.0.0 vs Compose-1.12 AAR metadata blocker still prevents the APK assemble, so the JVM-equivalent engine tests are the Android evidence — T-041/T-048). Installed `yt-dlp` (desktop) and Chaquopy + pinned `yt-dlp==2026.8.19` (Android) still own every URL the subset does not resolve. A simple media page needs neither; YouTube and postprocessing stay later. The media toolkit (FFmpeg/MediaMuxer/AVFoundation) is **recorded in ADR-007 and not built**. Prior phases: [D2](vault/00-project/Phase-2-Local-Kotlin-Engine.md) / [ADR-006](vault/03-decisions/ADR-006-Local-http-engine-phase.md) and [D1](vault/00-project/Phase-1-Desktop-MeTube.md) / [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
 
 The product name is **AnyDownload**. The repository is named [`anydownlod`](https://github.com/lucassales2/anydownlod) to match the original project folder.
 
@@ -23,21 +23,26 @@ These are **planned capabilities, not implemented features**. The [feature-parit
 
 ## Platform strategy
 
-| Target | Execution (D2) |
-| --- | --- |
-| Desktop | Shared Kotlin HTTP engine for direct files; installed `yt-dlp` CLI stays for site URLs (`apps/desktop` only). |
-| iOS | Shared engine + in-process NSURLSession + sandbox `Documents` store. Foreground-only; site URLs fail with “extractor not implemented”. |
-| Android | Shared engine wired in the app graph; Chaquopy + pinned yt-dlp adapter behind an `apps/android`-only port. APK build blocked in this environment (see below). |
-| Web | Compose/Wasm UI. A Manifest V3 extension holds `host_permissions` + `downloads` and saves files; the page performs no cross-origin fetch. |
+| Target | Execution (D3) | D3 fixture HTML result (2026-09-24) |
+| --- | --- | --- |
+| Desktop | Shared Kotlin HTTP engine incl. the generic subset; installed `yt-dlp` CLI stays for unresolved URLs (`apps/desktop` only). | **Pass** — fixture HTML via Kotlin, no process; unresolved page still on the CLI path (yt-dlp 2026.08.19 on PATH). |
+| iOS | Shared engine + in-process NSURLSession + sandbox `Documents` store. Foreground-only; unresolved HTML fails typed “extractor not implemented”. | **Pass** — native simulator run downloaded the fixture media into the sandbox; unresolved page fails typed. |
+| Android | Shared engine wired in the app graph; Chaquopy + pinned yt-dlp adapter behind an `apps/android`-only port. APK build **blocked** in this environment. | **Pass (JVM-equivalent)** — `apps/android-engine-tests` proves the Kotlin route and the Chaquopy fallback; APK assemble remains blocked (AGP/Compose mismatch, T-041). |
+| Web | Compose/Wasm UI. The Manifest V3 extension holds `host_permissions` + `downloads`, fetches the page bytes and saves the media; the page never fetches an origin. | **Pass** — real Chromium (Brave 153) run: extension service worker fetched the fixture page and the media; file saved; without the extension Add refuses. |
 
-### Phase D2: one direct file per host
+### Phase D3: one generic-extractor subset
 
-- **Desktop:** route direct files through `HttpDownloadEngine` (`DesktopRoutingEngine`); yt-dlp is present on PATH here (`/opt/homebrew/bin/yt-dlp`) and the CLI path is preserved and unit-tested. Direct files never spawn a process.
-- **iOS:** `IosHttpTransfer` (NSURLSession, one hop per call) + `IosFileStore` (POSIX, Documents). Verified by native tests incl. a real 1 MiB local-fixture download (COMPLETED, file on disk) and an unsigned simulator build + launch.
-- **Web:** load the unpacked extension from `apps/web-extension` (see that folder's `README.md`). Without it, Add reports “extension required” and the page makes no network call.
-- **Android:** the Android app variant cannot assemble in this environment: androidx Compose 1.12.0 AARs require AGP ≥ 9.1.0 (alpha-only) while the catalog pins AGP 9.0.0; the JVM-equivalent engine tests run under `apps/android-engine-tests`. Chaquopy config is validated (`-DchaquopyVersion=17.0.0`, pinned `yt-dlp==2026.8.19`) and only applies when requested, so default checkouts stay Chaquopy-free.
+- **Home screen:** the idle screen is the paste-link field alone — no clipboard permission dialog, no automatic clipboard read, no options chrome. A compatible HTTP(S) link opens the metadata preview with **Download** plus a collapsible **Edit download** (video or audio, quality, format; captions, clips, cookies, and the disabled custom yt-dlp JSON stay out). Invalid and multi-line input stays on the field with a typed message.
+- **Extractor:** `com.anydownlod.core.extract.GenericExtractor` (package `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract`) is a translated subset of yt-dlp's `generic.py` at tag `2026.08.19` (the Android pin `yt-dlp==2026.8.19`), with the Unlicense notice and `shared/core/NOTICE.md`. `<video src>`, `<audio src>`, and nested `<source src>` candidates resolve against the page URL, pass `UrlPolicy`, and exactly one survivor wins; zero or several fail typed and redacted. `generic.py` is not vendored; no process and no Python in common code.
+- **Engine:** `HttpDownloadEngine` reads a bounded 512 KiB page body, runs the extractor, then streams the chosen media URL with the same direct-file path (policy on every hop, redirects, cancel discards the temp file). The media hop never re-extracts; HTML again fails typed.
+- **Honest limits (recorded, not fixed here):**
+  - iOS downloads are foreground-only; suspending the app suspends the transfer and no completed file is claimed on relaunch. No background `URLSession` is added in this phase.
+  - On web, closing the tab ends the page's queue view of the job; the browser's downloader (started through the extension) can continue and finish the file after the tab closes, so a saved file can outlive the tab. The page shows completion only while it can still hear the extension.
+  - The desktop classifier fetches up to one bounded page body per submit to route HTML; a HEAD-only host that breaks on GET still falls back to the CLI path.
+  - The Android APK cannot assemble in this build environment (AGP 9.0.0 vs Compose 1.12.0 AAR metadata mismatch); the JVM-equivalent `apps/android-engine-tests` suite is the Android evidence. Chaquopy config stays opt-in (`-DchaquopyVersion=17.0.0`, `yt-dlp==2026.8.19`), `apps/android` only.
+- **Later, explicitly:** the rest of the generic extractor and site extractors, YouTube / yt-dlp-ejs, merge / audio extraction / clips (toolkit recorded in ADR-007, not built), Spotify matching, free-form yt-dlp JSON, and retiring the desktop CLI / Chaquopy.
 
-Toolchain (verified 2026-09-23, macOS 26.5 arm64): Gradle 9.7.1, Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, JDK 21, Xcode 26.5, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target, Chromium 153 (Brave) for the extension check.
+Toolchain (verified 2026-09-24, macOS 26.5.2 arm64): Gradle 9.7.1, Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, JDK 21, Xcode 26.5, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target, Chromium 153 (Brave 153.1.95.104) for the extension check, installed `yt-dlp` 2026.08.19 on PATH for the desktop CLI fallback.
 
 The later engine is shared Kotlin and does not shell out to the Python yt-dlp CLI ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)). Until that port exists, the desktop D1 adapter calls the installed CLI from `apps/desktop` only.
 
@@ -49,19 +54,19 @@ The later engine is shared Kotlin and does not shell out to the Python yt-dlp CL
 
 | Module | Purpose |
 | --- | --- |
-| `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, **`HttpDownloadEngine`** + URL policy/classifier, platform ports (`HttpTransfer`, `FileStore`, [`WebExtensionBridge`]), in-memory fakes |
+| `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, **`HttpDownloadEngine`** + URL policy/classifier + **`GenericExtractor`** (yt-dlp subset, Unlicense notice), platform ports (`HttpTransfer`, `FileStore`, [`WebExtensionBridge`]), in-memory fakes |
 | `shared/network` | Withdrawn server client. Kept in the tree, unused |
 | `shared/ui` | Compose Multiplatform screens; depends on core interfaces, no process APIs |
 | `apps/android` | Android application: real graph (HTTP engine + Chaquopy port); blocked APK build in this env |
 | `apps/android-engine-tests` | JVM-equivalent tests for the Android engine sources (variant-unblocked) |
 | `apps/desktop` | Desktop host: JSON store, yt-dlp/ffmpeg adapter, routing engine, Compose window |
 | `apps/web` | Compose/Wasm application: `WindowExtensionBridge` + `WebExtensionEngine`; never fetches an origin |
-| `apps/web-extension` | Manifest V3 extension: host permissions + `downloads`, probes and saves direct files |
+| `apps/web-extension` | Manifest V3 extension: host permissions + `downloads`, probes pages, fetches the HTML for the Kotlin extractor, saves the chosen media |
 | `apps/ios` | SwiftUI/Xcode host for the `AnyDownloadKit` framework; real iOS graph |
 
 Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, Ktor 3.6.0, JDK 21, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target. Minimum platform versions are **not decided**; T-004 and T-006 own that. Intel iOS simulators are unsupported because Compose Multiplatform 1.12 no longer publishes an `iosX64` variant.
 
-### Run the desktop D1 app
+### Run the desktop app
 
 `yt-dlp` and `ffmpeg` must be installed and on `PATH`; nothing is bundled. Downloads write under the folder chosen in Settings (default `~/Downloads/AnyDownload`). Queue, history, subscriptions, and settings persist outside the download root in the OS app-data folder (`~/Library/Application Support/AnyDownload` on macOS).
 
@@ -147,7 +152,7 @@ vault/                     # Open this folder as an Obsidian vault
   .obsidian/               # Portable vault settings only
 ```
 
-Treat module names, the `com.anydownlod` package, and pinned versions as provisional; minimum platform versions are still open. Phase D1 is complete: desktop runs the MeTube workflows through an installed yt-dlp, and the Kotlin port remains [ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md). Next work is the [T-022](vault/06-tasks/T-022-Parity-audit.md) parity audit and the target work in [T-004](vault/06-tasks/T-004-Validate-KMP-targets.md); do not move the desktop process adapter into shared code.
+Treat module names, the `com.anydownlod` package, and pinned versions as provisional; minimum platform versions are still open. Phases D1, D2, and D3 are complete: desktop runs the MeTube workflows through an installed yt-dlp, every host downloads one direct file, and one generic-extractor subset runs on all four families ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md) remains the end state). Next work is the [T-022](vault/06-tasks/T-022-Parity-audit.md) parity audit and the target work in [T-004](vault/06-tasks/T-004-Validate-KMP-targets.md); do not move the desktop process adapter into shared code.
 
 ## Contributing and licensing
 

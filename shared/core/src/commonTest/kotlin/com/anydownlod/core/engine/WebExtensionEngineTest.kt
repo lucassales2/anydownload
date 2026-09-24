@@ -37,7 +37,9 @@ class WebExtensionEngineTest {
         override val available: Boolean,
         var probe: WebProbe = WebProbe.Final(200, "application/octet-stream", 1_024, "https://example.com/files/tiny.bin"),
         var download: WebDownload = WebDownload.Completed("tiny.bin", 1_024),
+        var page: WebPage = WebPage.Final("https://example.com/watch?v=x", "no media here"),
         val probeCalls: MutableList<String> = mutableListOf(),
+        val pageCalls: MutableList<String> = mutableListOf(),
         val downloadCalls: MutableList<Pair<String, String>> = mutableListOf(),
         val cancels: MutableList<String> = mutableListOf(),
         var downloadGate: Channel<Unit>? = null,
@@ -45,6 +47,11 @@ class WebExtensionEngineTest {
         override suspend fun probe(url: String): WebProbe {
             probeCalls += url
             return probe
+        }
+
+        override suspend fun fetchPage(url: String): WebPage {
+            pageCalls += url
+            return page
         }
 
         override suspend fun download(url: String, jobId: String, onProgress: (Long, Long?) -> Unit): WebDownload {
@@ -111,6 +118,74 @@ class WebExtensionEngineTest {
         assertEquals(JobState.FAILED, finished.state)
         assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
         assertTrue(finished.error?.retryable == false)
+        assertEquals(listOf("https://example.com/watch?v=x"), bridge.pageCalls)
+        assertEquals(0, bridge.downloadCalls.size)
+        assertTrue(finished.artifacts.isEmpty())
+    }
+
+    @Test
+    fun matchingHtmlPageSavesTheMediaUrl() = runTest {
+        val mediaUrl = "https://cdn.fixtures.example.net/media/clip.bin"
+        val bridge = FakeBridge(
+            available = true,
+            probe = WebProbe.Final(200, "text/html; charset=utf-8", null, "https://example.com/watch?v=x"),
+            page = WebPage.Final(
+                finalUrl = "https://example.com/watch?v=x",
+                html = "<html><body><video src=\"$mediaUrl\"></video></body></html>",
+            ),
+            download = WebDownload.Completed("clip.bin", 4_096),
+        )
+        val engine = engine(bridge, this)
+
+        val job = engine.submit(request(url = "https://example.com/watch?v=x", key = "k4"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state)
+        assertNull(finished.error)
+        // The extension fetched the page; the media URL went to the save step.
+        assertEquals(listOf("https://example.com/watch?v=x"), bridge.pageCalls)
+        assertTrue(bridge.downloadCalls.single().first == mediaUrl)
+        assertEquals("clip.bin", finished.artifacts.single().relativePath)
+    }
+
+    @Test
+    fun twoMatchHtmlPageFailsTypedAndSavesNothing() = runTest {
+        val bridge = FakeBridge(
+            available = true,
+            probe = WebProbe.Final(200, "text/html; charset=utf-8", null, "https://example.com/watch?v=x"),
+            page = WebPage.Final(
+                finalUrl = "https://example.com/watch?v=x",
+                html = "<video src='one.mp4'></video><audio src='two.ogg'></audio>",
+            ),
+        )
+        val engine = engine(bridge, this)
+
+        val job = engine.submit(request(url = "https://example.com/watch?v=x", key = "k5"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+        assertEquals(0, bridge.downloadCalls.size)
+        assertTrue(finished.artifacts.isEmpty())
+    }
+
+    @Test
+    fun pageFetchFailureMapsTyped() = runTest {
+        val bridge = FakeBridge(
+            available = true,
+            probe = WebProbe.Final(200, "text/html; charset=utf-8", null, "https://example.com/watch?v=x"),
+            page = WebPage.Failed(WebFailureCode.NETWORK, "The page could not be reached."),
+        )
+        val engine = engine(bridge, this)
+
+        val job = engine.submit(request(url = "https://example.com/watch?v=x", key = "k6"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.NETWORK_FAILURE, finished.error?.code)
         assertEquals(0, bridge.downloadCalls.size)
     }
 

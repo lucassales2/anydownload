@@ -38,9 +38,12 @@ import kotlinx.coroutines.CancellationException
 import com.anydownlod.core.MediaPreviewResult
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.PreviewFailure
+import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.download
 import com.anydownlod.ui.generated.resources.preview_back
+import com.anydownlod.ui.generated.resources.preview_edit
+import com.anydownlod.ui.generated.resources.preview_edit_hide
 import com.anydownlod.ui.generated.resources.preview_failed
 import com.anydownlod.ui.generated.resources.preview_heading
 import com.anydownlod.ui.generated.resources.preview_loading
@@ -49,6 +52,7 @@ import com.anydownlod.ui.generated.resources.preview_timed_out
 import com.anydownlod.ui.generated.resources.preview_unavailable
 import com.anydownlod.ui.generated.resources.preview_uploaded
 import com.anydownlod.ui.generated.resources.preview_views
+import com.anydownlod.ui.i18n.text
 import com.anydownlod.ui.theme.PageInset
 import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
@@ -63,6 +67,9 @@ private sealed interface PreviewPhase {
 /**
  * Loads title, thumbnail, and related metadata, then starts the download only
  * after the user confirms. A failed lookup still offers Download.
+ *
+ * [editor] is the same presenter the home field uses: the collapsible Edit
+ * panel writes its choices, and Download submits them with the request.
  */
 @Composable
 fun PreviewScreen(
@@ -71,8 +78,10 @@ fun PreviewScreen(
     loadThumbnail: suspend (String) -> ByteArray?,
     onBack: () -> Unit,
     onDownload: () -> Unit,
+    editor: AddFormPresenter? = null,
 ) {
     var phase by remember(url) { mutableStateOf<PreviewPhase>(PreviewPhase.Loading) }
+    var editExpanded by remember(url) { mutableStateOf(false) }
 
     LaunchedEffect(url) {
         phase = PreviewPhase.Loading
@@ -123,8 +132,35 @@ fun PreviewScreen(
 
         when (val current = phase) {
             PreviewPhase.Loading -> LoadingBody()
-            is PreviewPhase.Failed -> FailedBody(current.failure, onDownload)
-            is PreviewPhase.Ready -> ReadyBody(current.preview, current.thumbnail, onDownload)
+            is PreviewPhase.Failed -> FailedBody(current.failure)
+            is PreviewPhase.Ready -> ReadyBody(current.preview, current.thumbnail)
+        }
+
+        if (phase !is PreviewPhase.Loading) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DownloadButton(onDownload)
+                if (editor != null) {
+                    OutlinedButton(
+                        onClick = { editExpanded = !editExpanded },
+                        modifier = Modifier.testTag("preview-edit-toggle"),
+                    ) {
+                        Text(
+                            if (editExpanded) {
+                                text(Res.string.preview_edit_hide)
+                            } else {
+                                text(Res.string.preview_edit)
+                            },
+                        )
+                    }
+                }
+            }
+            if (editExpanded && editor != null) {
+                PreviewEditPanel(editor = editor)
+            }
         }
     }
 }
@@ -145,7 +181,7 @@ private fun LoadingBody() {
 }
 
 @Composable
-private fun FailedBody(failure: PreviewFailure, onDownload: () -> Unit) {
+private fun FailedBody(failure: PreviewFailure) {
     val message = when (failure) {
         PreviewFailure.Unavailable -> stringResource(Res.string.preview_unavailable)
         PreviewFailure.TimedOut -> stringResource(Res.string.preview_timed_out)
@@ -153,12 +189,11 @@ private fun FailedBody(failure: PreviewFailure, onDownload: () -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.widthIn(max = 640.dp)) {
         Text(text = message, style = MaterialTheme.typography.bodyLarge)
-        DownloadButton(onDownload)
     }
 }
 
 @Composable
-private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?, onDownload: () -> Unit) {
+private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -201,7 +236,6 @@ private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?, onDownload: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DownloadButton(onDownload)
     }
 }
 

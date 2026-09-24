@@ -31,4 +31,18 @@ class SourceUrlValidatorTest {
         assertIs<SourceUrlValidation.Invalid>(SourceUrlValidator.validate("https://exam ple.org"))
         assertIs<SourceUrlValidation.Invalid>(SourceUrlValidator.validate("https:///nohost"))
     }
+
+    @Test
+    fun rejectsUserinfoCredentialsInTheAuthority() {
+        assertEquals(
+            SourceUrlValidation.Invalid(SourceUrlError.Userinfo),
+            SourceUrlValidator.validate("https://user:pass@example.com/watch"),
+        )
+        assertEquals(
+            SourceUrlValidation.Invalid(SourceUrlError.Userinfo),
+            SourceUrlValidator.validate("http://token@example.com/a"),
+        )
+        // An '@' after the authority (path or query) is not userinfo.
+        assertIs<SourceUrlValidation.Valid>(SourceUrlValidator.validate("https://example.com/a@b"))
+    }
 }

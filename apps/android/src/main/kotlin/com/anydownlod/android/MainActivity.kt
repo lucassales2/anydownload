@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
             // the Chaquopy adapter for other URLs. remember keeps one graph
             // (and its engine scope) for the activity lifetime.
             val graph = remember { AndroidAppGraph(applicationContext) }
-            App(graph = graph, offerClipboardCheck = true)
+            App(graph = graph)
         }
     }
 }

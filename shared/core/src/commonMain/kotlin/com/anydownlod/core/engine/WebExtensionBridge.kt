@@ -23,8 +23,23 @@ interface WebExtensionBridge {
     /** Downloads [url] and streams progress; then the browser saves the file. */
     suspend fun download(url: String, jobId: String, onProgress: (downloaded: Long, total: Long?) -> Unit): WebDownload
 
+    /**
+     * Fetches [url] and returns a bounded, redacted page: the FINAL URL after
+     * the browser's redirects plus at most 512 KiB of the HTML text. The page
+     * — never the extension — runs the shared Kotlin extractor on those
+     * bytes; the extension performs no extraction in JavaScript.
+     */
+    suspend fun fetchPage(url: String): WebPage
+
     /** Aborts an in-flight [download] for [jobId]. */
     suspend fun cancelDownload(jobId: String)
+}
+
+/** One bounded page-read outcome. */
+sealed interface WebPage {
+    data class Final(val finalUrl: String, val html: String) : WebPage
+
+    data class Failed(val code: WebFailureCode, val message: String) : WebPage
 }
 
 /** One classification outcome. */

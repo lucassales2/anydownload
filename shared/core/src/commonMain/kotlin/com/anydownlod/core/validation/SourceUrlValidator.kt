@@ -14,6 +14,8 @@ enum class SourceUrlError {
     Whitespace,
     UnsupportedScheme,
     MissingHost,
+    /** The authority embeds credentials (userinfo), which would leak into rendered URLs. */
+    Userinfo,
 }
 
 sealed interface SourceUrlValidation {
@@ -37,9 +39,13 @@ object SourceUrlValidator {
         }
 
         val afterScheme = candidate.substringAfter("://")
-        val host = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
-        if (host.isEmpty()) {
+        val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (authority.isEmpty()) {
             return SourceUrlValidation.Invalid(SourceUrlError.MissingHost)
+        }
+        // userinfo would carry credentials in a URL the app renders; reject it.
+        if (authority.indexOf('@') >= 0) {
+            return SourceUrlValidation.Invalid(SourceUrlError.Userinfo)
         }
 
         return SourceUrlValidation.Valid(candidate)

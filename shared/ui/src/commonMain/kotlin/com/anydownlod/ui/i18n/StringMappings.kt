@@ -33,6 +33,7 @@ import com.anydownlod.ui.generated.resources.theme_system
 import com.anydownlod.ui.generated.resources.url_error_blank
 import com.anydownlod.ui.generated.resources.url_error_host
 import com.anydownlod.ui.generated.resources.url_error_scheme
+import com.anydownlod.ui.generated.resources.url_error_userinfo
 import com.anydownlod.ui.generated.resources.url_error_whitespace
 import com.anydownlod.ui.generated.resources.write_metadata
 import com.anydownlod.ui.generated.resources.write_thumbnail
@@ -44,6 +45,7 @@ fun SourceUrlError.toUiText(): UiText = UiText.of(
         SourceUrlError.Whitespace -> Res.string.url_error_whitespace
         SourceUrlError.UnsupportedScheme -> Res.string.url_error_scheme
         SourceUrlError.MissingHost -> Res.string.url_error_host
+        SourceUrlError.Userinfo -> Res.string.url_error_userinfo
     },
 )
 

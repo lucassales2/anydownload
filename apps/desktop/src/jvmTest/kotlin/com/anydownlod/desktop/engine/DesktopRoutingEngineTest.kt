@@ -7,12 +7,16 @@ import com.anydownlod.core.domain.DownloadRequest
 import com.anydownlod.core.domain.JobErrorCode
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.engine.HttpDownloadEngine
+import com.anydownlod.core.engine.UrlCheck
+import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
@@ -52,12 +56,14 @@ class DesktopRoutingEngineTest {
         fileStore: FileStore,
         root: Path,
         scope: CoroutineScope,
+        urlCheck: (String) -> UrlCheck = UrlPolicy::check,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
         fileStore = fileStore,
         settings = InMemorySettingsRepository(AppSettings(downloadRoot = root.toString())),
         scope = scope,
         ioDispatcher = Dispatchers.Default,
+        urlCheck = urlCheck,
     )
 
     private fun routing(
@@ -205,6 +211,216 @@ class DesktopRoutingEngineTest {
             assertTrue(job.error!!.message.contains("yt-dlp"))
             assertFalse(httpTouched.get())
         } finally {
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun htmlFixtureRoutedByClassifierCompletesWithoutProcess() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-routing-html-")
+        val processStarted = AtomicBoolean(false)
+        val mediaUrl = "https://fixtures.example.net/clip.bin"
+        val payload = ByteArray(4096) { 2 }
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/watch") { exchange ->
+                val body = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val http = httpEngine(
+                FakeTransfer { url ->
+                    if (url.startsWith("http://127.0.0.1:")) {
+                        // The engine re-fetches the page itself (T-046 route).
+                        val html = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                        HttpResponse.Final(200, "text/html; charset=utf-8", html.size.toLong(), FakeBody(listOf(html)))
+                    } else {
+                        HttpResponse.Final(200, "application/octet-stream", payload.size.toLong(), FakeBody(listOf(payload)))
+                    }
+                },
+                JavaNetFileStore(root),
+                root,
+                scope,
+                urlCheck = fixtureCheck,
+            )
+            val cli = cliEngine(
+                root,
+                CliProcessRunner { _, _ -> processStarted.set(true); FakeCliProcess(emptyList()) },
+                scope,
+            )
+            val classifier = DesktopRouteClassifier(
+                connectTimeoutMillis = 2_000,
+                readTimeoutMillis = 2_000,
+                urlCheck = fixtureCheck,
+            )
+            val engine = routing(http, cli, classifier::route, scope)
+
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "http://127.0.0.1:${server.address.port}/watch",
+                    options = DownloadOptions(),
+                    idempotencyKey = "html-fixture-1",
+                )
+            )
+            val finished = waitFor(engine, job.id, JobState.COMPLETED)
+
+            assertEquals(JobState.COMPLETED, finished.state)
+            assertEquals("clip.bin", finished.artifacts.single().relativePath)
+            assertTrue(Files.isRegularFile(root.resolve("clip.bin")))
+            assertEquals(payload.size.toLong(), Files.size(root.resolve("clip.bin")))
+            assertFalse(processStarted.get(), "a fixture media page must never spawn yt-dlp")
+        } finally {
+            server.stop(0)
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun nonMatchingHtmlPageStillReachesTheCliPath() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-routing-nomatch-")
+        val file = root.resolve("One public video.mp4")
+        Files.writeString(file, "fake media")
+        val lines = listOf(
+            "TITLE|One public video",
+            "DL|downloading|10485760|NA|10485760|1048576.0|5",
+            "PP|started",
+            "FILE|$file",
+        )
+        val cliSeen = AtomicBoolean(false)
+        val httpTouched = AtomicBoolean(false)
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/page") { exchange ->
+                val body = "<html><body><p>no media here</p></body></html>".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val cli = cliEngine(root, CliProcessRunner { _, _ -> cliSeen.set(true); FakeCliProcess(lines, exitCode = 0) }, scope)
+            val http = httpEngine(
+                FakeTransfer { httpTouched.set(true); HttpResponse.Unavailable("must not be used") },
+                JavaNetFileStore(root),
+                root,
+                scope,
+            )
+            val classifier = DesktopRouteClassifier(
+                connectTimeoutMillis = 2_000,
+                readTimeoutMillis = 2_000,
+                urlCheck = fixtureCheck,
+            )
+            val engine = routing(http, cli, classifier::route, scope)
+
+            val job = engine.submit(
+                DownloadRequest(sourceUrl = "http://127.0.0.1:${server.address.port}/page", idempotencyKey = "html-nomatch-1")
+            )
+            val finished = waitFor(engine, job.id, JobState.COMPLETED)
+
+            assertEquals("One public video.mp4", finished.artifacts.single().fileName)
+            assertTrue(cliSeen.get())
+            assertFalse(httpTouched.get(), "an unresolved page must stay on the CLI path")
+        } finally {
+            server.stop(0)
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancelOfHtmlFixtureJobLeavesNoCompletedFile() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-routing-html-cancel-")
+        val processStarted = AtomicBoolean(false)
+        val mediaUrl = "https://fixtures.example.net/stall.bin"
+        val gate = Channel<Unit>(capacity = Channel.UNLIMITED)
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/watch") { exchange ->
+                val body = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val http = httpEngine(
+                FakeTransfer { url ->
+                    if (url.startsWith("http://127.0.0.1:")) {
+                        val html = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                        HttpResponse.Final(200, "text/html; charset=utf-8", html.size.toLong(), FakeBody(listOf(html)))
+                    } else {
+                        HttpResponse.Final(
+                            statusCode = 200,
+                            contentType = "application/octet-stream",
+                            totalBytes = null,
+                            body = GatedBody(listOf(ByteArray(1024), ByteArray(1024)), gate),
+                        )
+                    }
+                },
+                JavaNetFileStore(root),
+                root,
+                scope,
+                urlCheck = fixtureCheck,
+            )
+            val cli = cliEngine(root, CliProcessRunner { _, _ -> processStarted.set(true); FakeCliProcess(emptyList()) }, scope)
+            val classifier = DesktopRouteClassifier(
+                connectTimeoutMillis = 2_000,
+                readTimeoutMillis = 2_000,
+                urlCheck = fixtureCheck,
+            )
+            val engine = routing(http, cli, classifier::route, scope)
+
+            val job = engine.submit(
+                DownloadRequest(sourceUrl = "http://127.0.0.1:${server.address.port}/watch", idempotencyKey = "html-cancel-1")
+            )
+            withTimeout(10_000) {
+                engine.jobs.first { jobs -> jobs.any { it.id == job.id && it.state == JobState.DOWNLOADING } }
+            }
+
+            val cancelled = engine.cancel(job.id)
+            waitFor(engine, job.id, JobState.CANCELLED)
+
+            assertEquals(JobState.CANCELLED, cancelled?.state)
+            assertEquals(JobErrorCode.CANCELLED, engine.jobs.value.first { it.id == job.id }.error?.code)
+            withTimeout(10_000) {
+                while (Files.list(root).use { it.count() } != 0L) delay(20)
+            }
+            assertTrue(engine.jobs.value.first { it.id == job.id }.artifacts.isEmpty())
+            assertFalse(processStarted.get())
+        } finally {
+            server.stop(0)
             scope.cancel()
             root.toFile().deleteRecursively()
         }

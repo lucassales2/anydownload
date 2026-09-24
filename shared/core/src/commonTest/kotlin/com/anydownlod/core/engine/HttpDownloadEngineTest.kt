@@ -559,6 +559,227 @@ class HttpDownloadEngineTest {
         testScheduler.advanceUntilIdle()
         assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == job.id }.state)
     }
+
+    @Test
+    fun matchingHtmlFixtureDownloadsTheMediaUrl() = runTest {
+        val pageUrl = "https://fixtures.example.com/watch"
+        val mediaUrl = "https://cdn.fixtures.example.net/media/clip.bin"
+        val payload = ByteArray(4_096) { 3 }
+        val pageHtml = """
+            <html><head><title>Fixture</title></head><body>
+            <video controls><source src="$mediaUrl" type="video/mp4"></video>
+            </body></html>
+        """.trimIndent()
+        val transfer = FakeTransfer { url ->
+            if (url == pageUrl) {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "text/html; charset=utf-8",
+                    totalBytes = pageHtml.encodeToByteArray().size.toLong(),
+                    body = FakeBody(listOf(pageHtml.encodeToByteArray())),
+                )
+            } else {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "application/octet-stream",
+                    totalBytes = payload.size.toLong(),
+                    body = FakeBody(listOf(payload)),
+                )
+            }
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = pageUrl, key = "html-media-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state)
+        assertNull(finished.error)
+        assertEquals(listOf(pageUrl, mediaUrl), transfer.requested)
+        assertEquals("clip.bin", finished.artifacts.single().relativePath)
+        val written = store.live["clip.bin"]
+        assertNotNull(written)
+        assertTrue(written.bytes.toByteArray().contentEquals(payload))
+        assertTrue(written.published)
+    }
+
+    @Test
+    fun zeroMatchHtmlFailsTypedWithoutSaving() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "text/html; charset=utf-8",
+                body = FakeBody(listOf("<html><body>nothing here</body></html>".encodeToByteArray())),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "zero-media-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+        assertEquals(false, finished.error?.retryable)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(store.created.isEmpty())
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun twoMatchHtmlFailsTypedWithoutSaving() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "text/html; charset=utf-8",
+                body = FakeBody(
+                    listOf("""<video src="one.mp4"></video><video src="two.mp4"></video>""".encodeToByteArray()),
+                ),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "two-media-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun mediaUrlRedirectingToBlockedAddressFailsWithoutSaving() = runTest {
+        val pageUrl = "https://fixtures.example.com/watch"
+        val transfer = FakeTransfer { url ->
+            if (url == pageUrl) {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "text/html",
+                    body = FakeBody(listOf("""<video src="https://fixtures.example.com/go"></video>""".encodeToByteArray())),
+                )
+            } else {
+                HttpResponse.Redirect("http://127.0.0.1/admin")
+            }
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = pageUrl, key = "blocked-media-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, finished.error?.code)
+        assertEquals(listOf(pageUrl, "https://fixtures.example.com/go"), transfer.requested)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun mediaHopReturningHtmlAgainFailsTypedWithoutRecursing() = runTest {
+        val pageUrl = "https://fixtures.example.com/watch"
+        val transfer = FakeTransfer { url ->
+            if (url == pageUrl) {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "text/html",
+                    body = FakeBody(listOf("""<video src="https://fixtures.example.com/again"></video>""".encodeToByteArray())),
+                )
+            } else {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "text/html; charset=utf-8",
+                    body = FakeBody(listOf("<html>still a page</html>".encodeToByteArray())),
+                )
+            }
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = pageUrl, key = "again-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+        assertEquals(false, finished.error?.retryable)
+        // Only the page and the one media hop were fetched: no recursion.
+        assertEquals(2, transfer.requested.size)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun cancelDuringMediaStreamAfterExtractionLeavesNoFile() = runTest {
+        val gate = Channel<Unit>(capacity = Channel.UNLIMITED)
+        val pageUrl = "https://fixtures.example.com/watch"
+        val transfer = FakeTransfer { url ->
+            if (url == pageUrl) {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "text/html",
+                    body = FakeBody(listOf("""<video src="https://fixtures.example.com/clip.bin"></video>""".encodeToByteArray())),
+                )
+            } else {
+                HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "application/octet-stream",
+                    totalBytes = null,
+                    body = GatedBody(listOf(ByteArray(64), ByteArray(64)), gate),
+                )
+            }
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = pageUrl, key = "html-cancel-key"))
+        testScheduler.advanceUntilIdle() // parked on the media gate inside readNext
+        assertEquals(JobState.DOWNLOADING, engine.jobs.value.first { it.id == job.id }.state)
+
+        engine.cancel(job.id)
+        testScheduler.advanceUntilIdle()
+
+        val now = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.CANCELLED, now.state)
+        assertEquals(JobErrorCode.CANCELLED, now.error?.code)
+        assertNull(now.artifacts.firstOrNull())
+        assertTrue(store.created.isNotEmpty())
+        assertTrue(store.created.all { it.discarded })
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun oversizedPageIsBoundedAndFailsCleanly() = runTest {
+        val pageUrl = "https://fixtures.example.com/big"
+        val big = ByteArray(HttpDownloadEngine.MAX_HTML_BYTES * 2)
+        // The only media element sits beyond the read cap.
+        val tail = """<video src="late.mp4"></video>""".encodeToByteArray()
+        tail.copyInto(big, big.size - tail.size)
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "text/html; charset=utf-8",
+                body = FakeBody(listOf(big)),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(url = pageUrl, key = "big-page-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+        // The capped read never saw the late media element, so nothing was fetched.
+        assertEquals(1, transfer.requested.size)
+        assertTrue(store.publishTargets.isEmpty())
+    }
 }
 
 /** Common-safe growable byte buffer (ByteArrayOutputStream is JVM-only). */

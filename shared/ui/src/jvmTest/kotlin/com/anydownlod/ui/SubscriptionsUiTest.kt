@@ -34,7 +34,7 @@ class SubscriptionsUiTest {
             downloadOptions = DownloadOptions(),
         )
         val graph = InMemoryAppGraph(subscriptions = repository)
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         onNodeWithText("Subscriptions").performClick()
         onNodeWithText("Fixture channel").assertExists()
@@ -74,7 +74,7 @@ class SubscriptionsUiTest {
         val repository = InMemorySubscriptionRepository()
         val first = repository.add("https://example.com/channel/one", "One", DownloadOptions())
         val second = repository.add("https://example.com/channel/two", "Two", DownloadOptions())
-        setContent { App(InMemoryAppGraph(subscriptions = repository)) }
+        setContent { ShellUiHarness(InMemoryAppGraph(subscriptions = repository)) }
 
         onNodeWithText("Subscriptions").performClick()
         onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${first.id}"))
@@ -88,7 +88,7 @@ class SubscriptionsUiTest {
 
     @Test
     fun emptyStateExplainsChecksRunWhileOpen() = runComposeUiTest {
-        setContent { App(InMemoryAppGraph()) }
+        setContent { ShellUiHarness(InMemoryAppGraph()) }
 
         onNodeWithText("Subscriptions").performClick()
         onNodeWithText("Checks run while the app is open.", substring = true).assertExists()

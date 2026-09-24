@@ -187,6 +187,58 @@ class IosEngineTest {
         assertNotNull(fileStore.size(artifact.relativePath))
     }
 
+    @Test
+    fun realNSURLSessionDownloadsAMatchingHtmlPageAndFailsUnresolvedTyped() = runBlocking {
+        // Same opt-in as the direct-file live fixture: IOS_LIVE_FIXTURE env or
+        // /tmp/anydownlod-ios-live.txt names the host:port of a local server
+        // that serves /watch (one <video src="/media/clip.bin">), the media
+        // file, and /page-without-media (no media element).
+        val endpoint = NSProcessInfo.processInfo.environment["IOS_LIVE_FIXTURE"]
+            ?.toString()
+            ?: readHostText("/tmp/anydownlod-ios-live.txt")?.trim()
+        if (endpoint.isNullOrBlank()) {
+            println("Skipped: set IOS_LIVE_FIXTURE or write /tmp/anydownlod-ios-live.txt (host:port of a local fixture server) to run the live HTML route check.")
+            return@runBlocking
+        }
+        val root = tempRoot("live-html")
+        val fileStore = IosFileStore(root)
+        val base = "http://$endpoint"
+        val transfer = IosHttpTransfer(timeoutSeconds = 15.0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith(base)) UrlCheck.Allowed(url) else UrlPolicy.check(url)
+        }
+        val http = engine(transfer, fileStore, root, urlCheck = fixtureCheck)
+
+        // 1) A matching HTML page downloads the fixture media into the sandbox.
+        val job = http.submit(DownloadRequest(
+            sourceUrl = "$base/watch",
+            options = DownloadOptions(),
+            idempotencyKey = "ios-live-html",
+        ))
+        val finished = withTimeout(45_000) {
+            http.jobs.first { jobs -> jobs.any { it.id == job.id && it.state == JobState.COMPLETED } }
+                .first { it.id == job.id }
+        }
+        assertEquals(JobState.COMPLETED, finished.state)
+        val artifact = finished.artifacts.single()
+        assertEquals("clip.bin", artifact.relativePath)
+        assertEquals(4_096L, fileStore.size(artifact.relativePath))
+
+        // 2) Unresolved HTML fails typed, with no Python and no CLI.
+        val unresolved = http.submit(DownloadRequest(
+            sourceUrl = "$base/page-without-media",
+            options = DownloadOptions(),
+            idempotencyKey = "ios-live-unresolved",
+        ))
+        val failed = withTimeout(45_000) {
+            http.jobs.first { jobs -> jobs.any { it.id == unresolved.id && it.state == JobState.FAILED } }
+                .first { it.id == unresolved.id }
+        }
+        assertEquals(JobErrorCode.EXTRACTION_FAILURE, failed.error?.code)
+        assertEquals(false, failed.error?.retryable)
+        assertTrue(failed.artifacts.isEmpty())
+    }
+
     private suspend fun waitFor(engine: HttpDownloadEngine, jobId: String, state: JobState): DownloadJob =
         withTimeout(20_000) {
             engine.jobs.first { jobs -> jobs.any { it.id == jobId && it.state == state } }

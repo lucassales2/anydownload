@@ -125,3 +125,52 @@ test('cancel acknowledges without fetching', async () => {
   assert.equal(reply.type, 'ack');
   assert.equal(calls.length, 0);
 });
+
+test('fetch-page returns a bounded redacted page for the Kotlin extractor', async () => {
+  const html =
+    '<html><body><video src="https://cdn.fixtures.example.net/clip.bin"></video></body></html>';
+  const { bridge, calls } = makeBridge({
+    responses: [
+      { url: 'https://example.com/watch', method: 'GET', status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, body: html },
+    ],
+  });
+  const reply = await bridge.handleMessage({ type: 'fetch-page', requestId: 'r9', url: 'https://example.com/watch' });
+  assert.equal(reply.type, 'fetch-page-reply');
+  assert.equal(reply.kind, 'final');
+  assert.equal(reply.finalUrl, 'https://example.com/watch');
+  assert.equal(reply.html, html);
+  assert.equal(calls[0].method, 'GET');
+});
+
+test('fetch-page caps the page bytes and never holds a huge page', async () => {
+  const huge = 'x'.repeat(2 * 512 * 1024);
+  const { bridge } = makeBridge({
+    responses: [
+      { url: 'https://example.com/huge', method: 'GET', status: 200, headers: { 'content-type': 'text/html' }, body: huge },
+    ],
+  });
+  const reply = await bridge.handleMessage({ type: 'fetch-page', requestId: 'r10', url: 'https://example.com/huge' });
+  assert.equal(reply.kind, 'final');
+  assert.equal(reply.bounded, true);
+  assert.equal(reply.html.length, 512 * 1024);
+});
+
+test('fetch-page blocks a loopback URL without fetching', async () => {
+  const { bridge, calls } = makeBridge({ responses: [] });
+  const reply = await bridge.handleMessage({ type: 'fetch-page', requestId: 'r11', url: 'http://127.0.0.1/watch' });
+  assert.equal(reply.kind, 'failed');
+  assert.equal(reply.code, 'blocked');
+  assert.equal(calls.length, 0);
+});
+
+test('fetch-page reports a non-ok page as failed without bytes', async () => {
+  const { bridge } = makeBridge({
+    responses: [
+      { url: 'https://example.com/gone', method: 'GET', status: 404, body: '' },
+    ],
+  });
+  const reply = await bridge.handleMessage({ type: 'fetch-page', requestId: 'r12', url: 'https://example.com/gone' });
+  assert.equal(reply.kind, 'failed');
+  assert.equal(reply.code, 'network');
+  assert.equal(reply.html, undefined);
+});

@@ -14,5 +14,5 @@ import platform.UIKit.UIViewController
  */
 fun MainViewController(): UIViewController = ComposeUIViewController {
     val graph = remember { IosAppGraph() }
-    App(graph = graph, offerClipboardCheck = true)
+    App(graph = graph)
 }

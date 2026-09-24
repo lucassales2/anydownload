@@ -191,6 +191,8 @@
     <string name="preview_unavailable">Não foi possível carregar uma prévia neste aparelho. Você ainda pode iniciar o download.</string>
     <string name="preview_timed_out">A prévia demorou demais. Você ainda pode iniciar o download.</string>
     <string name="preview_back">Voltar</string>
+    <string name="preview_edit">Editar download</string>
+    <string name="preview_edit_hide">Ocultar edição</string>
     <string name="preview_views">%1$s visualizações</string>
     <string name="preview_uploaded">Publicado em %1$s</string>
     <string name="preview_playlist_count">Playlist · %1$s itens</string>
@@ -210,6 +212,8 @@
     <string name="url_error_whitespace">A URL não pode conter espaços.</string>
     <string name="url_error_scheme">Só fontes http:// e https:// são aceitas.</string>
     <string name="url_error_host">A URL não tem um host.</string>
+    <string name="url_error_userinfo">Este URL contém credenciais embutidas e foi recusado.</string>
+    <string name="url_error_one_only">Informe um único URL de origem.</string>
     <string name="path_error_absolute">Escolha uma pasta dentro da raiz de downloads, não um caminho absoluto.</string>
     <string name="path_error_empty_segment">O caminho da pasta tem um segmento vazio.</string>
     <string name="path_error_dot">O caminho da pasta não pode usar "." ou "..".</string>
@@ -258,7 +262,7 @@
     <string name="preset_no_options">Sem opções</string>
     <string name="section_appearance">Aparência</string>
     <string name="section_tools">Ferramentas</string>
-    <string name="tools_hint">As versões vêm da busca no PATH local. yt-dlp e ffmpeg são necessários para URLs de sites e vídeos; downloads de arquivos diretos funcionam sem eles.</string>
+    <string name="tools_hint">As versões vêm da busca no PATH local. Uma página de mídia simples não precisa de yt-dlp nem ffmpeg; downloads de arquivos diretos também funcionam sem eles, e URLs de sites e outros vídeos ainda precisam.</string>
     <string name="tool_not_checked">Não verificado</string>
     <string name="tool_available">Disponível</string>
     <string name="tool_not_found">Não encontrado</string>

@@ -7,12 +7,16 @@ import com.anydownlod.core.domain.DownloadRequest
 import com.anydownlod.core.domain.JobErrorCode
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.engine.HttpDownloadEngine
+import com.anydownlod.core.engine.UrlCheck
+import com.anydownlod.core.engine.UrlPolicy
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.HttpBody
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,12 +50,14 @@ class AndroidEngineTest {
         fileStore: FileStore,
         root: Path,
         scope: CoroutineScope,
+        urlCheck: (String) -> UrlCheck = UrlPolicy::check,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
         fileStore = fileStore,
         settings = InMemorySettingsRepository(AppSettings(downloadRoot = root.toString())),
         scope = scope,
         ioDispatcher = Dispatchers.Default,
+        urlCheck = urlCheck,
     )
 
     private fun chaquopyEngine(
@@ -199,6 +205,201 @@ class AndroidEngineTest {
             assertTrue(routing.jobs.value.first { it.id == job.id }.artifacts.isEmpty())
             assertEquals(0, port.received.size)
         } finally {
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun htmlFixtureCompletesThroughHttpEngineWithoutPython() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-android-html-")
+        val mediaUrl = "https://fixtures.example.net/clip.bin"
+        val payload = ByteArray(4096) { 3 }
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/watch") { exchange ->
+                val body = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val port = FakeChaquopyPort(available = true)
+            val http = httpEngine(
+                FakeTransfer { url ->
+                    if (url.startsWith("http://127.0.0.1:")) {
+                        val html = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                        HttpResponse.Final(200, "text/html; charset=utf-8", html.size.toLong(), FakeBody(listOf(html)))
+                    } else {
+                        HttpResponse.Final(200, "application/octet-stream", payload.size.toLong(), FakeBody(listOf(payload)))
+                    }
+                },
+                JavaNetFileStore(root),
+                root,
+                scope,
+                urlCheck = fixtureCheck,
+            )
+            val chaquopy = chaquopyEngine(port, root, scope)
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck)
+            val routing = AndroidRoutingEngine(http = http, chaquopy = chaquopy, classify = classifier::route, scope = scope)
+
+            val job = routing.submit(
+                DownloadRequest(
+                    sourceUrl = "http://127.0.0.1:${server.address.port}/watch",
+                    options = DownloadOptions(),
+                    idempotencyKey = "android-html-1",
+                )
+            )
+            val finished = waitFor(routing, job.id, JobState.COMPLETED)
+
+            assertEquals(JobState.COMPLETED, finished.state)
+            assertEquals("clip.bin", finished.artifacts.single().relativePath)
+            assertTrue(Files.isRegularFile(root.resolve("clip.bin")))
+            assertEquals(0, port.received.size, "a matching page must never reach the Chaquopy port")
+        } finally {
+            server.stop(0)
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun unresolvedHtmlStillDispatchesIntoTheFakeChaquopyPort() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-android-html2-")
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/page") { exchange ->
+                val body = "<html><body><p>no media here</p></body></html>".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val port = FakeChaquopyPort(
+                available = true,
+                result = ChaquopyResult.Finished("media/One site video.mp4", 42L),
+            )
+            val httpSeen = AtomicBoolean(false)
+            val http = httpEngine(
+                FakeTransfer { httpSeen.set(true); HttpResponse.Unavailable("unused") },
+                JavaNetFileStore(root),
+                root,
+                scope,
+            )
+            val chaquopy = chaquopyEngine(port, root, scope)
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck)
+            val routing = AndroidRoutingEngine(http = http, chaquopy = chaquopy, classify = classifier::route, scope = scope)
+
+            val request = DownloadRequest(
+                sourceUrl = "http://127.0.0.1:${server.address.port}/page",
+                options = DownloadOptions(),
+                idempotencyKey = "android-html-2",
+            )
+            val job = routing.submit(request)
+            val finished = waitFor(routing, job.id, JobState.COMPLETED)
+
+            assertEquals(listOf(request), port.received, "unresolved HTML must reach the Chaquopy port")
+            assertEquals("media/One site video.mp4", finished.artifacts.single().relativePath)
+            assertFalse(httpSeen.get())
+        } finally {
+            server.stop(0)
+            scope.cancel()
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancelOfHtmlFixtureJobLeavesNothingBehind() = runBlocking {
+        val root = Files.createTempDirectory("anydownlod-android-html-cancel-")
+        val mediaUrl = "https://fixtures.example.net/stall.bin"
+        val gate = Channel<Unit>(capacity = Channel.UNLIMITED)
+        val server = HttpServer.create(InetSocketAddress(0), 0)
+        val fixtureCheck: (String) -> UrlCheck = { url ->
+            if (url.startsWith("http://127.0.0.1:${server.address.port}")) {
+                UrlCheck.Allowed(url)
+            } else {
+                UrlPolicy.check(url)
+            }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            server.createContext("/watch") { exchange ->
+                val body = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+                exchange.close()
+            }
+            server.start()
+
+            val port = FakeChaquopyPort(available = true)
+            val http = httpEngine(
+                FakeTransfer { url ->
+                    if (url.startsWith("http://127.0.0.1:")) {
+                        val html = """<html><body><video src="$mediaUrl"></video></body></html>""".toByteArray()
+                        HttpResponse.Final(200, "text/html; charset=utf-8", html.size.toLong(), FakeBody(listOf(html)))
+                    } else {
+                        HttpResponse.Final(
+                            statusCode = 200,
+                            contentType = "application/octet-stream",
+                            totalBytes = null,
+                            body = GatedBody(listOf(ByteArray(1024), ByteArray(1024)), gate),
+                        )
+                    }
+                },
+                JavaNetFileStore(root),
+                root,
+                scope,
+                urlCheck = fixtureCheck,
+            )
+            val chaquopy = chaquopyEngine(port, root, scope)
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck)
+            val routing = AndroidRoutingEngine(http = http, chaquopy = chaquopy, classify = classifier::route, scope = scope)
+
+            val job = routing.submit(
+                DownloadRequest(
+                    sourceUrl = "http://127.0.0.1:${server.address.port}/watch",
+                    options = DownloadOptions(),
+                    idempotencyKey = "android-html-cancel-1",
+                )
+            )
+            withTimeout(10_000) {
+                routing.jobs.first { jobs -> jobs.any { it.id == job.id && it.state == JobState.DOWNLOADING } }
+            }
+
+            val cancelled = routing.cancel(job.id)
+            assertNotNull(cancelled)
+            withTimeout(10_000) {
+                routing.jobs.first { jobs -> jobs.any { it.id == job.id && it.state == JobState.CANCELLED } }
+            }
+            withTimeout(10_000) {
+                while (Files.list(root).use { it.count() } != 0L) delay(20)
+            }
+            assertEquals(JobState.CANCELLED, cancelled.state)
+            assertTrue(routing.jobs.value.first { it.id == job.id }.artifacts.isEmpty())
+            assertEquals(0, port.received.size)
+        } finally {
+            server.stop(0)
             scope.cancel()
             root.toFile().deleteRecursively()
         }

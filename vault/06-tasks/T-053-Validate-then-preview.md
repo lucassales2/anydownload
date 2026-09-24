@@ -31,10 +31,16 @@ Reuse `SourceUrlValidator` and `ClipboardLink.compatibleUrl`. Do not add a secon
 
 ## Acceptance criteria
 
-- [ ] UI tests: an invalid string stays on the field with an error; `https://example.com/watch` opens the preview; the job list is unchanged.
-- [ ] No clipboard read was added back.
-- [ ] `./gradlew :shared:ui:jvmTest` passes.
+- [x] UI tests: an invalid string stays on the field with an error; `https://example.com/watch` opens the preview; the job list is unchanged.
+- [x] No clipboard read was added back.
+- [x] `./gradlew :shared:ui:jvmTest` passes.
 
 ## Evidence / notes
 
-Not started. Use fixture hosts only. Do not paste private URLs.
+Done 2026-09-24.
+
+- `SourceUrlValidator` now rejects userinfo in the authority (`SourceUrlError.Userinfo`), matching what `UrlPolicy` already refuses at engine level. Added resource strings `url_error_userinfo` ("This URL embeds credentials and was refused.") and `url_error_one_only` ("Enter one source URL.") in EN and pt-BR, mapped in `StringMappings.toUiText`.
+- New `AddFormPresenter.validateForPreview()`: one compatible HTTP(S) URL returns it (caller opens `PreviewScreen`); blank, whitespace, non-HTTP(S), missing-host, userinfo, and multi-line inputs keep the field as it is and show the existing validator message on the status line. It never starts a job and never clears the field. `HomeScreen` routes the Download button through it, so the field no longer feeds the batch path; pasting or typing alone still does not submit.
+- Failed preview stays on the preview with the redacted error and Back (existing `PreviewScreen` failure phase), and never claims a job exists.
+- Tests: `SourceUrlValidatorTest.rejectsUserinfoCredentialsInTheAuthority` (plus path `@` allowed), `AddFormPresenterTest.validateForPreviewAcceptsOneCompatibleUrlAndNeverStartsAJob` and `...RejectsBlankSchemeUserinfoAndBatches`, `AddFormUiTest.invalidInputStaysOnTheFieldWithoutJobsOrPreview`, `...MoreThanOneLineStaysOnTheFieldWithoutJobs`, `...TypingAUrlAndClickingDownloadOpensThePreview` (preview opens, job list unchanged until Download is clicked).
+- Verification: `./gradlew :shared:core:jvmTest :shared:ui:jvmTest` — 102 + 69 tests, 0 failures; `:apps:desktop:compileKotlin`, `:apps:android:compileDebugKotlin`, `:shared:ui:compileKotlinIosSimulatorArm64`, `:shared:ui:compileKotlinWasmJs` all BUILD SUCCESSFUL. `:shared:core:wasmJsBrowserTest` cannot launch on this machine (no `CHROME_BIN`); not a code regression.

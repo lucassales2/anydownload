@@ -14,6 +14,9 @@ import com.anydownlod.core.domain.JobProgress
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.StartPolicy
+import com.anydownlod.core.extract.GenericExtraction
+import com.anydownlod.core.extract.GenericExtractionFailure
+import com.anydownlod.core.extract.GenericExtractor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -236,39 +239,51 @@ class WebExtensionEngine(
                     if (UrlClassifier.classify(probe.contentType) ==
                         UrlClassifier.Classification.NEEDS_EXTRACTOR
                     ) {
-                        fail(
-                            jobId,
-                            JobErrorCode.EXTRACTION_FAILURE,
-                            "This URL needs an extractor, which this build does not include.",
-                            retryable = false,
-                        )
-                        return
-                    }
-                    val outcome = withContext(ioDispatcher) {
-                        bridge.download(finalUrl, jobId) { downloaded, total ->
-                            update(jobId, persistNow = false) {
-                                it.copy(
-                                    progress = JobProgress(
-                                        phase = "downloading",
-                                        percent = total?.takeIf { total != 0L }
-                                            ?.let { (downloaded.toDouble() / it) * 100.0 },
-                                        downloadedBytes = downloaded,
-                                        totalBytes = total,
-                                    ),
-                                )
+                        // T-050: the extension fetches the page, the shared
+                        // Kotlin extractor (never a second JavaScript
+                        // extractor) picks the one media URL, and the
+                        // extension saves that file with the D2 path.
+                        when (val page = withContext(ioDispatcher) { bridge.fetchPage(finalUrl) }) {
+                            is WebPage.Failed -> fail(jobId, mapFailure(page.code, page.message))
+
+                            is WebPage.Final -> {
+                                val pageUrl = page.finalUrl
+                                when (val policy = UrlPolicy.check(pageUrl)) {
+                                    is UrlCheck.Rejected -> {
+                                        fail(
+                                            jobId,
+                                            JobErrorCode.INVALID_URL_OPTIONS,
+                                            "The final page address is local or reserved and was refused.",
+                                        )
+                                        return
+                                    }
+
+                                    is UrlCheck.Allowed -> Unit
+                                }
+                                when (
+                                    val extraction = GenericExtractor.extract(
+                                        pageUrl = pageUrl,
+                                        html = page.html,
+                                    )
+                                ) {
+                                    is GenericExtraction.Direct -> {
+                                        downloadViaBridge(jobId, extraction.url, mediaType, totalBytes = null)
+                                    }
+
+                                    is GenericExtraction.Failed -> {
+                                        fail(
+                                            jobId,
+                                            JobErrorCode.EXTRACTION_FAILURE,
+                                            redactedExtractionMessage(extraction.reason),
+                                            retryable = false,
+                                        )
+                                    }
+                                }
                             }
                         }
+                        return
                     }
-                    currentCoroutineContext().ensureActive()
-                    when (outcome) {
-                        is WebDownload.Completed -> complete(jobId, outcome, mediaType, probe.totalBytes)
-                        is WebDownload.Failed -> fail(jobId, mapFailure(outcome.code, outcome.message, outcome.retryable))
-                        is WebDownload.Aborted -> if (cancelRequested[jobId] == true) {
-                            confirmCancelled(jobId)
-                        } else {
-                            fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download stopped before finishing.")
-                        }
-                    }
+                    downloadViaBridge(jobId, finalUrl, mediaType, probe.totalBytes)
                 }
             }
         } catch (cancelled: CancellationException) {
@@ -280,6 +295,49 @@ class WebExtensionEngine(
                 fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download failed. Check the network and retry.")
             }
         }
+    }
+
+    /** The D2 save step: one validated URL handed to the extension downloader. */
+    private suspend fun downloadViaBridge(jobId: String, url: String, mediaType: MediaType, totalBytes: Long?) {
+        when (val policy = UrlPolicy.check(url)) {
+            is UrlCheck.Rejected -> {
+                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, redactedUrlReason(policy.reason))
+                return
+            }
+
+            is UrlCheck.Allowed -> Unit
+        }
+        val outcome = withContext(ioDispatcher) {
+            bridge.download(url, jobId) { downloaded, total ->
+                update(jobId, persistNow = false) {
+                    it.copy(
+                        progress = JobProgress(
+                            phase = "downloading",
+                            percent = total?.takeIf { total != 0L }
+                                ?.let { (downloaded.toDouble() / it) * 100.0 },
+                            downloadedBytes = downloaded,
+                            totalBytes = total,
+                        ),
+                    )
+                }
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        when (outcome) {
+            is WebDownload.Completed -> complete(jobId, outcome, mediaType, totalBytes)
+            is WebDownload.Failed -> fail(jobId, mapFailure(outcome.code, outcome.message, outcome.retryable))
+            is WebDownload.Aborted -> if (cancelRequested[jobId] == true) {
+                confirmCancelled(jobId)
+            } else {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download stopped before finishing.")
+            }
+        }
+    }
+
+    private fun redactedExtractionMessage(reason: GenericExtractionFailure): String = when (reason) {
+        GenericExtractionFailure.UnsupportedPageUrl -> "The page URL is not an HTTP(S) address this app can read."
+        GenericExtractionFailure.NoMedia -> "This page has no media this app can download."
+        GenericExtractionFailure.MultipleMedia -> "This page has more than one media element, so the app cannot choose one."
     }
 
     private fun complete(jobId: String, outcome: WebDownload.Completed, mediaType: MediaType, probeTotal: Long?) {

@@ -28,7 +28,7 @@ class AndroidRouteClassifierTest {
             exchange.close()
         }
         try {
-            val classifier = AndroidRouteClassifier(2_000, 2_000, fixtureCheck(server))
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck(server))
             assertEquals(
                 AndroidRoute.DIRECT_FILE,
                 classifier.route("http://127.0.0.1:${server.address.port}/files/tiny.bin"),
@@ -39,17 +39,41 @@ class AndroidRouteClassifierTest {
     }
 
     @Test
-    fun htmlPageRoutesToChaquopy() {
+    fun htmlWithoutMediaRoutesToChaquopy() {
         val server = server()
         server.createContext("/watch") { exchange ->
+            val body = "<html><body><p>no media element</p></body></html>".toByteArray()
             exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
-            exchange.sendResponseHeaders(200, 12)
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
             exchange.close()
         }
         try {
-            val classifier = AndroidRouteClassifier(2_000, 2_000, fixtureCheck(server))
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck(server))
             assertEquals(
                 AndroidRoute.CHAQUOPY,
+                classifier.route("http://127.0.0.1:${server.address.port}/watch"),
+            )
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun htmlFixtureWithOneMediaElementRoutesToHttpEngine() {
+        val server = server()
+        server.createContext("/watch") { exchange ->
+            val body =
+                """<html><body><video src="https://fixtures.example.net/clip.bin"></video></body></html>""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "text/html; charset=utf-8")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+            exchange.close()
+        }
+        try {
+            val classifier = AndroidRouteClassifier(connectTimeoutMillis = 2_000, readTimeoutMillis = 2_000, urlCheck = fixtureCheck(server))
+            assertEquals(
+                AndroidRoute.DIRECT_FILE,
                 classifier.route("http://127.0.0.1:${server.address.port}/watch"),
             )
         } finally {

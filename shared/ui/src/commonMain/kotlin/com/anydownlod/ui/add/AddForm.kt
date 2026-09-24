@@ -112,7 +112,7 @@ import com.anydownlod.ui.theme.SegmentedChoice
 import com.anydownlod.ui.theme.StatusTone
 import org.jetbrains.compose.resources.stringResource
 
-private val qualityOptions = listOf(
+internal val qualityOptions = listOf(
     QualityPreference.Best,
     QualityPreference.Worst,
     QualityPreference.Resolution("2160"),
@@ -123,7 +123,7 @@ private val qualityOptions = listOf(
     QualityPreference.Resolution("360"),
 )
 
-private val bitrateOptions = listOf("", "128", "192", "256", "320")
+internal val bitrateOptions = listOf("", "128", "192", "256", "320")
 
 /**
  * The add composer: a source field with the primary action beside it, format
@@ -343,10 +343,11 @@ private fun FolderField(state: AddFormState, presenter: AddFormPresenter, modifi
 
 /**
  * URL field with Paste and Download beside it: type or paste a link, then
- * start the download from the same row.
+ * start the download from the same row. This is the only control on the idle
+ * home screen; the add-form options use it too.
  */
 @Composable
-private fun UrlEntryRow(
+internal fun UrlEntryRow(
     urlText: String,
     downloadEnabled: Boolean,
     onUrlChange: (String) -> Unit,
@@ -592,14 +593,16 @@ private fun LabeledCheckbox(
 }
 
 @Composable
-private fun <T> ChoiceRow(
+internal fun <T> ChoiceRow(
     label: String,
     options: List<T>,
     selected: T,
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    optionTag: (T) -> String? = { null },
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
@@ -610,12 +613,13 @@ private fun <T> ChoiceRow(
             selected = selected,
             optionLabel = optionLabel,
             onSelect = onSelect,
+            optionTag = optionTag,
         )
     }
 }
 
 @Composable
-private fun MediaType.displayName(): String = when (this) {
+internal fun MediaType.displayName(): String = when (this) {
     MediaType.VIDEO -> text(Res.string.media_video)
     MediaType.AUDIO -> text(Res.string.media_audio)
     MediaType.CAPTIONS -> text(Res.string.media_captions)
@@ -623,7 +627,7 @@ private fun MediaType.displayName(): String = when (this) {
 }
 
 @Composable
-private fun VideoContainerProfile.displayName(): String = when (this) {
+internal fun VideoContainerProfile.displayName(): String = when (this) {
     VideoContainerProfile.AUTO -> text(Res.string.auto)
     VideoContainerProfile.MP4 -> "MP4"
     VideoContainerProfile.IOS_COMPATIBLE -> text(Res.string.profile_ios)
@@ -639,14 +643,14 @@ private fun VideoCodec.displayName(): String = when (this) {
 }
 
 @Composable
-private fun QualityPreference.displayName(): String = when (this) {
+internal fun QualityPreference.displayName(): String = when (this) {
     QualityPreference.Best -> text(Res.string.quality_best)
     QualityPreference.Worst -> text(Res.string.quality_worst)
     is QualityPreference.Resolution -> text(Res.string.quality_resolution, token)
 }
 
 @Composable
-private fun AudioContainer.displayName(): String = when (this) {
+internal fun AudioContainer.displayName(): String = when (this) {
     AudioContainer.M4A -> "M4A"
     AudioContainer.MP3 -> "MP3"
     AudioContainer.OPUS -> "Opus"

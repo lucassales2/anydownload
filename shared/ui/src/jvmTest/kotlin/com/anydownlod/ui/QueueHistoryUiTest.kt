@@ -31,7 +31,7 @@ class QueueHistoryUiTest {
     @Test
     fun startCancelRetryRemoveAndDeleteThroughTheUi() = runComposeUiTest {
         val graph = InMemoryAppGraph.seeded()
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         // Downloading: Start only exists on the pending row.
         onNodeWithTag("queue-list").performScrollToNode(hasTestTag("queue-start-seed-pending"))
@@ -68,7 +68,7 @@ class QueueHistoryUiTest {
     @Test
     fun bulkStartAndBulkRemoveOperateOnTheSelection() = runComposeUiTest {
         val graph = InMemoryAppGraph.seeded()
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         // Select two startable rows, then use the bulk action.
         onNodeWithTag("queue-list").performScrollToNode(hasTestTag("queue-select-seed-pending"))
@@ -103,7 +103,7 @@ class QueueHistoryUiTest {
         val graph = object : AppGraph by base {
             override val openUrl: (String) -> Unit = { opened = it }
         }
-        setContent { App(graph) }
+        setContent { ShellUiHarness(graph) }
 
         onNodeWithTag("queue-list").performScrollToNode(hasTestTag("queue-open-seed-downloading"))
         onNodeWithTag("queue-open-seed-downloading").performClick()

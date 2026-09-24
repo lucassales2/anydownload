@@ -37,11 +37,17 @@ Package: `com.anydownlod.core.extract`. Do not create a Gradle module.
 
 ## Acceptance criteria
 
-- [ ] Unit tests: one `<video src>`, one `<audio src>`, one nested `<source>`, a relative URL, zero matches, two matches, and a policy-rejected target (userinfo or non-HTTP).
-- [ ] Tests use fixture strings. No live host.
-- [ ] The notice names the upstream revision. `generic.py` is not vendored.
-- [ ] Common code still has no process or Python API.
+- [x] Unit tests: one `<video src>`, one `<audio src>`, one nested `<source>`, a relative URL, zero matches, two matches, and a policy-rejected target (userinfo or non-HTTP).
+- [x] Tests use fixture strings. No live host.
+- [x] The notice names the upstream revision. `generic.py` is not vendored.
+- [x] Common code still has no process or Python API.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- Re-read `yt_dlp/extractor/generic.py` at the Android pin `yt-dlp==2026.8.19` (upstream tag `2026.08.19`, commit `3a08beaf031ab68f966401ead017ac81fe8486cf`, fetched from GitHub on this date). Translated only the HTML5-media subset: `<video src>`, `<audio src>`, and nested `<source src>` (case-insensitive), the upstream `urljoin`-style resolution, `orderedSet()` dedupe, and `unescapeHTML`/`\/` de-escaping. Playlists, embeds, iframes, JSON-LD, meta refresh, HLS, DASH stay out.
+- New `com.anydownlod.core.extract.GenericExtractor` in `shared/core/src/commonMain/.../extract/GenericExtractor.kt` with an Unlicense header naming the revision; short notice also at `shared/core/NOTICE.md`. `generic.py` is not vendored. No ProcessBuilder, no Python, no new Gradle module.
+- API: `GenericExtractor.extract(pageUrl, html)` → `GenericExtraction.Direct(url)` or `Failed(UnsupportedPageUrl | NoMedia | MultipleMedia)` — typed and redacted, never carrying HTML. Every candidate goes through the existing `UrlPolicy`; one survivor wins, zero or more than one fail closed.
+- Tests: `GenericExtractorTest` (16 cases) in `shared/core/src/commonTest`, fixture strings on example.org only: video src, audio src, nested source, relative + `../` + scheme-relative resolution, query/fragment base stripping, uppercase tags, `&amp;`/`&#x2F;` entities, dedupe, zero matches, source-outside-element ignored, two matches fail closed, userinfo and ftp rejected to NoMedia, one-good-plus-one-bad wins with the good one, non-http page URL fails typed.
+- Verification: `./gradlew :shared:core:jvmTest` — 117 tests, 0 failures; `:shared:core:compileKotlinMetadata`/`compileKotlinIosSimulatorArm64`/`compileKotlinWasmJs` and `:apps:android:compileDebugKotlin` all BUILD SUCCESSFUL; `:shared:ui:jvmTest` still green.

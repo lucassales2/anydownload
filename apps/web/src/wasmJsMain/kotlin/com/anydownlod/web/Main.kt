@@ -13,6 +13,6 @@ fun main() {
         // browser extension (see apps/web-extension). The page never fetches
         // an arbitrary origin itself.
         val graph = remember { WebAppGraph() }
-        App(graph = graph, offerClipboardCheck = true)
+        App(graph = graph)
     }
 }

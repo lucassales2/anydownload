@@ -29,10 +29,16 @@ A desktop HTML fixture with one media element downloads without `ProcessBuilder`
 
 ## Acceptance criteria
 
-- [ ] Desktop tests: fixture HTML completes with no process; a non-matching site URL still reaches the CLI fake; direct file still skips the CLI.
-- [ ] Cancel of the HTML-backed job leaves no completed file.
-- [ ] `./gradlew :apps:desktop:test` passes.
+- [x] Desktop tests: fixture HTML completes with no process; a non-matching site URL still reaches the CLI fake; direct file still skips the CLI.
+- [x] Cancel of the HTML-backed job leaves no completed file.
+- [x] `./gradlew :apps:desktop:test` passes.
 
 ## Evidence / notes
 
-Not started.
+Done 2026-09-24.
+
+- `DesktopRouteClassifier` now decides by the page body, not just the HEAD: when the HEAD probe says HTML/unknown, a bounded GET (≤ `HttpDownloadEngine.MAX_HTML_BYTES`, same policy-checked redirect budget) feeds the shared `GenericExtractor`. Exactly one media URL that passes policy → `DIRECT_FILE` (owned by `HttpDownloadEngine`); zero, several, page I/O errors, or a loopback/reserved candidate → `YTDLP_CLI`, so unresolved HTML and site URLs keep the CLI path and its missing-tool behavior. Direct files still never spawn a process. `Main.kt` wiring unchanged (`classify = { url -> DesktopRouteClassifier().route(url) }`); jobs persist through the existing JSON store as before.
+- Seam: the shared `GenericExtractor.extract` gained an optional `candidateCheck` (default `UrlPolicy::check`), and `HttpDownloadEngine` passes its own `urlCheck` — production behavior identical, tests may allow exactly one loopback fixture origin (mirrors the engine's existing `urlCheck` pattern).
+- Settings still report yt-dlp/ffmpeg; `tools_hint` (EN + pt-BR) now says a simple media page needs neither yt-dlp nor ffmpeg while site and other video URLs still do; the FreshWindows UI test asserts the new copy.
+- Tests: classifier — `htmlFixtureWithOneMediaElementIsRoutedToTheHttpEngine`, `htmlWithoutMediaIsRoutedToTheCli` (both over a local `HttpServer`, fixture exception for exactly the loopback origin; the removed `htmlPageIsRoutedToTheCli` was replaced). Routing — `htmlFixtureRoutedByClassifierCompletesWithoutProcess` (real classifier + fixture page + fake transfer: COMPLETED, artifact file on disk, zero processes), `nonMatchingHtmlPageStillReachesTheCliPath` (CLI fake runs, http engine untouched), `cancelOfHtmlFixtureJobLeavesNoCompletedFile` (CANCELLED, download root empty). `FreshWindowsInstallWithoutYtDlpTest` updated for the link-only home (no queue chrome in `App`): asserts the job lands FAILED with the missing-tool message in the persisted graph instead of clicking the old shell tabs.
+- Verification: `./gradlew :apps:desktop:test` — 101 tests, 0 failures; `:shared:core:jvmTest` 124 and `:shared:ui:jvmTest` 71, both 0 failures; iOS-sim/Wasm/Android compiles BUILD SUCCESSFUL.
