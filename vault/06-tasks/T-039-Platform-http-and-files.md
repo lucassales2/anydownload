@@ -28,11 +28,37 @@ expect/actual (or injected ports) for HTTP GET/HEAD with redirect policy and for
 
 ## Acceptance criteria
 
-- [ ] JVM tests write, cancel, and delete under a temp root.
-- [ ] Android and iOS actuals compile. A missing SDK is recorded, not treated as a D2 design failure.
-- [ ] Web actual cannot silently fetch a third-party URL.
-- [ ] Common code still has no `ProcessBuilder`.
+- [x] JVM tests write, cancel, and delete under a temp root.
+- [x] Android and iOS actuals compile. A missing SDK is recorded, not treated as a D2 design failure.
+- [x] Web actual cannot silently fetch a third-party URL.
+- [x] Common code still has no `ProcessBuilder`.
 
 ## Evidence / notes
 
-Not started.
+Done on 2026-09-23. Adapters land on the T-038 ports; T-040 wires desktop, T-041 Android, T-042 iOS, T-043 web.
+
+Commands run:
+
+- `./gradlew :shared:core:jvmTest` - 92 tests, 0 failures (86 common + 6 JVM platform integration).
+- `./gradlew :shared:core:compileKotlinWasmJs :shared:core:compileKotlinIosSimulatorArm64 :shared:core:compileAndroidMain` - all target families compile.
+- `grep -rn ProcessBuilder shared/core/src/commonMain/` - no process API in common code.
+
+JVM tests (`JavaNetPlatformTest`, real local `com.sun.net.httpserver.HttpServer`, fixture exception that allows exactly the one test-server origin, everything else goes to `UrlPolicy` - strictly test-only, per T-006):
+
+- `streamsEightMibWithoutBufferingWholeFile` - 8 MiB payload, streamed in 64 KiB chunks, artifact bytes verified.
+- `cancelMidStreamDeletesTheTempFile` - stalling server; cancel; CANCELLED, temp file deleted, no artifact.
+- `deleteArtifactsRemovesTheFileUnderTheRoot`
+- `followsRelativeLocationResolvedByThePlatform` - 302 with relative `Location`; artifact named from the final hop.
+- `fileStoreRejectsTraversalOutsideTheRoot` - `../`, `a/../../`, absolute escapes refused.
+- `fileStoreWritesAndDeletesUnderTheRoot`
+
+The shared engine gained an `HttpResponse.Unavailable` result (typed "engine unavailable" job error; no fake download). Common test `unavailableTransferFailsAsEngineUnavailable` covers it.
+
+Delivered:
+
+- JVM: `JavaNetHttpTransfer` (java.net, one hop per call, relative `Location` resolved), `JavaNetFileStore` (java.nio, normalized, root-escape refused).
+- Android: `JavaNetHttpTransfer` / `JavaNetFileStore` mirrors (java.net/java.nio are platform APIs; no new Gradle dependency added anywhere).
+- iOS: `IosHttpTransfer` compiles and returns typed `Unavailable`; it is deliberately a placeholder - the real in-process NSURLSession fetch that also preserves per-hop redirect validation lands in T-042 (recorded here so this is a plan, not a design failure).
+- Web: `WebExtensionTransfer` performs no request (typed `Unavailable`); it cannot silently fetch any third-party URL. T-043 fills the extension bridge behind the same interface.
+
+No Ktor dependency was added to `shared/core` this task; java.net/java.nio stay the JVM/Android implementation detail.

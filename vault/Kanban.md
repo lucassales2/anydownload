@@ -6,6 +6,7 @@ tags: [project, board]
 ## Backlog
 
 - [ ] [T-007 — Define UX and review the contract](06-tasks/T-007-Define-UX-and-contract.md) #M0 #P1
+
 - [ ] [T-009 — Local engine vertical slice](06-tasks/T-009-Backend-vertical-slice.md) #M1 #P0
 - [ ] [T-010 — Local flow on all four targets](06-tasks/T-010-Remote-vertical-slice.md) #M1 #P0
 - [ ] [T-011 — Durable queue, recovery and live events](06-tasks/T-011-Durable-queue.md) #M2 #P0
@@ -21,18 +22,8 @@ tags: [project, board]
 - [ ] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #M3 #P1
 - [ ] [T-022 — Audit MeTube parity with evidence](06-tasks/T-022-Parity-audit.md) #M3 #P0
 - [ ] [T-023 — Portfolio builds](06-tasks/T-023-Release-readiness.md) #M4 #P0
-- [ ] [T-038 — Shared HTTP download engine](06-tasks/T-038-Shared-http-engine.md) #D2 #P0
-- [ ] [T-039 — Platform HTTP and file adapters](06-tasks/T-039-Platform-http-and-files.md) #D2 #P0
-- [ ] [T-040 — Desktop routes direct files through Kotlin HTTP](06-tasks/T-040-Desktop-http-route.md) #D2 #P0
-- [ ] [T-041 — Android HTTP engine and Chaquopy adapter](06-tasks/T-041-Android-http-and-chaquopy.md) #D2 #P0
-- [ ] [T-042 — iOS HTTP download](06-tasks/T-042-Ios-http-download.md) #D2 #P0
-- [ ] [T-043 — Web extension download path](06-tasks/T-043-Web-extension-download.md) #D2 #P0
-- [ ] [T-044 — Phase 2 verification](06-tasks/T-044-Phase-2-verification.md) #D2 #P0
 
 ## Ready
-
-- [ ] [T-006 — Review security and licensing](06-tasks/T-006-Review-security-licensing.md) #M0 #D2 #P0
-- [ ] [T-004 — Validate all four Kotlin targets](06-tasks/T-004-Validate-KMP-targets.md) #M0 #P0
 
 ## In progress
 
@@ -48,6 +39,15 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-044 — Phase 2 verification](06-tasks/T-044-Phase-2-verification.md) #D2 #P0
+- [x] [T-004 — Validate all four Kotlin targets](06-tasks/T-004-Validate-KMP-targets.md) #M0 #P0
+- [x] [T-043 — Web extension download path](06-tasks/T-043-Web-extension-download.md) #D2 #P0
+- [x] [T-042 — iOS HTTP download](06-tasks/T-042-Ios-http-download.md) #D2 #P0
+- [x] [T-041 — Android HTTP engine and Chaquopy adapter](06-tasks/T-041-Android-http-and-chaquopy.md) #D2 #P0
+- [x] [T-040 — Desktop routes direct files through Kotlin HTTP](06-tasks/T-040-Desktop-http-route.md) #D2 #P0
+- [x] [T-039 — Platform HTTP and file adapters](06-tasks/T-039-Platform-http-and-files.md) #D2 #P0
+- [x] [T-038 — Shared HTTP download engine](06-tasks/T-038-Shared-http-engine.md) #D2 #P0
+- [x] [T-006 — Review security and licensing](06-tasks/T-006-Review-security-licensing.md) #M0 #D2 #P0
 - [x] [T-003 — Approve product scope and naming](06-tasks/T-003-Approve-product-scope.md) #M0 #D2 #P0
 - [x] [T-036 — Phase 1 verification](06-tasks/T-036-Phase-1-verification.md) #D1 #P0
 - [x] [T-035 — Cookies, presets, and subscription checks](06-tasks/T-035-Desktop-cookies-presets-subscriptions.md) #D1 #P1

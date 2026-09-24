@@ -62,4 +62,76 @@ class ExecutableOnPathTest {
 
         assertEquals(exe.toString(), ExecutableOnPath.findOnPath("yt-dlp", path, windows = true))
     }
+
+    @Test
+    fun macFindsAHomebrewInstallWhenPathDoesNotIncludeIt() {
+        val path = Files.createTempDirectory("anydownlod-path-gui")
+        val homebrew = Files.createTempDirectory("anydownlod-homebrew-bin")
+        val binary = homebrew.resolve("yt-dlp")
+        Files.writeString(binary, "#!/bin/sh\n")
+        binary.toFile().setExecutable(true)
+
+        assertEquals(
+            binary.toString(),
+            ExecutableOnPath.findOnPath(
+                "yt-dlp",
+                path.toString(),
+                windows = false,
+                extraDirectories = listOf(homebrew.toString()),
+            ),
+        )
+    }
+
+    @Test
+    fun pathWinsOverALaterInstallDirectory() {
+        val path = Files.createTempDirectory("anydownlod-path-first")
+        val extra = Files.createTempDirectory("anydownlod-path-extra")
+        val preferred = path.resolve("yt-dlp")
+        Files.writeString(preferred, "#!/bin/sh\n")
+        preferred.toFile().setExecutable(true)
+        val other = extra.resolve("yt-dlp")
+        Files.writeString(other, "#!/bin/sh\n")
+        other.toFile().setExecutable(true)
+
+        assertEquals(
+            preferred.toString(),
+            ExecutableOnPath.findOnPath(
+                "yt-dlp",
+                path.toString(),
+                windows = false,
+                extraDirectories = listOf(extra.toString()),
+            ),
+        )
+    }
+
+    @Test
+    fun windowsIgnoresTheMacInstallDirectories() {
+        val extra = Files.createTempDirectory("anydownlod-win-extra")
+        val binary = extra.resolve("yt-dlp.exe")
+        Files.writeString(binary, "yt-dlp")
+        binary.toFile().setExecutable(true)
+
+        assertNull(
+            ExecutableOnPath.findOnPath(
+                "yt-dlp",
+                path = null,
+                windows = true,
+                extraDirectories = listOf(extra.toString()),
+            ),
+        )
+    }
+
+    @Test
+    fun macInstallDirectoriesCoverHomebrewAndTheUserBin() {
+        assertEquals(
+            listOf("/opt/homebrew/bin", "/usr/local/bin", "/Users/ada/.local/bin"),
+            ExecutableOnPath.macInstallBins(home = "/Users/ada"),
+        )
+    }
+
+    @Test
+    fun childPathKeepsTheCallerPathAndAppendsAMissingInstallDirectory() {
+        val joined = ExecutableOnPath.joinPath("/usr/bin:/bin", listOf("/opt/homebrew/bin", "/usr/bin"))
+        assertEquals("/usr/bin:/bin:/opt/homebrew/bin", joined.replace(File.pathSeparator, ":"))
+    }
 }

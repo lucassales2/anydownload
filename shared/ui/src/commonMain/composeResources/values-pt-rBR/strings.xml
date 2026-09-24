@@ -258,7 +258,7 @@
     <string name="preset_no_options">Sem opções</string>
     <string name="section_appearance">Aparência</string>
     <string name="section_tools">Ferramentas</string>
-    <string name="tools_hint">As versões vêm da busca no PATH local. Uma ferramenta ausente impede um download real.</string>
+    <string name="tools_hint">As versões vêm da busca no PATH local. yt-dlp e ffmpeg são necessários para URLs de sites e vídeos; downloads de arquivos diretos funcionam sem eles.</string>
     <string name="tool_not_checked">Não verificado</string>
     <string name="tool_available">Disponível</string>
     <string name="tool_not_found">Não encontrado</string>

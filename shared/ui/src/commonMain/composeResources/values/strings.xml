@@ -258,7 +258,7 @@
     <string name="preset_no_options">No options</string>
     <string name="section_appearance">Appearance</string>
     <string name="section_tools">Tools</string>
-    <string name="tools_hint">Versions come from the local PATH probe. A missing tool stops a real download.</string>
+    <string name="tools_hint">Versions come from the local PATH probe. yt-dlp and ffmpeg are needed for site and video URLs; direct file downloads work without them.</string>
     <string name="tool_not_checked">Not checked</string>
     <string name="tool_available">Available</string>
     <string name="tool_not_found">Not found</string>

@@ -14,9 +14,16 @@ import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.domain.Artifact
+import com.anydownlod.core.domain.DownloadJob
+import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.platform.JavaNetHttpTransfer
 import com.anydownlod.desktop.engine.CliProcessRunner
+import com.anydownlod.desktop.engine.DesktopFileStore
+import com.anydownlod.desktop.engine.DesktopRoute
+import com.anydownlod.desktop.engine.DesktopRouteClassifier
+import com.anydownlod.desktop.engine.DesktopRoutingEngine
 import com.anydownlod.desktop.engine.DownloadPaths
 import com.anydownlod.desktop.engine.ExecutableOnPath
 import com.anydownlod.desktop.engine.JavaCliProcessRunner
@@ -92,16 +99,45 @@ internal class DesktopApp(
                 delegate = InMemorySettingsRepository(persisted.settings),
                 store = store,
             )
-            val engine = YtDlpCliEngine(
+
+            // Each engine owns the jobs it creates; the router merges their
+            // flows and routes every action to the owning engine. Both engines
+            // persist the merged list so one engine can never drop the other's
+            // rows in jobs.json.
+            var routing: DesktopRoutingEngine? = null
+            val persistAll: (List<DownloadJob>) -> Unit = { _ -> routing?.let { store.saveJobs(it.jobs.value) } }
+
+            val cliEngine = YtDlpCliEngine(
                 settingsRepository = settings,
                 scope = scope,
                 runner = processRunner,
                 resolveExecutable = resolveExecutable,
                 ioDispatcher = ioDispatcher,
-                persist = { jobs -> store.saveJobs(jobs) },
+                persist = persistAll,
                 cookieFilePath = { store.cookieFilePath() },
-                seedJobs = persisted.jobs,
+                seedJobs = persisted.jobs.filter {
+                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl) == DesktopRoute.YTDLP_CLI
+                },
             )
+            val httpEngine = HttpDownloadEngine(
+                transfer = JavaNetHttpTransfer(),
+                fileStore = DesktopFileStore { settings.settings.value.downloadRoot },
+                settings = settings,
+                scope = scope,
+                ioDispatcher = ioDispatcher,
+                persist = persistAll,
+                seedJobs = persisted.jobs.filter {
+                    DesktopRouteClassifier.resumeRoute(it.request.sourceUrl) == DesktopRoute.DIRECT_FILE
+                },
+            )
+            routing = DesktopRoutingEngine(
+                http = httpEngine,
+                cli = cliEngine,
+                classify = { url -> DesktopRouteClassifier().route(url) },
+                scope = scope,
+            )
+            val engine: DownloadEngine = routing
+
             val subscriptions = DesktopSubscriptionRepository(
                 delegate = InMemorySubscriptionRepository(seedSubscriptions = persisted.subscriptions),
                 store = store,
@@ -144,7 +180,7 @@ internal class DesktopApp(
                     loadThumbnail = { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } },
                 ),
                 shutdownEngine = {
-                    engine.shutdown()
+                    cliEngine.shutdown()
                     scope.cancel()
                 },
             )

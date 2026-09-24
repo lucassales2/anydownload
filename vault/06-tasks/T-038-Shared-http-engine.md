@@ -36,11 +36,33 @@ Do not create a new Gradle module. Do not reference `ProcessBuilder` or Chaquopy
 
 ## Acceptance criteria
 
-- [ ] Unit tests cover success, cancel mid-stream, HTTP error, redirect to a blocked address, HTML Content-Type treated as NeedsExtractor, and idempotent double submit.
-- [ ] Tests use a local mock server or in-memory dispatcher. No live third-party hosts in default CI.
-- [ ] Common code still has no process or Python API.
-- [ ] Evidence lists commands and test names.
+- [x] Unit tests cover success, cancel mid-stream, HTTP error, redirect to a blocked address, HTML Content-Type treated as NeedsExtractor, and idempotent double submit.
+- [x] Tests use a local mock server or in-memory dispatcher. No live third-party hosts in default CI.
+- [x] Common code still has no process or Python API.
+- [x] Evidence lists commands and test names.
 
 ## Evidence / notes
 
-Not started.
+Done on 2026-09-23. Engine and ports land now; T-039 supplies the per-target HTTP/file actuals.
+
+Commands run:
+
+- `./gradlew :shared:core:jvmTest` - 85 tests, 0 failures.
+- `./gradlew :shared:core:compileKotlinWasmJs :shared:core:compileKotlinIosSimulatorArm64 :shared:core:compileAndroidMain` - all target families compile the new common code.
+- `grep -rn -i 'processbuilder\|python\|chaquopy' shared/core/src/commonMain/` - no process or Python API (only the doc comment that says so).
+
+Test names (in-memory dispatcher and fakes only, fixture host `https://fixtures.example.com`):
+
+- `directFileStreamsToTempThenPublishesAndCompletes` (success)
+- `cancelMidStreamDiscardsTempAndCancelsTheJob` (cancel mid-stream)
+- `httpErrorFailsWithMappedErrorCode`, `rateLimitedStatusMapsToRateLimited` (HTTP errors)
+- `redirectToBlockedAddressFailsWithoutFetchingIt` (redirect to a blocked address)
+- `htmlContentTypeIsNeedsExtractorAndFailsTyped` (HTML Content-Type -> NeedsExtractor)
+- `idempotentDoubleSubmitReturnsTheOriginalJobOnce` (idempotent double submit)
+- plus: manual start, invalid URL/userinfo/loopback rejection, allowed redirects, redirect budget, retry, removeHistory, deleteArtifacts, progress percent known/unknown, `UrlPolicyTest`, `UrlClassifierTest`, `ArtifactNameTest`.
+
+Delivered under `com.anydownlod.core.engine` and `com.anydownlod.core.platform`:
+
+- `HttpDownloadEngine` - job lifecycle, per-hop URL policy, streaming to temp then publish, typed errors.
+- `UrlPolicy` (reuses `SourceUrlValidator` intent, adds userinfo + local/reserved destination checks), `UrlClassifier` (DirectFile vs NeedsExtractor via Content-Type), `ArtifactName` (normalized, traversal-rejected output naming).
+- Ports for T-039: `HttpTransfer`/`HttpBody`, `FileStore`/`FileHandle`, plus a tiny `engineCriticalSection` expect/actual (JVM/Android `synchronized`; native/wasm single-threaded).

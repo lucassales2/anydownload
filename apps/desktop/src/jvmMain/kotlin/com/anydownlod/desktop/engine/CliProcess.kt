@@ -37,6 +37,7 @@ object JavaCliProcessRunner : CliProcessRunner {
         val builder = ProcessBuilder(command)
         builder.directory(workingDirectory.toFile())
         builder.redirectErrorStream(false)
+        ExecutableOnPath.applyToolPath(builder.environment())
         return JavaCliProcess(builder.start())
     }
 }
@@ -63,27 +64,56 @@ private class JavaCliProcess(private val process: Process) : CliProcess {
     }
 }
 
-/** Finds an executable on PATH without starting anything. */
+/**
+ * Finds an executable on PATH without starting anything.
+ *
+ * A Mac app opened from Finder does not inherit the shell PATH, so Homebrew's
+ * `/opt/homebrew/bin` is invisible there. After PATH, macOS also checks the
+ * usual install directories. Nothing is bundled and nothing is started.
+ */
 object ExecutableOnPath {
-    fun find(name: String): String? = findOnPath(
-        name = name,
-        path = System.getenv("PATH"),
-        windows = isWindows(),
-    )
+    fun find(name: String): String? {
+        val windows = isWindows()
+        return findOnPath(
+            name = name,
+            path = System.getenv("PATH"),
+            windows = windows,
+            extraDirectories = if (isMac()) macInstallBins() else emptyList(),
+        )
+    }
+
+    /**
+     * Puts the macOS install directories on a child process PATH when they are
+     * missing, so yt-dlp can still find ffmpeg. The caller's PATH stays first.
+     */
+    fun applyToolPath(environment: MutableMap<String, String>) {
+        if (!isMac()) return
+        val joined = joinPath(environment["PATH"], macInstallBins())
+        if (joined.isNotEmpty()) environment["PATH"] = joined
+    }
 
     /**
      * [windows] also looks for `.exe`, `.cmd`, and `.bat`, which is how a
      * Windows install of yt-dlp or ffmpeg is named. A missing file is a miss;
-     * nothing is started.
+     * nothing is started. [extraDirectories] are searched after PATH and are
+     * ignored on Windows.
      */
-    internal fun findOnPath(name: String, path: String?, windows: Boolean): String? {
-        if (path == null) return null
+    internal fun findOnPath(
+        name: String,
+        path: String?,
+        windows: Boolean,
+        extraDirectories: List<String> = emptyList(),
+    ): String? {
         val candidates = if (windows) {
             listOf(name, "$name.exe", "$name.cmd", "$name.bat")
         } else {
             listOf(name)
         }
-        path.split(File.pathSeparatorChar).forEach { directory ->
+        val directories = buildList {
+            path?.split(File.pathSeparatorChar)?.let { addAll(it) }
+            if (!windows) addAll(extraDirectories)
+        }
+        directories.forEach { directory ->
             if (directory.isBlank()) return@forEach
             val base = runCatching { Path.of(directory) }.getOrNull() ?: return@forEach
             candidates.forEach { candidate ->
@@ -96,5 +126,20 @@ object ExecutableOnPath {
         return null
     }
 
+    internal fun macInstallBins(home: String? = System.getProperty("user.home")): List<String> =
+        buildList {
+            add("/opt/homebrew/bin")
+            add("/usr/local/bin")
+            if (!home.isNullOrBlank()) add(Path.of(home, ".local", "bin").toString())
+        }
+
+    internal fun joinPath(path: String?, extraDirectories: List<String>): String {
+        val existing = path?.split(File.pathSeparatorChar)?.filter { it.isNotBlank() }.orEmpty()
+        val suffix = extraDirectories.filter { it.isNotBlank() && it !in existing }
+        return (existing + suffix).joinToString(File.pathSeparator)
+    }
+
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
+
+    private fun isMac(): Boolean = System.getProperty("os.name").lowercase().contains("mac")
 }

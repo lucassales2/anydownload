@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "AnyDownload page bridge",
+  "version": "0.1.0",
+  "description": "Fetches and saves direct-file downloads for the AnyDownload web page. The page itself never fetches a third-party origin; this extension holds the host permissions.",
+  "permissions": ["downloads"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

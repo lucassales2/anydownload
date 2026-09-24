@@ -147,7 +147,7 @@ class FreshWindowsInstallWithoutYtDlpTest {
             }
             onNodeWithTag("settings-tool-ytdlp").assertExists()
             onNodeWithTag("settings-tool-ffmpeg").assertExists()
-            onNodeWithText("Versions come from the local PATH probe. A missing tool stops a real download.")
+            onNodeWithText("Versions come from the local PATH probe. yt-dlp and ffmpeg are needed for site and video URLs; direct file downloads work without them.")
                 .assertExists()
             onNodeWithTag("settings-close").performClick()
 

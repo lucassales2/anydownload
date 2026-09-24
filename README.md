@@ -2,7 +2,7 @@
 
 **A planned Kotlin Multiplatform app for downloading video and audio from yt-dlp-supported sites on Android, iOS, desktop, and web.**
 
-> **Status: Phase D1 verified.** The desktop app is a MeTube-style Compose window that downloads through the `yt-dlp` and `ffmpeg` programs installed on the machine. `shared/core` and `shared/ui` never spawn a process; the process adapter lives only in `apps/desktop`. Android, iOS, and web build the same screens against an in-memory fake and do not download. The end state is still an in-process local Kotlin engine on every target ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)); that port has not started and [T-022](vault/06-tasks/T-022-Parity-audit.md) will audit it. Phase scope: [Phase 1](vault/00-project/Phase-1-Desktop-MeTube.md) and [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
+> **Status: Phase D2 verified (2026-09-23).** One direct HTTP(S) file download now completes on every host family, per [ADR-006](vault/03-decisions/ADR-006-Local-http-engine-phase.md) and [Phase 2](vault/00-project/Phase-2-Local-Kotlin-Engine.md): desktop uses the **shared Kotlin HTTP engine** (installed `yt-dlp` stays only for site URLs), iOS downloads into its sandbox via in-process NSURLSession (foreground-only), web downloads through a **Manifest V3 extension** whose page never fetches an origin, and Android has the same shared engine wired in its app graph (its APK remains blocked in this build environment by a pre-existing AGP 9.0.0 vs Compose-1.12 AAR metadata mismatch — T-041 records the Chaquopy/pinned-yt-dlp adapter config and the exact blocker). The yt-dlp **extractor port** of [ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md) has not started; D2 is the HTTP-only slice and explicitly does not translate extractors. Prior phase: [Phase 1](vault/00-project/Phase-1-Desktop-MeTube.md) / [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
 
 The product name is **AnyDownload**. The repository is named [`anydownlod`](https://github.com/lucassales2/anydownlod) to match the original project folder.
 
@@ -23,12 +23,21 @@ These are **planned capabilities, not implemented features**. The [feature-parit
 
 ## Platform strategy
 
-| Target | Execution |
+| Target | Execution (D2) |
 | --- | --- |
-| Android | In-app Kotlin engine and Compose UI. A download runs while the app process is allowed to run. |
-| iOS | Same shared engine. Sandbox file export. The system can suspend the app. |
-| Desktop | D1: Compose/JVM window calling an installed `yt-dlp` from `apps/desktop`. Later: the shared Kotlin engine. |
-| Web | Compose/Wasm. No Python subprocess. Cross-origin fetches and in-browser media processing still have to be proven. |
+| Desktop | Shared Kotlin HTTP engine for direct files; installed `yt-dlp` CLI stays for site URLs (`apps/desktop` only). |
+| iOS | Shared engine + in-process NSURLSession + sandbox `Documents` store. Foreground-only; site URLs fail with “extractor not implemented”. |
+| Android | Shared engine wired in the app graph; Chaquopy + pinned yt-dlp adapter behind an `apps/android`-only port. APK build blocked in this environment (see below). |
+| Web | Compose/Wasm UI. A Manifest V3 extension holds `host_permissions` + `downloads` and saves files; the page performs no cross-origin fetch. |
+
+### Phase D2: one direct file per host
+
+- **Desktop:** route direct files through `HttpDownloadEngine` (`DesktopRoutingEngine`); yt-dlp is present on PATH here (`/opt/homebrew/bin/yt-dlp`) and the CLI path is preserved and unit-tested. Direct files never spawn a process.
+- **iOS:** `IosHttpTransfer` (NSURLSession, one hop per call) + `IosFileStore` (POSIX, Documents). Verified by native tests incl. a real 1 MiB local-fixture download (COMPLETED, file on disk) and an unsigned simulator build + launch.
+- **Web:** load the unpacked extension from `apps/web-extension` (see that folder's `README.md`). Without it, Add reports “extension required” and the page makes no network call.
+- **Android:** the Android app variant cannot assemble in this environment: androidx Compose 1.12.0 AARs require AGP ≥ 9.1.0 (alpha-only) while the catalog pins AGP 9.0.0; the JVM-equivalent engine tests run under `apps/android-engine-tests`. Chaquopy config is validated (`-DchaquopyVersion=17.0.0`, pinned `yt-dlp==2026.8.19`) and only applies when requested, so default checkouts stay Chaquopy-free.
+
+Toolchain (verified 2026-09-23, macOS 26.5 arm64): Gradle 9.7.1, Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, JDK 21, Xcode 26.5, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target, Chromium 153 (Brave) for the extension check.
 
 The later engine is shared Kotlin and does not shell out to the Python yt-dlp CLI ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)). Until that port exists, the desktop D1 adapter calls the installed CLI from `apps/desktop` only.
 
@@ -40,13 +49,15 @@ The later engine is shared Kotlin and does not shell out to the Python yt-dlp CL
 
 | Module | Purpose |
 | --- | --- |
-| `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, in-memory fakes |
-| `shared/network` | Withdrawn server client. Kept in the tree, unused by D1 |
+| `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, **`HttpDownloadEngine`** + URL policy/classifier, platform ports (`HttpTransfer`, `FileStore`, [`WebExtensionBridge`]), in-memory fakes |
+| `shared/network` | Withdrawn server client. Kept in the tree, unused |
 | `shared/ui` | Compose Multiplatform screens; depends on core interfaces, no process APIs |
-| `apps/android` | Android application; D1 shell on the in-memory fake, no downloads |
-| `apps/desktop` | Desktop host: JSON store, yt-dlp/ffmpeg adapter, Compose window |
-| `apps/web` | Compose/Wasm browser application; D1 shell on the in-memory fake |
-| `apps/ios` | SwiftUI host for the `AnyDownloadKit` framework; D1 shell on the in-memory fake |
+| `apps/android` | Android application: real graph (HTTP engine + Chaquopy port); blocked APK build in this env |
+| `apps/android-engine-tests` | JVM-equivalent tests for the Android engine sources (variant-unblocked) |
+| `apps/desktop` | Desktop host: JSON store, yt-dlp/ffmpeg adapter, routing engine, Compose window |
+| `apps/web` | Compose/Wasm application: `WindowExtensionBridge` + `WebExtensionEngine`; never fetches an origin |
+| `apps/web-extension` | Manifest V3 extension: host permissions + `downloads`, probes and saves direct files |
+| `apps/ios` | SwiftUI/Xcode host for the `AnyDownloadKit` framework; real iOS graph |
 
 Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, Ktor 3.6.0, JDK 21, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target. Minimum platform versions are **not decided**; T-004 and T-006 own that. Intel iOS simulators are unsupported because Compose Multiplatform 1.12 no longer publishes an `iosX64` variant.
 
@@ -60,9 +71,14 @@ Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.
 ```
 
 ```sh
-./gradlew :shared:core:jvmTest :shared:network:jvmTest  # shared unit tests
-./gradlew :apps:android:assembleDebug                   # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :apps:web:wasmJsBrowserDevelopmentRun         # browser app
+./gradlew :shared:core:jvmTest                       # shared engine + platform tests
+./gradlew :shared:core:iosSimulatorArm64Test         # native iOS tests (runs in the simulator)
+./gradlew :apps:desktop:test                         # desktop store/engine/UI tests
+./gradlew :apps:android-engine-tests:test            # JVM-equivalent Android engine tests
+node --test apps/web-extension/test/bridge.test.mjs  # extension logic tests
+./gradlew :apps:web:wasmJsBrowserDevelopmentRun      # browser app (install the extension for downloads)
+./gradlew :apps:web:wasmJsBrowserDistribution        # production web bundle
+./gradlew :apps:android:assembleDebug                # blocked in this env (AGP/Compose mismatch, see above)
 xcodebuild -project apps/ios/AnyDownload.xcodeproj -scheme AnyDownload \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```

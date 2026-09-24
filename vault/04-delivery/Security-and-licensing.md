@@ -55,9 +55,29 @@ There is no server to authenticate. A public GitHub repository does not grant a 
 
 Bound playlist expansion, concurrent work, retries, media duration/size, disk usage, regex evaluation and subscription frequency. Persist state and test restart/cancellation races. Pin the full engine runtime set, verify trusted release artifacts where available, test updates and support rollback; do not let client-supplied download options select arbitrary executable updates.
 
+## Local engine threat notes (D2)
+
+Recorded at [T-006](../06-tasks/T-006-Review-security-licensing.md) on 2026-09-23 for the D2 slice: one direct HTTP(S) file download per host, no backend, no login. The server-era controls above describe later architecture; this section is the local-engine record and the controls the D2 implementation must honor.
+
+| Threat | Local record and control |
+| --- | --- |
+| Pasted/shared untrusted URL | Validate before any network call: http(s) schemes only, reject userinfo, malformed or ambiguous URLs, and across **every** redirect reject private/loopback/link-local/reserved IPv4/IPv6 destinations and DNS-rebinding paths. A direct-file URL is fetched by the platform HTTP adapter directly; it is never handed to a shell or a `ProcessBuilder` in common code. |
+| Option injection | Options are an **allowlist** (Q-09, closed on [T-003](../06-tasks/T-003-Approve-product-scope.md)). Free-form yt-dlp JSON stays disabled. Argument arrays, never concatenated command strings. Non-overridable safety constraints cannot be cleared by per-job values; `null` cannot clear a control. |
+| Filesystem paths | Output names derive from validated inputs, are normalized, and reject traversal, absolute paths, symlink escapes and unsafe templates. Every host writes inside its own app-private sandbox; artifact lookup uses registered IDs, not arbitrary request paths. |
+| Local cookies | Import only with explicit user consent; scope to owner/provider where feasible; restrict file permissions; keep values out of job/event payloads and remove transient copies after use. There is no app login. See the on-device cookie decision below. |
+| Logs, history, toasts, exports | Cookie contents, signed media URLs, Authorization headers and raw process/extension stderr never enter logs, history, toasts, exports, or this vault. Unknown progress stays unknown (no invented percent, speed, or ETA). Tests and evidence use fixture hosts only. |
+
+### On-device cookie decision (T-006)
+
+- **Consent:** cookie import is the user's explicit action only; the UI states the cookie file stays on this device. There is no app login.
+- **Storage:** on-device only, outside git and outside the vault, with scoped file permissions.
+- **Redaction:** cookie values and signed media URLs never appear in job payloads, logs, exports, history, or paste text. Synthetic examples only in this public vault.
+- **Deletion / expiry:** user deletion removes the file and its store references; expired or superseded snapshots are pruned. Jobs already using a credential snapshot keep the snapshot they started with.
+- **Encryption-at-rest:** deferred to M3 ([T-018](../06-tasks/T-018-Cookie-lifecycle.md)). Until then, device OS protection plus app-private storage apply; T-018 must revisit key storage and backups before cookie persistence ships.
+
 ## License review inventory
 
-Observed upstream metadata/source on **2026-09-16**; verify full license text and the actual shipped artifacts before adoption. This table is engineering due diligence, not legal advice.
+Observed upstream metadata/source on **2026-09-16**; the Chaquopy/CPython and spotDL rows were inspected again on **2026-09-23** for T-006. Verify full license text and the actual shipped artifacts before adoption. This table is engineering due diligence, not legal advice.
 
 | Component | Observed license / important distinction | Planning implication |
 | --- | --- | --- |
@@ -66,9 +86,10 @@ Observed upstream metadata/source on **2026-09-16**; verify full license text an
 | yt-dlp bundled release executables | Upstream states PyInstaller bundles include GPLv3+ code; other artifacts also bundle MIT/ISC components. | Review chosen binary individually; preserve notices and satisfy applicable redistribution/source obligations. |
 | YtDlp-kt | GPL-3.0 metadata; archived JVM wrapper. | Review full obligations if adopted/forked; do not copy code on the assumption that “Kotlin wrapper” means permissive/KMP. |
 | MeTube | AGPL-3.0 metadata. | Feature inspiration is not code reuse. Copying/modifying/distributing or operating modified AGPL code requires an explicit review of obligations, including network-source provisions where applicable. |
-| spotDL | MIT on the README, inspected 2026-09-23. | Reimplement the match-on-YouTube workflow. Copying matcher source waits on T-006. Do not vendor the package or its release executable without reviewing what that build bundles. |
+| spotDL | MIT on the README, inspected 2026-09-23. | D2 reimplements the match-on-YouTube workflow and copies no matcher source. The MIT row is now recorded at T-006; any later copy must keep the notice and still not vendor the package or its release executable without reviewing what that build bundles. |
 | FFmpeg / ffprobe | Build-dependent LGPL/GPL and codec/patent considerations. | Record configure flags, codecs, license notices, source requirements and store/distribution compatibility for each build. |
 | yt-dlp-ejs / JS runtime | EJS has Unlicense code and MIT/ISC bundled components; runtime has its own terms. | Include EJS/runtime in SBOM, version/update policy and artifact review; do not assume Python + FFmpeg alone is enough for current YouTube behavior. |
+| Chaquopy + embedded CPython (Android-only) | Repository `LICENSE.txt` is **MIT** — “Copyright (c) 2017-2025 Chaquo Ltd and contributors”; GitHub API reports SPDX `MIT`; inspected 2026-09-23, `master` VERSION 17.1.0, latest release tag 17.0.0. Chaquopy embeds CPython (PSF License) and prebuilt Python packages inside the APK, each under its own terms (pinned yt-dlp would be Unlicense). | Adapter lives only under `apps/android`, never in shared code. At [T-041](../06-tasks/T-041-Android-http-and-chaquopy.md), freeze and record the exact Chaquopy/CPython/yt-dlp wheel versions, preserve the MIT/PSF/Unlicense notices, and verify release artifacts before enabling the adapter. |
 | Kotlin/Compose/Ktor and other libraries | Exact coordinates/versions not selected. | Audit transitive dependencies once chosen; do not invent a final dependency inventory now. |
 | Obsidian Kanban | GPL-3.0 upstream plugin; separate documentation tool. | Install locally via registry/release; plugin code is not vendored in this repository or proposed app. |
 
@@ -83,3 +104,5 @@ Sources and pinned revisions: [upstream review](../05-research/Upstream-review.m
 ## Approval gate
 
 T-006 records the threat model for a local engine, the cookie-storage decision, and the license inventory before extractor source is copied. Store review is not part of that gate.
+
+Recorded on 2026-09-23: local-engine threat notes and the on-device cookie decision above, plus the Chaquopy/CPython row and spotDL confirmation in the inventory, all precede any extractor-source copy or Chaquopy adoption.
