@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D1 desktop MeTube · **Targets:** desktop first; iOS, web, and Android stay in the end state · **Name:** AnyDownload
+**Phase:** D2 local HTTP engine · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,9 +14,9 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) and [ADR-005](03-decisions/ADR-005-Desktop-metube-phase.md). That is the current implementation work.
-2. Take the first Ready D1 card on [Kanban](Kanban.md). [T-026](06-tasks/T-026-Shared-domain-and-engine-seam.md) is first.
-3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state: a Kotlin engine on iOS, Compose/Wasm, Android, and desktop. D1 does not start that port.
+1. Read [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) and [ADR-006](03-decisions/ADR-006-Local-http-engine-phase.md). That is the current implementation work.
+2. Take the first Ready D2 card on [Kanban](Kanban.md). [T-006](06-tasks/T-006-Review-security-licensing.md) is first.
+3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state: a Kotlin port of yt-dlp on every target. D2 is HTTP-only and does not translate extractors.
 
 ## Accepted direction — 2026-09-21
 
@@ -25,7 +25,7 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 - Targets are iOS, Compose/Wasm, Android, and desktop.
 - Store publication is out of scope; this is a portfolio project.
 
-License notes for ported code, and proof that Wasm and iOS can complete a download, are still open.
+License notes for copied extractor code are still T-006. D2 proves a direct-file download on each host (web via extension) before any extractor is translated.
 
 ## Documentation map
 
@@ -33,7 +33,8 @@ License notes for ported code, and proof that Wasm and iOS can complete a downlo
 
 - [Documentation guide](00-project/Documentation-guide.md) — opening the vault, Kanban workflow, templates, privacy.
 - [Roadmap](00-project/Roadmap.md) — milestone scopes and exit criteria.
-- [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) — current implementation handoff.
+- [Phase 1 — Desktop MeTube](00-project/Phase-1-Desktop-MeTube.md) — D1, done.
+- [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) — current implementation handoff.
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 

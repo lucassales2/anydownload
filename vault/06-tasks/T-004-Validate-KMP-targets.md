@@ -28,4 +28,4 @@ Show that one local download can finish on iOS, Compose/Wasm, Android, and deskt
 
 ## Evidence / notes
 
-Not started. Framework upstream stability labels do not prove application support. After ADR-004 this task must show a **local** download on iOS, Compose/Wasm, Android, and desktop. Store distribution is out of scope. A JVM process wrapper around Python yt-dlp does not pass this task. [Client yt-dlp options](../05-research/Client-yt-dlp-options.md) records the expected web cross-origin limit and the rejected Python packagers; a run on this task confirms or revises that, and the note alone does not pass the task.
+Not started as a standalone spike. [ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md) binds this gate to Phase D2: a **direct HTTP(S) file**, not a yt-dlp extractor. Web evidence must go through the extension (T-043), not an in-page YouTube fetch. A JVM process wrapper around Python yt-dlp still does not pass this task. Close the checkboxes from [T-044](T-044-Phase-2-verification.md) evidence. Do not pick this card up on its own during the D2 loop.

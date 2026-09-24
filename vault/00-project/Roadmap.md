@@ -21,13 +21,14 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-Phase **D1** is the implementation work in progress. Spec: [Phase 1 — Desktop MeTube](Phase-1-Desktop-MeTube.md). Decision: [ADR-005](../03-decisions/ADR-005-Desktop-metube-phase.md).
+Phase **D1** is done. Phase **D2** is the implementation work in progress. Spec: [Phase 2 — Local HTTP engine](Phase-2-Local-Kotlin-Engine.md). Decision: [ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md).
 
-1. Build the shared domain seam and the Compose shell ([T-026](../06-tasks/T-026-Shared-domain-and-engine-seam.md), [T-027](../06-tasks/T-027-Desktop-app-shell.md)).
-2. Build Add, Downloading, Completed, Subscriptions, and Settings against the in-memory fake (T-028–T-031).
-3. Persist that state and download through an installed yt-dlp on desktop only (T-032–T-035), then verify (T-036).
+1. Finish the T-006 license inventory and the Q-09 allowlist close on T-003.
+2. Shared HTTP-only `DownloadEngine` and platform file adapters (T-038, T-039).
+3. Wire desktop (Kotlin HTTP + existing CLI), Android (HTTP + Chaquopy), iOS (HTTP), and web (extension) — T-040–T-043.
+4. Verify all four hosts and close T-004 from that evidence (T-044).
 
-After D1, the earlier M0/M1 gates resume: a local Kotlin download on all four targets ([T-004](../06-tasks/T-004-Validate-KMP-targets.md)), the in-process engine ([T-008](../06-tasks/T-008-Scaffold-KMP-clients.md)), and license notes for copied extractor code ([T-006](../06-tasks/T-006-Review-security-licensing.md)). Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) waits until a YouTube download works. D1 does not close those.
+After D2, extractor translation and YouTube (yt-dlp-ejs) resume under ADR-004. Spotify matching ([T-037](../06-tasks/T-037-Spotify-youtube-match.md)) still waits until a YouTube download works. D2 does not close T-009/T-010's extractor wording.
 
 ## Sequencing rules
 

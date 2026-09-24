@@ -23,7 +23,7 @@ Owner-approved product boundaries and milestone definitions, including whether t
 - [x] Confirm working/final name and whether to retain the `anydownlod` repository spelling.
 - [x] Decide target audience, server ownership/trust, single-owner versus multi-user scope, and whether standalone mobile operation is mandatory.
 - [x] Approve MVP versus parity scope and pinned MeTube baseline; prioritize external integrations and clarify protocol compatibility.
-- [ ] Explicitly approve or revise security-scoped option differences and “supported sites, not every media URL” product language.
+- [x] Explicitly approve or revise security-scoped option differences and “supported sites, not every media URL” product language.
 - [x] Record approver/date and update the brief, open questions, roadmap and ADR-001 as applicable.
 
 ## Evidence / notes
@@ -36,4 +36,7 @@ Owner, 2026-09-21:
 - Store publication is out of scope. Portfolio builds only.
 - Recorded in the product brief, open questions, roadmap, and [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md). ADR-001 and ADR-003 are superseded.
 
-Still open on this task: whether download options are an allowlist or a closer pass-through of yt-dlp options (Q-09).
+Owner, 2026-09-23 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)):
+
+- Q-09 is **allowlist only**. Typed options the app builds. Free-form yt-dlp JSON stays disabled. No shell, plugins, or path escape.
+- Product language stays “supported sites, not every media URL.” D2 proves a direct HTTP(S) file on each host. Site coverage grows with the Kotlin port. Android Chaquopy and the desktop CLI are interim adapters, not a claim that every host already matches yt-dlp.

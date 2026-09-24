@@ -8,7 +8,7 @@ tags: [architecture, kmp]
 
 [Home](../Home.md) · [Platform matrix](Platform-matrix.md) · [Lifecycle](Download-lifecycle.md) · [API outline](API-outline.md) · [Decision log](../03-decisions/Decision-log.md)
 
-**Accepted direction, not yet implemented.** Extraction runs inside the app. See [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md).
+**Accepted direction.** Extraction will run inside the app ([ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md)). Phase D2 ([ADR-006](../03-decisions/ADR-006-Local-http-engine-phase.md)) implements the first slice only: a shared direct HTTP(S) file download. Web fetches through a browser extension. Android may call pinned yt-dlp via Chaquopy under `apps/android`. Desktop keeps the installed CLI for non-direct URLs. Extractor translation is the next phase after D2.
 
 ## Local engine
 
@@ -27,7 +27,7 @@ flowchart TD
 
 - **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI. A Spotify URL is metadata plus a YouTube or YouTube Music match, then the same engine. See [T-037](../06-tasks/T-037-Spotify-youtube-match.md).
 - **Platform adapters:** HTTP, file write, share/open, and lifecycle. Common code does not spawn a process or assume Python.
-- **Web:** Compose/Wasm. Cross-origin fetches and in-browser media processing are the feasibility risk in [T-004](../06-tasks/T-004-Validate-KMP-targets.md).
+- **Web:** Compose/Wasm UI. Downloads go through a local MV3 extension with host permissions ([T-043](../06-tasks/T-043-Web-extension-download.md)). The page does not fetch arbitrary origins.
 - **iOS:** the same shared engine, with sandbox file export and no guarantee of work after suspension.
 
 The draft `shared/network` API client was built for a server. The engine replaces that path.
