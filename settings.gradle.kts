@@ -69,7 +69,5 @@ include(":apps:android")
 include(":apps:desktop")
 include(":apps:web")
 
-// JVM-equivalent tests for the Android engine sources; the Android app
-// variant cannot assemble in this environment (AGP 9.0.0 vs Compose 1.12.0
-// requiring AGP >= 9.1.0, which is alpha-only). See vault T-041.
+// JVM-equivalent tests for the Android engine sources. See vault T-041.
 include(":apps:android-engine-tests")

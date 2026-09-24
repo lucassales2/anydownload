@@ -2,7 +2,7 @@
 
 **A planned Kotlin Multiplatform app for downloading video and audio from yt-dlp-supported sites on Android, iOS, desktop, and web.**
 
-> **Status: Phase D3 verified (2026-09-24).** The [generic extractor subset](vault/00-project/Phase-3-Generic-Extractor.md) ([ADR-007](vault/03-decisions/ADR-007-Generic-extractor-phase.md)) works on every host family: one local HTML fixture with a single `<video>`/`<audio>`/`<source>` downloads on desktop (shared Kotlin HTTP engine), iOS (sandbox, foreground-only), web (Manifest V3 extension fetches the page and the media; the Compose/Wasm page never fetches an origin), and Android (same shared engine; the pre-existing AGP 9.0.0 vs Compose-1.12 AAR metadata blocker still prevents the APK assemble, so the JVM-equivalent engine tests are the Android evidence — T-041/T-048). Installed `yt-dlp` (desktop) and Chaquopy + pinned `yt-dlp==2026.8.19` (Android) still own every URL the subset does not resolve. A simple media page needs neither; YouTube and postprocessing stay later. The media toolkit (FFmpeg/MediaMuxer/AVFoundation) is **recorded in ADR-007 and not built**. Prior phases: [D2](vault/00-project/Phase-2-Local-Kotlin-Engine.md) / [ADR-006](vault/03-decisions/ADR-006-Local-http-engine-phase.md) and [D1](vault/00-project/Phase-1-Desktop-MeTube.md) / [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
+> **Status: Phase D3 verified (2026-09-24).** The [generic extractor subset](vault/00-project/Phase-3-Generic-Extractor.md) ([ADR-007](vault/03-decisions/ADR-007-Generic-extractor-phase.md)) works on every host family: one local HTML fixture with a single `<video>`/`<audio>`/`<source>` downloads on desktop (shared Kotlin HTTP engine), iOS (sandbox, foreground-only), web (Manifest V3 extension fetches the page and the media; the Compose/Wasm page never fetches an origin), and Android (same shared engine; the Debug APK assembles with AGP 9.1.1, and the JVM-equivalent engine tests remain the Android evidence — T-041/T-048). Installed `yt-dlp` (desktop) and Chaquopy + pinned `yt-dlp==2026.8.19` (Android) still own every URL the subset does not resolve. A simple media page needs neither; YouTube and postprocessing stay later. The media toolkit (FFmpeg/MediaMuxer/AVFoundation) is **recorded in ADR-007 and not built**. Prior phases: [D2](vault/00-project/Phase-2-Local-Kotlin-Engine.md) / [ADR-006](vault/03-decisions/ADR-006-Local-http-engine-phase.md) and [D1](vault/00-project/Phase-1-Desktop-MeTube.md) / [ADR-005](vault/03-decisions/ADR-005-Desktop-metube-phase.md).
 
 The product name is **AnyDownload**. The repository is named [`anydownlod`](https://github.com/lucassales2/anydownlod) to match the original project folder.
 
@@ -27,7 +27,7 @@ These are **planned capabilities, not implemented features**. The [feature-parit
 | --- | --- | --- |
 | Desktop | Shared Kotlin HTTP engine incl. the generic subset; installed `yt-dlp` CLI stays for unresolved URLs (`apps/desktop` only). | **Pass** — fixture HTML via Kotlin, no process; unresolved page still on the CLI path (yt-dlp 2026.08.19 on PATH). |
 | iOS | Shared engine + in-process NSURLSession + sandbox `Documents` store. Foreground-only; unresolved HTML fails typed “extractor not implemented”. | **Pass** — native simulator run downloaded the fixture media into the sandbox; unresolved page fails typed. |
-| Android | Shared engine wired in the app graph; Chaquopy + pinned yt-dlp adapter behind an `apps/android`-only port. APK build **blocked** in this environment. | **Pass (JVM-equivalent)** — `apps/android-engine-tests` proves the Kotlin route and the Chaquopy fallback; APK assemble remains blocked (AGP/Compose mismatch, T-041). |
+| Android | Shared engine wired in the app graph; Chaquopy + pinned yt-dlp adapter behind an `apps/android`-only port. | **Pass (JVM-equivalent)** — `apps/android-engine-tests` proves the Kotlin route and the Chaquopy fallback. Debug APK assembles with AGP 9.1.1. |
 | Web | Compose/Wasm UI. The Manifest V3 extension holds `host_permissions` + `downloads`, fetches the page bytes and saves the media; the page never fetches an origin. | **Pass** — real Chromium (Brave 153) run: extension service worker fetched the fixture page and the media; file saved; without the extension Add refuses. |
 
 ### Phase D3: one generic-extractor subset
@@ -39,10 +39,10 @@ These are **planned capabilities, not implemented features**. The [feature-parit
   - iOS downloads are foreground-only; suspending the app suspends the transfer and no completed file is claimed on relaunch. No background `URLSession` is added in this phase.
   - On web, closing the tab ends the page's queue view of the job; the browser's downloader (started through the extension) can continue and finish the file after the tab closes, so a saved file can outlive the tab. The page shows completion only while it can still hear the extension.
   - The desktop classifier fetches up to one bounded page body per submit to route HTML; a HEAD-only host that breaks on GET still falls back to the CLI path.
-  - The Android APK cannot assemble in this build environment (AGP 9.0.0 vs Compose 1.12.0 AAR metadata mismatch); the JVM-equivalent `apps/android-engine-tests` suite is the Android evidence. Chaquopy config stays opt-in (`-DchaquopyVersion=17.0.0`, `yt-dlp==2026.8.19`), `apps/android` only.
+  - Chaquopy config stays opt-in (`-DchaquopyVersion=17.0.0`, `yt-dlp==2026.8.19`), `apps/android` only. The JVM-equivalent `apps/android-engine-tests` suite is the Android engine evidence.
 - **Later, explicitly:** the rest of the generic extractor and site extractors, YouTube / yt-dlp-ejs, merge / audio extraction / clips (toolkit recorded in ADR-007, not built), Spotify matching, free-form yt-dlp JSON, and retiring the desktop CLI / Chaquopy.
 
-Toolchain (verified 2026-09-24, macOS 26.5.2 arm64): Gradle 9.7.1, Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, JDK 21, Xcode 26.5, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target, Chromium 153 (Brave 153.1.95.104) for the extension check, installed `yt-dlp` 2026.08.19 on PATH for the desktop CLI fallback.
+Toolchain (verified 2026-09-24, macOS 26.5.2 arm64): Gradle 9.7.1, Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.1.1, JDK 21, Xcode 26.5, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target, Chromium 153 (Brave 153.1.95.104) for the extension check, installed `yt-dlp` 2026.08.19 on PATH for the desktop CLI fallback.
 
 The later engine is shared Kotlin and does not shell out to the Python yt-dlp CLI ([ADR-004](vault/03-decisions/ADR-004-Local-kotlin-engine.md)). Until that port exists, the desktop D1 adapter calls the installed CLI from `apps/desktop` only.
 
@@ -57,14 +57,14 @@ The later engine is shared Kotlin and does not shell out to the Python yt-dlp CL
 | `shared/core` | Domain, `DownloadEngine` / repository interfaces, validation, **`HttpDownloadEngine`** + URL policy/classifier + **`GenericExtractor`** (yt-dlp subset, Unlicense notice), platform ports (`HttpTransfer`, `FileStore`, [`WebExtensionBridge`]), in-memory fakes |
 | `shared/network` | Withdrawn server client. Kept in the tree, unused |
 | `shared/ui` | Compose Multiplatform screens; depends on core interfaces, no process APIs |
-| `apps/android` | Android application: real graph (HTTP engine + Chaquopy port); blocked APK build in this env |
+| `apps/android` | Android application: real graph (HTTP engine + Chaquopy port) |
 | `apps/android-engine-tests` | JVM-equivalent tests for the Android engine sources (variant-unblocked) |
 | `apps/desktop` | Desktop host: JSON store, yt-dlp/ffmpeg adapter, routing engine, Compose window |
 | `apps/web` | Compose/Wasm application: `WindowExtensionBridge` + `WebExtensionEngine`; never fetches an origin |
 | `apps/web-extension` | Manifest V3 extension: host permissions + `downloads`, probes pages, fetches the HTML for the Kotlin extractor, saves the chosen media |
 | `apps/ios` | SwiftUI/Xcode host for the `AnyDownloadKit` framework; real iOS graph |
 
-Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.0.0, Ktor 3.6.0, JDK 21, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target. Minimum platform versions are **not decided**; T-004 and T-006 own that. Intel iOS simulators are unsupported because Compose Multiplatform 1.12 no longer publishes an `iosX64` variant.
+Provisional pinned toolchain: Gradle 9.7.1 (wrapper, checksum-pinned), Kotlin 2.4.20, Compose Multiplatform 1.12.0, AGP 9.1.1, Ktor 3.6.0, JDK 21, Android `compileSdk` 37 / `minSdk` 26, iOS 16 deployment target. Minimum platform versions are **not decided**; T-004 and T-006 own that. Intel iOS simulators are unsupported because Compose Multiplatform 1.12 no longer publishes an `iosX64` variant.
 
 ### Run the desktop app
 
