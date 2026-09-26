@@ -196,7 +196,10 @@
     <string name="preview_views">%1$s views</string>
     <string name="preview_uploaded">Uploaded %1$s</string>
     <string name="preview_playlist_count">Playlist · %1$s items</string>
-    <string name="preview_needs_toolkit">Needs the media toolkit (not built yet)</string>
+    <string name="preview_videos">Videos in this post</string>
+    <string name="preview_video_fallback">Video %1$s</string>
+    <string name="preview_cannot_merge">This host cannot merge video and audio</string>
+    <string name="preview_cannot_write">This host cannot write %1$s</string>
     <string name="preview_not_available_source">Not available from this source</string>
     <string name="preview_formats_needing_js">%1$s more formats need the JavaScript runtime</string>
     <string name="paste_one_url">Paste at least one source URL.</string>
@@ -256,6 +259,15 @@
     <string name="cookie_warning">A cookie file stays on this computer and can expose an account. Importing it does not guarantee the site will allow the download. Contents are never shown here.</string>
     <string name="import_file">Import</string>
     <string name="replace_file">Replace</string>
+    <string name="section_spotify">Spotify library</string>
+    <string name="spotify_logged_in">Logged in to Spotify. Liked songs, playlists, albums, and followed artists can be used.</string>
+    <string name="spotify_logged_out">Not logged in. Saved songs, your playlists, saved albums, and followed artists need a Spotify login; public track links do not.</string>
+    <string name="spotify_unavailable">Spotify login is not available on this host.</string>
+    <string name="spotify_token_hint">Access token from your own Spotify login</string>
+    <string name="spotify_login">Log in</string>
+    <string name="spotify_logout">Log out</string>
+    <string name="spotify_token_saved">Spotify login stored on this device.</string>
+    <string name="spotify_logout_done">Spotify login removed.</string>
     <string name="section_presets">Presets</string>
     <string name="presets_layer_hint">Presets layer in this order; a later preset overrides an earlier one on the same key.</string>
     <string name="no_presets_yet">No presets yet.</string>

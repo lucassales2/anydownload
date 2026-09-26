@@ -28,10 +28,13 @@
 
   // T-056: the extractor request-header allowlist. The extension drops
   // anything else before fetch. Response headers are filtered too, so a
-  // Set-Cookie never crosses the extension boundary.
+  // Set-Cookie never crosses the extension boundary. `authorization` is
+  // only ever set by the trusted D6 Spotify metadata clients through the
+  // explicit request field, never by an extractor header map.
   const REQUEST_HEADER_ALLOWLIST = new Set([
     'accept',
     'accept-language',
+    'authorization',
     'content-type',
     'origin',
     'referer',

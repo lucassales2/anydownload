@@ -1,5 +1,6 @@
 package com.anydownlod.core.platform
 
+import com.anydownlod.core.postprocess.MediaFilePath
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,6 +26,18 @@ class JavaNetFileStore(root: Path) : FileStore {
         val temp = Files.createTempFile(rootAbs, ".anydownload-", ".part")
         return JavaNetFileHandle(temp)
     }
+
+    override fun createTempFile(extension: String): FileHandle {
+        val suffix = if (extension.startsWith(".")) extension else ".$extension"
+        val temp = Files.createTempFile(rootAbs, ".anydownload-", suffix)
+        return JavaNetFileHandle(temp)
+    }
+
+    override fun mediaFilePath(temp: FileHandle): MediaFilePath =
+        MediaFilePath((temp as JavaNetFileHandle).path.toString())
+
+    override fun mediaFilePath(relativePath: String): MediaFilePath =
+        MediaFilePath(resolve(relativePath).toString())
 
     override fun publish(temp: FileHandle, relativePath: String): String {
         val target = resolve(relativePath)

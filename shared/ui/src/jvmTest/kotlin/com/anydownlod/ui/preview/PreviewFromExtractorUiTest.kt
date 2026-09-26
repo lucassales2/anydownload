@@ -66,6 +66,10 @@ class PreviewFromExtractorUiTest {
                        "mimeType": "video/mp4; codecs=\"avc1.42001E, mp4a.40.2\"", "height": 360}
                     ],
                     "adaptiveFormats": [
+                      {"itag": 137, "url": "https://cdn.fixtures.example.net/video.mp4",
+                       "mimeType": "video/mp4; codecs=\"avc1\"", "height": 1080},
+                      {"itag": 140, "url": "https://cdn.fixtures.example.net/audio.m4a",
+                       "mimeType": "audio/mp4; codecs=\"mp4a.40.2\""},
                       {"itag": 136, "signatureCipher": "s=REDACTED", "mimeType": "video/mp4; codecs=\"avc1\""}
                     ]
                   }
@@ -89,13 +93,13 @@ class PreviewFromExtractorUiTest {
         onNodeWithText("Fixture Channel").assertExists()
         assertEquals(0, graph.engine.jobs.value.size, "the preview must not start a download")
 
-        // The Edit panel reflects the extracted formats: 1080p is not a
-        // single-file format here and carries the toolkit reason, and the
-        // dropped cipher format is reported.
+        // The Edit panel reflects the extracted formats: 1080p exists only as
+        // a split video stream, and this test host cannot merge, so it carries
+        // the host gap; the dropped cipher format is reported.
         onNodeWithTag("preview-edit-toggle").performClick()
         onNodeWithTag("preview-edit-quality-res-360").assertExists()
         onNodeWithTag("preview-edit-quality-res-1080").assertIsNotEnabled()
-        onNodeWithText("Needs the media toolkit (not built yet)", substring = true).assertExists()
+        onNodeWithText("This host cannot merge video and audio", substring = true).assertExists()
         onNodeWithTag("preview-js-formats").assertExists()
 
         assertTrue(transfer.requests.none { it.url.contains("clip.mp4") }, "no media request during preview")

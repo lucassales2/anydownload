@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D4 verified 2026-09-24 (extractor core and YouTube single video) · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
+**Phase:** D7 verified 2026-09-25 (X/Twitter status video) · D6 verified 2026-09-25 (spotDL parity) · D5 verified 2026-09-25 (media toolkit) · D4 verified 2026-09-24 · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,9 +14,9 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md), [ADR-008](03-decisions/ADR-008-Extractor-core-and-youtube-phase.md), and the [yt-dlp equivalence matrix](01-product/Ytdlp-equivalence.md). D4 is verified; the next phase is the media toolkit build or the first named site.
-2. Take the first Ready D4 card on [Kanban](Kanban.md). [T-055](06-tasks/T-055-Port-manifest-and-equivalence-matrix.md) is first: the port manifest and the generated coverage table.
-3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. D4 builds the extractor core and translates YouTube for a single video, JS-less first, then with yt-dlp-ejs. The media toolkit stays later; downloads are single-file formats.
+1. Read [Phase 7 — X/Twitter status video](00-project/Phase-7-X-Twitter.md), [ADR-011](03-decisions/ADR-011-X-twitter-phase.md), and the [yt-dlp equivalence matrix](01-product/Ytdlp-equivalence.md). D7 is verified: the public X/Twitter status video on all four hosts, with the four-host result and the opt-in-live/web-end-to-end gaps in [T-100](06-tasks/T-100-Phase-7-verification.md).
+2. The next site is chosen when a phase is planned; the [Kanban](Kanban.md) is the source of truth.
+3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. Do not start another M2/M3 card or another site without a scheduled phase.
 
 ## Accepted direction — 2026-09-21
 
@@ -25,7 +25,7 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 - Targets are iOS, Compose/Wasm, Android, and desktop.
 - Store publication is out of scope; this is a portfolio project.
 
-License notes for translated extractor code are in T-006. D2 proved a direct-file download on each host. D3 shipped the link-only home screen and one generic subset. D4 built the extractor core and YouTube single video and was verified on 2026-09-24. The end goal, recorded 2026-09-24 in ADR-008, is yt-dlp feature equivalence: the core engine plus the extractor catalog over time, measured in the equivalence matrix. The media toolkit is recorded in ADR-007 and not built yet.
+License notes for translated extractor code are in T-006. D2 proved a direct-file download on each host. D3 shipped the link-only home screen and one generic subset. D4 built the extractor core and YouTube single video and was verified on 2026-09-24. The end goal, recorded 2026-09-24 in ADR-008, is yt-dlp feature equivalence: the core engine plus the extractor catalog over time, measured in the equivalence matrix. D5 built and verified the media toolkit on 2026-09-25: merge and audio extract on desktop, Android, and iOS, with web as a documented gap. D6 implemented spotDL v4.5.2 parity and was verified on 2026-09-25. D7 ported the public X/Twitter status video and was verified on 2026-09-25.
 
 ## Documentation map
 
@@ -37,6 +37,9 @@ License notes for translated extractor code are in T-006. D2 proved a direct-fil
 - [Phase 2 — Local HTTP engine](00-project/Phase-2-Local-Kotlin-Engine.md) — D2, done.
 - [Phase 3 — Generic extractor subset](00-project/Phase-3-Generic-Extractor.md) — D3, done.
 - [Phase 4 — Extractor core and YouTube](00-project/Phase-4-Extractor-Core-and-YouTube.md) — done 2026-09-24: core, YouTube JS-less, then EJS.
+- [Phase 5 — Media toolkit](00-project/Phase-5-Media-Toolkit.md) — verified 2026-09-25: merge and audio extract on desktop, Android, and iOS. Web stays a gap.
+- [Phase 6 — spotDL parity](00-project/Phase-6-SpotDL-Parity.md) — verified 2026-09-25: spotDL v4.5.2 operations on the existing engine, with the four-host gaps recorded.
+- [Phase 7 — X/Twitter status video](00-project/Phase-7-X-Twitter.md) — verified 2026-09-25: `TwitterIE`, the selectable preview, one file per selected video on all four hosts, with the opt-in live status and web end-to-end gaps recorded.
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 
@@ -72,7 +75,7 @@ License notes for translated extractor code are in T-006. D2 proved a direct-fil
 ## Scope reminders
 
 - Site support follows the Kotlin port of yt-dlp. The goal is yt-dlp's coverage. Phase D1 reaches that coverage on desktop by calling the installed yt-dlp, then the port replaces that adapter.
-- Spotify URLs use that engine after a YouTube match ([T-037](06-tasks/T-037-Spotify-youtube-match.md)). D1 does not implement the match.
+- Spotify URLs use that engine after a YouTube match ([T-037](06-tasks/T-037-Spotify-youtube-match.md)). The full spotDL surface is [Phase 6](00-project/Phase-6-SpotDL-Parity.md), verified 2026-09-25. D1 did not implement the match.
 - MeTube-equivalent workflows are the target, not a pixel-for-pixel copy or MeTube protocol compatibility.
 - Downloads finish on the device. There is no server job.
 - This vault is public. Never paste real credentials or private-media links here.

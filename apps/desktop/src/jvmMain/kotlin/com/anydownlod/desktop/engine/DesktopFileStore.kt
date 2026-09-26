@@ -3,6 +3,7 @@ package com.anydownlod.desktop.engine
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
 import com.anydownlod.core.platform.JavaNetFileStore
+import com.anydownlod.core.postprocess.MediaFilePath
 import java.nio.file.Path
 
 /**
@@ -22,6 +23,12 @@ class DesktopFileStore(private val rootProvider: () -> String) : FileStore {
     }
 
     override fun createTempFile(): FileHandle = current().createTempFile()
+
+    override fun createTempFile(extension: String): FileHandle = current().createTempFile(extension)
+
+    override fun mediaFilePath(temp: FileHandle): MediaFilePath = current().mediaFilePath(temp)
+
+    override fun mediaFilePath(relativePath: String): MediaFilePath = current().mediaFilePath(relativePath)
 
     override fun publish(temp: FileHandle, relativePath: String): String =
         current().publish(temp, relativePath)

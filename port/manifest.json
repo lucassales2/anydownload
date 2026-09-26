@@ -30,11 +30,40 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
       ],
       "status": "partial",
-      "scope": "Single video via the JS-less visionos innertube client: watch?v=, youtu.be/, /shorts/, /embed/, /live/, youtube-nocookie.com/embed/, music.youtube.com/watch?v=; metadata and streamingData formats; signature-cipher and n-transformed formats dropped and counted. No playlists, channels, live streams, comments, subtitles, cookies, PO tokens, JS challenge solving, or other clients.",
+      "scope": "Single video via the JS-less visionos client and, with the runtime, the web client: watch?v=, youtu.be/, /shorts/, /embed/, /live/, youtube-nocookie.com/embed/, music.youtube.com/watch?v=; metadata and streamingData formats; signatureCipher and n resolved through the bundled solver and merged visionos-first. No playlists, channels, live streams, comments, subtitles, cookies, PO tokens, or other clients.",
       "tasks": [
-        "T-060"
+        "T-060",
+        "T-070"
       ],
       "portedAt": "2026-09-24"
+    },
+    {
+      "id": "YoutubeSearchIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_search.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeSearch.kt"
+      ],
+      "status": "partial",
+      "scope": "Innertube search subset for the D6 matcher: WEB_REMIX songs/videos and WEB video results parsed to video id, title, channel/artists, album, duration, views, and the verified song flag, with the request context/headers from `_tab.py`'s `_search_results`. No continuations, playlist/channel/album result sections, filters beyond songs/videos, other clients, or download.",
+      "tasks": [
+        "T-085"
+      ],
+      "portedAt": "2026-09-25"
+    },
+    {
+      "id": "TwitterIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Single public status through the public syndication guest lookup: x.com, twitter.com, mobile.x.com, mobile.twitter.com /user/status/<id> (plus www/m and i/web forms); tweet metadata; media grouped by stable media id; MP4 and HLS variants; photo-only, protected, and deleted fail typed. No GraphQL or legacy API, no cookies, no stored guest token, no photos, quoted tweets, cards, Spaces, broadcasts, Amplify, or shortener, and no download.",
+      "tasks": [
+        "T-094"
+      ],
+      "portedAt": "2026-09-25"
     },
     {
       "id": "common.py",

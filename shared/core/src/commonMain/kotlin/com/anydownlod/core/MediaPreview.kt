@@ -1,5 +1,19 @@
 package com.anydownlod.core
 
+import com.anydownlod.core.music.SpotifyPreview
+
+/**
+ * Port-only: one selectable video of a preview (an X status). [mediaId] is
+ * the stable id a download request carries back to the extractor; photos
+ * never appear here.
+ */
+data class MediaPreviewVideo(
+    val mediaId: String,
+    val title: String? = null,
+    val durationSeconds: Long? = null,
+    val thumbnailUrl: String? = null,
+)
+
 /**
  * Metadata shown before a download starts.
  *
@@ -25,6 +39,18 @@ data class MediaPreview(
      * Edit panel then keeps its static choices.
      */
     val availableFormats: FormatChoices? = null,
+    /**
+     * Port-only: selectable videos of one source (an X status). Non-empty
+     * only when the source carries videos; the UI lists one row per stable
+     * media id and preselects the first. Photos are never listed.
+     */
+    val videos: List<MediaPreviewVideo> = emptyList(),
+    /**
+     * A resolved Spotify query. Non-null only when the source expanded a
+     * Spotify URL or text search; the UI lists its entries and Download queues
+     * them through the Spotify download service.
+     */
+    val spotify: SpotifyPreview? = null,
 )
 
 /** Why a preview could not be shown. The UI maps each case to a short message. */

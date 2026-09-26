@@ -1,0 +1,39 @@
+{
+  "albums": {
+    "href": "https://api.spotify.com/v1/search?q=fixture&type=album",
+    "items": [
+      {
+        "album_type": "album",
+        "artists": [
+          {
+            "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+            "id": "0gxyHStUsqpMadRV0Di1Qt",
+            "name": "Rick Astley",
+            "type": "artist",
+            "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+          }
+        ],
+        "external_urls": { "spotify": "https://open.spotify.com/album/1ATL5GLyefJaxhQzSPVrLX" },
+        "id": "1ATL5GLyefJaxhQzSPVrLX",
+        "images": [
+          {
+            "height": 640,
+            "url": "https://i.scdn.co/image/ab67616d0000b273255e131abc1410833be95673",
+            "width": 640
+          }
+        ],
+        "name": "Whenever You Need Somebody",
+        "release_date": "1987-11-12",
+        "release_date_precision": "day",
+        "total_tracks": 3,
+        "type": "album",
+        "uri": "spotify:album:1ATL5GLyefJaxhQzSPVrLX"
+      }
+    ],
+    "limit": 50,
+    "next": null,
+    "offset": 0,
+    "previous": null,
+    "total": 1
+  }
+}

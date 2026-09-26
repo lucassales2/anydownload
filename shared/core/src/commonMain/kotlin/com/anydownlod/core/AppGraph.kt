@@ -2,6 +2,9 @@ package com.anydownlod.core
 
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.ToolStatus
+import com.anydownlod.core.music.SpotifyAuthService
+import com.anydownlod.core.music.SpotifyDownloadService
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 
 /**
  * Everything the shared screens need, wired once by each host.
@@ -58,4 +61,24 @@ interface AppGraph {
 
     /** Local cookie-file management; desktop replaces the unavailable default. */
     val cookieStore: CookieStore get() = CookieStore.Unavailable
+
+    /**
+     * What the running host's media toolkit can do. Empty on web and in tests;
+     * desktop supplies the FFmpeg capabilities once T-078 wires them. The Edit
+     * panel enables a merge or transcode choice only when this says so.
+     */
+    val toolkitCapabilities: ToolkitCapabilities get() = ToolkitCapabilities.Unavailable
+
+    /**
+     * Spotify metadata, matching, and queueing. Null on hosts that have not
+     * wired the metadata client and matcher; the UI then treats Spotify input
+     * as an unavailable preview instead of pretending it can download.
+     */
+    val spotify: SpotifyDownloadService? get() = null
+
+    /**
+     * On-device Spotify login state for the user library. Null when the host
+     * has no secret store; the Settings screen then says login is unavailable.
+     */
+    val spotifyAuth: SpotifyAuthService? get() = null
 }

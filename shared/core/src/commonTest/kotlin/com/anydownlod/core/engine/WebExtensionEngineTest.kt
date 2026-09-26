@@ -40,6 +40,7 @@ class WebExtensionEngineTest {
         override val available: Boolean,
         var probe: WebProbe = WebProbe.Final(200, "application/octet-stream", 1_024, "https://example.com/files/tiny.bin"),
         var download: WebDownload = WebDownload.Completed("tiny.bin", 1_024),
+        var downloadFor: ((String) -> WebDownload)? = null,
         var page: WebPage = WebPage.Final("https://example.com/watch?v=x", "no media here"),
         val probeCalls: MutableList<String> = mutableListOf(),
         val pageCalls: MutableList<String> = mutableListOf(),
@@ -78,10 +79,11 @@ class WebExtensionEngineTest {
             downloadSaveViaBlob += saveViaBlob
             downloadGate?.receive()
             currentCoroutineContext().ensureActive()
-            if (download is WebDownload.Completed) {
+            val outcome = downloadFor?.invoke(url) ?: download
+            if (outcome is WebDownload.Completed) {
                 onProgress(512L, 1_024L)
             }
-            return download
+            return outcome
         }
 
         override suspend fun cancelDownload(jobId: String) {
@@ -379,6 +381,100 @@ class WebExtensionEngineTest {
         assertEquals(JobErrorCode.LOGIN_REQUIRED, finished.error?.code)
         assertTrue(bridge.probeCalls.isEmpty())
         assertTrue(bridge.downloadCalls.isEmpty())
+    }
+
+    @Test
+    fun aStatusSelectionSavesOneFilePerSelectedVideo() = runTest {
+        val bridge = FakeBridge(
+            available = true,
+            downloadFor = { url ->
+                when {
+                    url.endsWith("first.mp4") -> WebDownload.Completed("first.mp4", 1_024)
+                    url.endsWith("second.mp4") -> WebDownload.Completed("second.mp4", 2_048)
+                    else -> WebDownload.Failed(WebFailureCode.OTHER, "unexpected media URL")
+                }
+            },
+        )
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(StatusExtractor))
+        val engine = engine(bridge, this, registry)
+
+        val job = engine.submit(
+            DownloadRequest(
+                sourceUrl = "https://x.example/fixture/status/1",
+                idempotencyKey = "web-x-status",
+                selectedMediaIds = listOf("a", "b"),
+            ),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        assertTrue(bridge.probeCalls.isEmpty(), "a matched status must not probe")
+        assertEquals(
+            listOf("https://video.example/first.mp4", "https://video.example/second.mp4"),
+            bridge.downloadCalls.map { it.first },
+        )
+        assertEquals(listOf("first.mp4", "second.mp4"), finished.artifacts.map { it.relativePath })
+        assertEquals(3_072L, finished.progress?.downloadedBytes)
+    }
+
+    @Test
+    fun anEmptyStatusSelectionFailsBeforeAnyMediaUrl() = runTest {
+        val bridge = FakeBridge(available = true)
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(StatusExtractor))
+        val engine = engine(bridge, this, registry)
+
+        val job = engine.submit(
+            DownloadRequest(
+                sourceUrl = "https://x.example/fixture/status/1",
+                idempotencyKey = "web-x-empty",
+            ),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, finished.error?.code)
+        assertTrue(bridge.downloadCalls.isEmpty())
+        assertTrue(finished.artifacts.isEmpty())
+    }
+
+    private object StatusExtractor : com.anydownlod.core.extract.InfoExtractor(
+        ieKey = "Twitter",
+        http = com.anydownlod.core.extract.ExtractorHttp(UnusedTransfer),
+        validUrl = Regex("""https?://x\.example/.*"""),
+    ) {
+        override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict =
+            com.anydownlod.core.extract.InfoDict(
+                id = "1",
+                title = "Fixture status",
+                media = listOf(
+                    com.anydownlod.core.extract.InfoMedia(
+                        mediaId = "a",
+                        title = "First",
+                        formats = listOf(
+                            com.anydownlod.core.extract.MediaFormat(
+                                formatId = "http-256",
+                                url = "https://video.example/first.mp4",
+                                ext = "mp4",
+                                height = 180,
+                            ),
+                        ),
+                    ),
+                    com.anydownlod.core.extract.InfoMedia(
+                        mediaId = "b",
+                        title = "Second",
+                        formats = listOf(
+                            com.anydownlod.core.extract.MediaFormat(
+                                formatId = "http-832",
+                                url = "https://video.example/second.mp4",
+                                ext = "mp4",
+                                height = 360,
+                            ),
+                        ),
+                    ),
+                ),
+            )
     }
 
     private object UnusedTransfer : com.anydownlod.core.platform.HttpTransfer {

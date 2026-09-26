@@ -52,6 +52,10 @@ tasks.withType<Test>().configureEach {
     providers.gradleProperty("liveExtractorTests").orNull?.let { value ->
         systemProperty("liveExtractorTests", value)
     }
+    // T-096's live X status check runs only with -PxStatusUrl=<public status>.
+    providers.gradleProperty("xStatusUrl").orNull?.let { value ->
+        systemProperty("xStatusUrl", value)
+    }
     listOf(
         "anydownlod.live.url",
         "anydownlod.live.cancelUrl",

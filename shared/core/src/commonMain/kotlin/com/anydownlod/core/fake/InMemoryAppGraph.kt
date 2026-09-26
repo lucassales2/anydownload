@@ -7,6 +7,8 @@ import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.domain.DownloadJob
+import com.anydownlod.core.music.SpotifyAuthService
+import com.anydownlod.core.music.SpotifyDownloadService
 
 /**
  * The default [AppGraph]: three in-memory fakes and a probe that reports both
@@ -18,6 +20,8 @@ class InMemoryAppGraph(
     override val settings: SettingsRepository = InMemorySettingsRepository(),
     override val toolProbe: ToolProbe = InMemoryToolProbe,
     override val previews: MediaPreviewSource = FixedMediaPreviewSource(),
+    override val spotify: SpotifyDownloadService? = null,
+    override val spotifyAuth: SpotifyAuthService? = null,
 ) : AppGraph {
 
     companion object {

@@ -6,6 +6,7 @@ import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.CaptionFormat
 import com.anydownlod.core.domain.CaptionPreference
+import com.anydownlod.core.domain.DownloadOptions
 import com.anydownlod.core.domain.DownloadRequest
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.QualityPreference
@@ -13,6 +14,7 @@ import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.domain.Subscription
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.core.music.SpotifyQueryParser
 import com.anydownlod.core.validation.BatchUrlValidator
 import com.anydownlod.core.validation.ClipboardLink
 import com.anydownlod.core.validation.SourceUrlValidation
@@ -107,23 +109,25 @@ class AddFormPresenter(
     }
 
     /**
-     * The one http(s) URL in the field, or null when the field is a batch,
-     * empty, or already showing an input error. A batch keeps the direct
-     * download path; a single link opens the preview first.
+     * The one previewable input in the field: an http(s) URL, a Spotify link,
+     * or Spotify search text. Null for a batch, empty, or an input error. A
+     * batch keeps the direct download path; a single input opens the preview.
      */
     fun singleSourceUrl(): String? {
         val current = _state.value
         if (current.inputError() != null) return null
         val lines = current.urlText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.size != 1) return null
-        return (SourceUrlValidator.validate(lines.single()) as? SourceUrlValidation.Valid)?.url
+        val single = lines.single()
+        if (SpotifyQueryParser.isSpotifyInput(single)) return single
+        return (SourceUrlValidator.validate(single) as? SourceUrlValidation.Valid)?.url
     }
 
     /**
-     * T-053 idle-field submit: accepts exactly one compatible HTTP(S) URL.
-     * Returns that URL (the caller then opens the metadata preview), or
-     * records the validator message on the status line and returns null. This
-     * never starts a job and never clears the field.
+     * T-053 idle-field submit: accepts exactly one compatible HTTP(S) URL or
+     * one Spotify query. Returns that input (the caller then opens the
+     * metadata preview), or records the validator message on the status line
+     * and returns null. This never starts a job and never clears the field.
      */
     fun validateForPreview(): String? {
         val current = _state.value
@@ -132,7 +136,9 @@ class AddFormPresenter(
             _status.value = AddStatus(UiText.of(Res.string.url_error_one_only), isError = true)
             return null
         }
-        return when (val validation = SourceUrlValidator.validate(lines.singleOrNull().orEmpty())) {
+        val single = lines.singleOrNull().orEmpty()
+        if (SpotifyQueryParser.isSpotifyInput(single)) return single
+        return when (val validation = SourceUrlValidator.validate(single)) {
             is SourceUrlValidation.Valid -> validation.url
             is SourceUrlValidation.Invalid -> {
                 _status.value = AddStatus(validation.error.toUiText(), isError = true)
@@ -140,6 +146,10 @@ class AddFormPresenter(
             }
         }
     }
+
+    /** The current form options; the Spotify queue path uses them. */
+    fun currentOptions(): DownloadOptions =
+        _state.value.toDownloadOptions(settingsRepository.settings.value)
 
     fun setMediaType(value: MediaType) = mutate { it.copy(mediaType = value, lineErrors = emptyList()) }
 
@@ -204,8 +214,12 @@ class AddFormPresenter(
     /**
      * Submits every valid line through the engine and clears only the accepted
      * lines. Returns null when the form has an inline error or no valid URL.
+     *
+     * [selectedMediaIds] is the multi-media preview selection (an X status);
+     * it rides on every request of this submission and stays empty for other
+     * sources and for the batch field.
      */
-    fun submit(): AddSubmitReport? {
+    fun submit(selectedMediaIds: List<String> = emptyList()): AddSubmitReport? {
         val current = _state.value
         current.inputError()?.let { error ->
             _status.value = AddStatus(error, isError = true)
@@ -236,6 +250,7 @@ class AddFormPresenter(
                     sourceUrl = url,
                     options = options,
                     idempotencyKey = "$batchKey-$index",
+                    selectedMediaIds = selectedMediaIds,
                 )
             )
             if (submittedJobIds.add(job.id)) {

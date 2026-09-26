@@ -3,10 +3,13 @@ package com.anydownlod.android
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.anydownlod.android.engine.AndroidExtractors
 import com.anydownlod.android.engine.AndroidRouteClassifier
 import com.anydownlod.android.engine.AndroidRoutingEngine
 import com.anydownlod.android.engine.ChaquopyEngine
 import com.anydownlod.android.engine.ChaquopyPort
+import com.anydownlod.android.engine.media.AndroidMediaToolkit
+import com.anydownlod.android.media.AndroidPlatformMuxer
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
@@ -23,12 +26,15 @@ import com.anydownlod.core.domain.ToolAvailability
 import com.anydownlod.core.domain.ToolStatus
 import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.extract.ExtractorHttp
-import com.anydownlod.core.extract.ExtractorRegistry
-import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.music.AudioMatcher
+import com.anydownlod.core.music.SpotifyDownloadService
+import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
 import com.anydownlod.core.platform.JavaNetFileStore
 import com.anydownlod.core.platform.JavaNetHttpTransfer
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,10 +65,11 @@ class AndroidAppGraph(
     // rest. One transfer and registry serve routing, downloads, and previews.
     private val transfer = JavaNetHttpTransfer()
     private val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
-    private val extractorRegistry = ExtractorRegistry(
-        listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
-    )
+    private val extractorRegistry = AndroidExtractors.registry(transfer, jsRuntime)
     private val classifier = AndroidRouteClassifier(registry = extractorRegistry)
+
+    // D5: MediaMuxer/MediaExtractor remux. Capabilities stay M4A/Opus copy-only.
+    private val toolkit = AndroidMediaToolkit(AndroidPlatformMuxer())
 
     override val engine: DownloadEngine = AndroidRoutingEngine(
         http = HttpDownloadEngine(
@@ -72,6 +79,7 @@ class AndroidAppGraph(
             scope = scope,
             ioDispatcher = Dispatchers.Default,
             registry = extractorRegistry,
+            toolkit = toolkit,
         ),
         chaquopy = ChaquopyEngine(
             port = port,
@@ -86,9 +94,18 @@ class AndroidAppGraph(
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = settingsRepository
 
+    // D6: Spotify metadata, matching, and queueing through the shared engine.
+    // The user library needs an on-device token store, which is a mobile gap.
+    override val spotify: SpotifyDownloadService = SpotifyDownloadService(
+        metadata = SpotifyMetadataClients.default(ExtractorHttp(transfer)),
+        matcher = AudioMatcher.default(YoutubeSearch(ExtractorHttp(transfer))),
+        engine = engine,
+    )
+
     override val toolProbe: ToolProbe = AndroidToolProbe(port, jsRuntime)
     override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
     override val cookieStore: CookieStore = CookieStore.Unavailable
+    override val toolkitCapabilities: ToolkitCapabilities = toolkit.capabilities()
 
     override val openUrl: (String) -> Unit = { url ->
         runCatching {

@@ -104,7 +104,16 @@ class OptionsToSpecTest {
                 OptionsToSpec.compile(DownloadOptions(mediaType = MediaType.AUDIO, audioContainer = container)),
             )
             assertEquals(container.wireName, needs.container)
-            assertTrue(needs.message.contains("media toolkit"))
+            assertTrue(needs.message.contains("cannot write"), needs.message)
+
+            val extract = assertIs<CompiledSpec.ExtractAudio>(
+                OptionsToSpec.compile(
+                    DownloadOptions(mediaType = MediaType.AUDIO, audioContainer = container),
+                    audioContainers = setOf(container),
+                ),
+            )
+            assertEquals(container, extract.container)
+            assertEquals("ba", extract.specText)
         }
     }
 
@@ -146,6 +155,75 @@ class OptionsToSpecTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun mergeCapableHostCompilesOneMergeWithASingleFileFallback() {
+        val best = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(DownloadOptions(), canMerge = true),
+        )
+        assertEquals("bv*+ba/b", best.specText)
+
+        val worst = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(DownloadOptions(quality = QualityPreference.Worst), canMerge = true),
+        )
+        assertEquals("wv*+wa/w", worst.specText)
+
+        val capped = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(DownloadOptions(quality = QualityPreference.Resolution("720")), canMerge = true),
+        )
+        assertEquals("bv*[height<=720]+ba/b[height<=720]", capped.specText)
+
+        val mp4 = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(DownloadOptions(videoProfile = VideoContainerProfile.MP4), canMerge = true),
+        )
+        assertEquals("bv*[ext=mp4][vcodec^=avc1]+ba/b[ext=mp4][vcodec^=avc1]/b", mp4.specText)
+
+        val cappedMp4 = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(
+                DownloadOptions(
+                    videoProfile = VideoContainerProfile.MP4,
+                    quality = QualityPreference.Resolution("1080"),
+                ),
+                canMerge = true,
+            ),
+        )
+        assertEquals(
+            "bv*[height<=1080][ext=mp4][vcodec^=avc1]+ba/b[height<=1080][ext=mp4][vcodec^=avc1]/b[height<=1080]",
+            cappedMp4.specText,
+        )
+
+        for (spec in listOf(best, worst, capped, mp4, cappedMp4)) {
+            assertEquals(1, spec.specText.count { it == '+' }, spec.specText)
+            FormatSpec.parse(spec.specText)
+        }
+
+        // Audio options never grow a merge, even on a merge-capable host.
+        val audio = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(
+                DownloadOptions(mediaType = MediaType.AUDIO, audioContainer = AudioContainer.M4A),
+                canMerge = true,
+            ),
+        )
+        assertFalse(audio.specText.contains("+"))
+    }
+
+    @Test
+    fun mergeSpecSelectsASplitPair() {
+        val info = com.anydownlod.core.extract.InfoDict(
+            formats = listOf(
+                format(id = "v1080", ext = "webm", vcodec = "vp9", acodec = "none", height = 1080),
+                format(id = "v720", ext = "mp4", vcodec = "avc1", acodec = "none", height = 720),
+                format(id = "audio", ext = "m4a", vcodec = "none", acodec = "mp4a"),
+                format(id = "progressive", ext = "mp4", vcodec = "avc1", acodec = "mp4a", height = 360),
+            ),
+        )
+        val compiled = assertIs<CompiledSpec.SingleFile>(
+            OptionsToSpec.compile(DownloadOptions(quality = QualityPreference.Resolution("720")), canMerge = true),
+        )
+        val selection = assertIs<Selection.Merge>(FormatSelector.select(info, compiled.spec, compiled.sort))
+        assertEquals("v720", selection.video.formatId)
+        assertEquals("audio", selection.audio.formatId)
     }
 
     @Test

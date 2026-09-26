@@ -9,7 +9,7 @@ tags: [project, engine, kmp, youtube, delivery]
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [ADR-008](../03-decisions/ADR-008-Extractor-core-and-youtube-phase.md) · [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) · [yt-dlp equivalence](../01-product/Ytdlp-equivalence.md) · [Phase 3](Phase-3-Generic-Extractor.md)
 
-**Start here if you are implementing.** This note is the handoff for Phase D4. ADR-004 remains the end state: Kotlin yt-dlp on every target. D2's direct-file path and D3's generic subset stay. This phase builds the extractor core every later translation plugs into, then translates YouTube for a single video, first without JavaScript and then with yt-dlp-ejs on an embedded runtime.
+**Done 2026-09-24** ([T-074](../06-tasks/T-074-Phase-4-verification.md)). The current handoff is [Phase 5](Phase-5-Media-Toolkit.md). This note is kept as the record of Phase D4. ADR-004 remains the end state: Kotlin yt-dlp on every target. D2's direct-file path and D3's generic subset stay. This phase built the extractor core every later translation plugs into, then translated YouTube for a single video, first without JavaScript and then with yt-dlp-ejs on an embedded runtime.
 
 Owner direction, 2026-09-24: the end goal is yt-dlp feature equivalence, meaning the core engine plus the extractor catalog over time. D4 is the core and YouTube single video on iOS, Android, web, and desktop. No merge or transcode yet. Stage YouTube: JS-less `visionos` first as a gate, then EJS with the `web` client. Zipline QuickJS is the embedded runtime to try first. yt-dlp-ejs is bundled and pinned. The desktop CLI and Chaquopy stay for unmatched URLs and become an opt-in oracle. Preview and Edit come from the Kotlin extractor.
 
@@ -109,7 +109,7 @@ Parity rows: F-01 gains YouTube evidence for a single video at single-file quali
 
 ## Explicitly later
 
-- Media toolkit: merge, audio extract, transcode, clips, chapter split, embed thumbnail/metadata (recorded in ADR-007).
+- Media toolkit: Phase D5 ([Phase 5](Phase-5-Media-Toolkit.md)). Clips, chapter split, and embed thumbnail/metadata stay later.
 - YouTube playlists, channels and tabs, live and from-start, comments, subtitles, PO token providers, cookies, premium/authed clients.
 - X / Twitter (next named site), the rest of the generic extractor (JSON-LD, og:video, embeds), and any other extractor.
 - Runtime EJS updates, `jsinterp` port, curl_cffi-style impersonation.

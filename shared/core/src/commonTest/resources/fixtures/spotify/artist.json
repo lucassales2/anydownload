@@ -1,0 +1,17 @@
+{
+  "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+  "followers": { "href": null, "total": 1000 },
+  "genres": ["new romantic"],
+  "id": "0gxyHStUsqpMadRV0Di1Qt",
+  "images": [
+    {
+      "height": 640,
+      "url": "https://i.scdn.co/image/ab6761610000e5eb4f6d1f7a6e2c9b8d",
+      "width": 640
+    }
+  ],
+  "name": "Rick Astley",
+  "popularity": 75,
+  "type": "artist",
+  "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+}

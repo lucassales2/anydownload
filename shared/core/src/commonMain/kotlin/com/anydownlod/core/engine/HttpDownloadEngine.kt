@@ -5,6 +5,7 @@ import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.ArtifactKind
+import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadOptions
 import com.anydownlod.core.domain.DownloadRequest
@@ -13,7 +14,9 @@ import com.anydownlod.core.domain.JobError
 import com.anydownlod.core.domain.JobErrorCode
 import com.anydownlod.core.domain.JobProgress
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.core.domain.MediaTags
 import com.anydownlod.core.domain.MediaType
+import com.anydownlod.core.domain.OverwriteMode
 import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.extract.ExtractionError
 import com.anydownlod.core.download.FragmentDownloader
@@ -28,6 +31,7 @@ import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractionFailure
 import com.anydownlod.core.extract.GenericExtractor
 import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.InfoMedia
 import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.format.CompiledSpec
 import com.anydownlod.core.format.FormatSelector
@@ -42,6 +46,10 @@ import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.engineCriticalSection
+import com.anydownlod.core.postprocess.MediaFilePath
+import com.anydownlod.core.postprocess.MediaToolkit
+import com.anydownlod.core.postprocess.ToolkitError
+import com.anydownlod.core.postprocess.UnavailableToolkit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -93,6 +101,11 @@ class HttpDownloadEngine(
      * the D4 host tasks.
      */
     private val registry: ExtractorRegistry? = null,
+    /**
+     * The host media toolkit. The web host and tests keep the default
+     * [UnavailableToolkit]: the compiler then never emits a merge.
+     */
+    private val toolkit: MediaToolkit = UnavailableToolkit,
     private val maxRedirects: Int = UrlPolicy.MAX_REDIRECTS,
     private val chunkSize: Int = 64 * 1024,
     /**
@@ -111,6 +124,15 @@ class HttpDownloadEngine(
 
         /** Largest HLS/DASH manifest the engine will read (T-073). */
         const val MANIFEST_MAX_BYTES = 2 * 1024 * 1024
+
+        /** Largest artwork image the engine will fetch for tag embedding. */
+        const val ARTWORK_MAX_BYTES = 5 * 1024 * 1024
+
+        /**
+         * The container a D5 merge writes. A codec pair this container cannot
+         * hold fails typed instead of being silently saved as one stream.
+         */
+        const val MERGE_CONTAINER_EXT = "mp4"
     }
 
     private val lock = Any()
@@ -226,6 +248,7 @@ class HttpDownloadEngine(
             updatedAtEpochMillis = at,
             startedAtEpochMillis = at,
             sourceHost = UrlPolicy.hostOf(request.sourceUrl),
+            parentBatchId = request.parentBatchId,
             attempts = listOf(
                 JobAttempt(
                     id = "attempt-${idGenerator()}",
@@ -274,6 +297,7 @@ class HttpDownloadEngine(
             fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "Choose a download folder in Settings first.")
             return
         }
+        val request = findJob(jobId)?.request ?: return
         semaphore.withPermit {
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
@@ -282,6 +306,7 @@ class HttpDownloadEngine(
             val url = findJob(jobId)?.request?.sourceUrl ?: return@withPermit
             val options = findJob(jobId)?.request?.options ?: DownloadOptions()
             try {
+                if (handleExistingArtifact(jobId, request)) return@withPermit
                 val extractor = registry?.suitableFor(url)
                 if (extractor != null) {
                     extractAndDownload(jobId, url, options, extractor)
@@ -333,7 +358,12 @@ class HttpDownloadEngine(
                 formatsNeedingJs = info.formatsNeedingJs,
             )
         }
-        when (val resolution = resolveFormat(info, options)) {
+        if (info.media.isNotEmpty()) {
+            downloadSelectedMedia(jobId, url, info, options)
+            return
+        }
+        val capabilities = toolkit.capabilities()
+        when (val resolution = resolveFormat(info, options, capabilities.canMerge, capabilities.audioContainers)) {
             is FormatResolution.Unsupported -> {
                 fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
             }
@@ -365,7 +395,669 @@ class HttpDownloadEngine(
                     artifactExt = format.ext,
                 )
             }
+
+            is FormatResolution.Merge -> downloadAndMerge(
+                jobId = jobId,
+                sourceUrl = url,
+                info = info,
+                options = options,
+                video = resolution.video,
+                audio = resolution.audio,
+            )
+
+            is FormatResolution.ExtractAudio -> downloadAndExtractAudio(
+                jobId = jobId,
+                sourceUrl = url,
+                info = info,
+                options = options,
+                format = resolution.format,
+                container = resolution.container,
+            )
         }
+    }
+
+    /**
+     * The D7 media route: a source with several videos (an X status) writes
+     * one file per selected stable media id. Every id is resolved against the
+     * fresh extraction before any media request, so a stale selection never
+     * half-downloads. Files are published one by one on the same job, whose
+     * source URL stays the status URL. A failure mid-way keeps the files
+     * already published and fails the job typed; the failed temp is discarded.
+     */
+    private suspend fun downloadSelectedMedia(
+        jobId: String,
+        sourceUrl: String,
+        info: InfoDict,
+        options: DownloadOptions,
+    ) {
+        val selectedIds = findJob(jobId)?.request?.selectedMediaIds.orEmpty()
+        if (selectedIds.isEmpty()) {
+            fail(
+                jobId,
+                JobErrorCode.INVALID_URL_OPTIONS,
+                "Select at least one video before downloading this post.",
+                retryable = false,
+            )
+            return
+        }
+        val selected = info.media.filter { it.mediaId in selectedIds }
+        if (selected.size != selectedIds.size) {
+            fail(
+                jobId,
+                JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+                "A selected video is no longer part of this post.",
+                retryable = false,
+            )
+            return
+        }
+        val capabilities = toolkit.capabilities()
+        val resolved = mutableListOf<MediaFormat>()
+        for (media in selected) {
+            // Each media is its own single-format selection; the preview's
+            // media URLs are never reused.
+            val mediaInfo = info.copy(formats = media.formats, media = emptyList())
+            when (
+                val resolution = resolveFormat(
+                    info = mediaInfo,
+                    options = options,
+                    canMerge = capabilities.canMerge,
+                    audioContainers = capabilities.audioContainers,
+                )
+            ) {
+                is FormatResolution.Ready -> resolved += resolution.format
+                is FormatResolution.Unsupported -> {
+                    fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
+                    return
+                }
+
+                is FormatResolution.Merge, is FormatResolution.ExtractAudio -> {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "This selection needs the media toolkit and is not available for a post video.",
+                        retryable = false,
+                    )
+                    return
+                }
+            }
+        }
+
+        var downloaded = 0L
+        val multi = selected.size > 1
+        selected.forEachIndexed { index, media ->
+            val format = resolved[index]
+            val formatUrl = format.url
+            if (formatUrl.isNullOrBlank()) {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "The selected format has no downloadable URL.",
+                    retryable = false,
+                )
+                return
+            }
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return
+            }
+            update(jobId, persistNow = false) {
+                it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+            }
+            val title = mediaTitle(info, media, multi, index)
+            val temp = downloadDirectFile(
+                jobId = jobId,
+                url = formatUrl,
+                options = options,
+                extractHtml = false,
+                headers = format.httpHeaders.orEmpty(),
+                chunkSize = format.downloaderOptions?.httpChunkSize,
+                declaredSize = format.filesize ?: format.filesizeApprox,
+                artifactTitle = title,
+                artifactExt = format.ext,
+                publishResult = false,
+            ) ?: return
+            if (isCancelRequested(jobId)) {
+                runCatching { temp.handle.discard() }
+                confirmCancelled(jobId)
+                return
+            }
+            val published = publishMediaArtifact(
+                jobId = jobId,
+                temp = temp,
+                options = options,
+                sourceUrl = sourceUrl,
+                artifactTitle = title,
+                artifactExt = format.ext,
+            )
+            if (!published) return
+            downloaded += temp.bytes
+        }
+        update(jobId) {
+            it.copy(
+                state = JobState.COMPLETED,
+                progress = JobProgress(phase = "completed", percent = 100.0, downloadedBytes = downloaded),
+                error = null,
+                finishedAtEpochMillis = now(),
+            )
+        }
+    }
+
+    /** A media title, numbered when several videos are selected at once. */
+    private fun mediaTitle(
+        info: InfoDict,
+        media: InfoMedia,
+        multi: Boolean,
+        index: Int,
+    ): String? = media.title
+        ?: info.title?.let { title -> if (multi) "$title #${index + 1}" else title }
+
+    /**
+     * Publishes one finished media temp under the artifact name and appends
+     * the artifact without completing the job, so several files can share the
+     * status job. The existing name sanitization and collision policy stand.
+     */
+    private suspend fun publishMediaArtifact(
+        jobId: String,
+        temp: TempDownload,
+        options: DownloadOptions,
+        sourceUrl: String,
+        artifactTitle: String?,
+        artifactExt: String?,
+    ): Boolean {
+        val relativePath = artifactPath(
+            options = options,
+            sourceUrl = sourceUrl,
+            artifactTitle = artifactTitle ?: temp.suggestedTitle,
+            artifactExt = artifactExt ?: temp.suggestedExt,
+            requestedPath = requestedPath(jobId),
+        ) ?: run {
+            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+            runCatching { temp.handle.discard() }
+            return false
+        }
+        temp.handle.close()
+        val published = try {
+            fileStore.publish(temp.handle, relativePath)
+            true
+        } catch (failure: Throwable) {
+            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+            false
+        }
+        if (!published) {
+            runCatching { temp.handle.discard() }
+            return false
+        }
+        val sizeBytes = runCatching { fileStore.size(relativePath) }.getOrNull() ?: temp.bytes
+        val artifact = Artifact(
+            id = "artifact-${idGenerator()}",
+            jobId = jobId,
+            kind = artifactKind(options.mediaType, relativePath),
+            fileName = relativePath.substringAfterLast('/'),
+            relativePath = relativePath,
+            sizeBytes = sizeBytes,
+        )
+        update(jobId) { it.copy(artifacts = it.artifacts + artifact) }
+        return true
+    }
+
+    /**
+     * The D5 merge route: download the selected video and audio streams to
+     * temps through the same direct-file path, merge them with the host
+     * toolkit into one container, and publish one artifact. Temps are deleted
+     * on success, failure, and cancel. An incompatible container or a missing
+     * toolkit fails typed; it never silently saves one stream.
+     */
+    private suspend fun downloadAndMerge(
+        jobId: String,
+        sourceUrl: String,
+        info: InfoDict,
+        options: DownloadOptions,
+        video: MediaFormat,
+        audio: MediaFormat,
+    ) {
+        val videoTemp = downloadFormatToTemp(jobId, video, options, info.title) ?: return
+        try {
+            val audioTemp = downloadFormatToTemp(jobId, audio, options, info.title) ?: return
+            try {
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return
+                }
+                update(jobId) {
+                    it.copy(state = JobState.POSTPROCESSING, progress = JobProgress(phase = "merging"))
+                }
+                val destination = runCatching { fileStore.createTempFile(MERGE_CONTAINER_EXT) }.getOrNull()
+                if (destination == null) {
+                    fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+                    return
+                }
+                var published = false
+                try {
+                    // The toolkit writes the file itself; release the empty handle first.
+                    destination.close()
+                    try {
+                        toolkit.merge(
+                            fileStore.mediaFilePath(videoTemp.handle),
+                            fileStore.mediaFilePath(audioTemp.handle),
+                            fileStore.mediaFilePath(destination),
+                        )
+                    } catch (error: ToolkitError) {
+                        val mapped = toolkitJobError(error)
+                        fail(jobId, mapped.code, mapped.message, mapped.retryable)
+                        return
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (isCancelRequested(jobId)) {
+                        confirmCancelled(jobId)
+                        return
+                    }
+                    val relativePath = artifactPath(
+                        options = options,
+                        sourceUrl = sourceUrl,
+                        artifactTitle = info.title,
+                        artifactExt = MERGE_CONTAINER_EXT,
+                        requestedPath = requestedPath(jobId),
+                    ) ?: run {
+                        fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                        return
+                    }
+                    published = publishAndComplete(
+                        jobId = jobId,
+                        handle = destination,
+                        downloaded = videoTemp.bytes + audioTemp.bytes,
+                        totalBytes = null,
+                        options = options,
+                        relativePath = relativePath,
+                    )
+                } finally {
+                    if (!published) {
+                        runCatching { destination.discard() }
+                    }
+                }
+            } finally {
+                runCatching { audioTemp.handle.discard() }
+            }
+        } finally {
+            runCatching { videoTemp.handle.discard() }
+        }
+    }
+
+    /**
+     * The T-082 audio extraction route: download the best audio-only stream to
+     * a temp and let the host toolkit copy or transcode it into the requested
+     * container. The destination extension is the container the toolkit wrote;
+     * a rejected codec fails typed and leaves no artifact.
+     */
+    private suspend fun downloadAndExtractAudio(
+        jobId: String,
+        sourceUrl: String,
+        info: InfoDict,
+        options: DownloadOptions,
+        format: MediaFormat,
+        container: AudioContainer,
+    ) {
+        val sourceTemp = downloadFormatToTemp(jobId, format, options, info.title) ?: return
+        try {
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return
+            }
+            update(jobId) {
+                it.copy(state = JobState.POSTPROCESSING, progress = JobProgress(phase = "extracting audio"))
+            }
+            val destination = runCatching { fileStore.createTempFile(container.wireName) }.getOrNull()
+            if (destination == null) {
+                fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+                return
+            }
+            var published = false
+            try {
+                // The toolkit writes the file itself; release the empty handle first.
+                destination.close()
+                try {
+                    toolkit.extractAudio(
+                        fileStore.mediaFilePath(sourceTemp.handle),
+                        container,
+                        fileStore.mediaFilePath(destination),
+                    )
+                } catch (error: ToolkitError) {
+                    val mapped = toolkitJobError(error)
+                    fail(jobId, mapped.code, mapped.message, mapped.retryable)
+                    return
+                }
+                currentCoroutineContext().ensureActive()
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return
+                }
+                val tags = embedRequestedTags(jobId, destination, container)
+                if (tags is TagResult.Failed) return
+                val relativePath = artifactPath(
+                    options = options,
+                    sourceUrl = sourceUrl,
+                    artifactTitle = info.title,
+                    artifactExt = container.wireName,
+                    requestedPath = requestedPath(jobId),
+                ) ?: run {
+                    fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                    return
+                }
+                published = publishAndComplete(
+                    jobId = jobId,
+                    handle = destination,
+                    downloaded = sourceTemp.bytes,
+                    totalBytes = null,
+                    options = options,
+                    relativePath = relativePath,
+                    tagsEmbedded = tagsEmbeddedOf(tags),
+                    lyricsEmbedded = lyricsEmbeddedOf(tags),
+                )
+            } finally {
+                if (!published) {
+                    runCatching { destination.discard() }
+                }
+            }
+        } finally {
+            runCatching { sourceTemp.handle.discard() }
+        }
+    }
+
+    /** Downloads one selected format into a temp through the direct-file path. */
+    private suspend fun downloadFormatToTemp(
+        jobId: String,
+        format: MediaFormat,
+        options: DownloadOptions,
+        artifactTitle: String?,
+    ): TempDownload? {
+        val formatUrl = format.url
+        if (formatUrl.isNullOrBlank()) {
+            fail(
+                jobId,
+                JobErrorCode.UNSUPPORTED_FORMAT,
+                "The selected format has no downloadable URL.",
+                retryable = false,
+            )
+            return null
+        }
+        update(jobId, persistNow = false) {
+            it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+        }
+        return downloadDirectFile(
+            jobId = jobId,
+            url = formatUrl,
+            options = options,
+            extractHtml = false,
+            headers = format.httpHeaders.orEmpty(),
+            chunkSize = format.downloaderOptions?.httpChunkSize,
+            declaredSize = format.filesize ?: format.filesizeApprox,
+            artifactTitle = artifactTitle,
+            artifactExt = format.ext,
+            publishResult = false,
+        )
+    }
+
+    /**
+     * A finished download held in a temp file, closed and ready to publish or
+     * merge. [suggestedTitle] and [suggestedExt] carry the manifest-derived
+     * name when the source had one.
+     */
+    private class TempDownload(
+        val handle: FileHandle,
+        val bytes: Long,
+        val totalBytes: Long?,
+        val suggestedTitle: String? = null,
+        val suggestedExt: String? = null,
+    )
+
+    /**
+     * Publishes a completed temp under the artifact name, or hands it back for
+     * a merge. A refused name discards the temp.
+     */
+    private suspend fun finishTemp(
+        jobId: String,
+        temp: TempDownload,
+        publishResult: Boolean,
+        options: DownloadOptions,
+        sourceUrl: String,
+        artifactTitle: String?,
+        artifactExt: String?,
+    ): TempDownload? {
+        if (!publishResult) return temp
+        val container = AudioContainer.fromWire(artifactExt ?: temp.suggestedExt.orEmpty())
+        val tags = embedRequestedTags(jobId, temp.handle, container)
+        if (tags is TagResult.Failed) {
+            runCatching { temp.handle.discard() }
+            return null
+        }
+        val relativePath = artifactPath(
+            options,
+            sourceUrl,
+            artifactTitle ?: temp.suggestedTitle,
+            artifactExt ?: temp.suggestedExt,
+            requestedPath(jobId),
+        ) ?: run {
+            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+            runCatching { temp.handle.discard() }
+            return null
+        }
+        val published = publishAndComplete(
+            jobId = jobId,
+            handle = temp.handle,
+            downloaded = temp.bytes,
+            totalBytes = temp.totalBytes,
+            options = options,
+            relativePath = relativePath,
+            tagsEmbedded = tagsEmbeddedOf(tags),
+            lyricsEmbedded = lyricsEmbeddedOf(tags),
+        )
+        if (!published) {
+            runCatching { temp.handle.discard() }
+        }
+        return null
+    }
+
+    /** Whether the request's Spotify tags could be written on this host. */
+    private sealed interface TagResult {
+        data object NotRequested : TagResult
+        data class Skipped(val lyricsEmbedded: Boolean?) : TagResult
+        data class Embedded(val lyricsEmbedded: Boolean?) : TagResult
+        data object Failed : TagResult
+    }
+
+    private fun tagsEmbeddedOf(result: TagResult): Boolean? = when (result) {
+        TagResult.NotRequested -> null
+        is TagResult.Skipped -> false
+        is TagResult.Embedded -> true
+        TagResult.Failed -> null
+    }
+
+    private fun lyricsEmbeddedOf(result: TagResult): Boolean? = when (result) {
+        is TagResult.Skipped -> result.lyricsEmbedded
+        is TagResult.Embedded -> result.lyricsEmbedded
+        else -> null
+    }
+
+    /**
+     * Embeds the request's tags into a finished temp when it carries any. The
+     * media path is resolved only when tags were requested, so a host without
+     * a toolkit is never asked for one. [container] gates lyrics: a container
+     * the host does not list in `lyricsContainers` never receives them.
+     */
+    private suspend fun embedRequestedTags(
+        jobId: String,
+        handle: FileHandle,
+        container: AudioContainer?,
+    ): TagResult {
+        val request = findJob(jobId)?.request ?: return TagResult.NotRequested
+        if (request.metadata == null) return TagResult.NotRequested
+        return embedTagsInto(jobId, request, fileStore.mediaFilePath(handle), container)
+    }
+
+    /**
+     * Embeds the request's tags into a finished file. A host without the
+     * capability keeps the file and records a skip; a failed rewrite fails
+     * the job and the caller discards the file. Lyrics ride along only when
+     * [container] is in the host's `lyricsContainers`; the job records that
+     * the lyrics were skipped otherwise.
+     */
+    private suspend fun embedTagsInto(
+        jobId: String,
+        request: DownloadRequest,
+        file: MediaFilePath,
+        container: AudioContainer?,
+    ): TagResult {
+        val tags = request.metadata ?: return TagResult.NotRequested
+        val capabilities = toolkit.capabilities()
+        val lyricsSupported = tags.lyrics != null &&
+            container != null &&
+            container in capabilities.lyricsContainers
+        val lyricsEmbedded = when {
+            tags.lyrics == null -> null
+            lyricsSupported -> true
+            else -> false
+        }
+        if (!capabilities.canEmbedTags) return TagResult.Skipped(lyricsEmbedded)
+        update(jobId) {
+            it.copy(state = JobState.POSTPROCESSING, progress = JobProgress(phase = "tagging"))
+        }
+        val artwork = if (capabilities.canEmbedArtwork) fetchArtwork(request.artworkUrl) else null
+        val effectiveTags = if (tags.lyrics != null && !lyricsSupported) tags.copy(lyrics = null) else tags
+        try {
+            toolkit.embedTags(file, effectiveTags, artwork)
+        } catch (error: ToolkitError) {
+            val mapped = toolkitJobError(error)
+            fail(jobId, mapped.code, mapped.message, mapped.retryable)
+            return TagResult.Failed
+        }
+        return TagResult.Embedded(lyricsEmbedded)
+    }
+
+    /**
+     * Handles an existing destination before any download. `skip` completes
+     * the job with the existing file; `metadata` retags it when the host can
+     * and the request carries tags; `force` returns false so the download
+     * replaces it. Returns true when the job is already finished.
+     */
+    private suspend fun handleExistingArtifact(jobId: String, request: DownloadRequest): Boolean {
+        val relativePath = request.relativePath?.takeIf { it.isNotBlank() } ?: return false
+        val existingSize = runCatching { fileStore.size(relativePath) }.getOrNull() ?: return false
+        when (request.options.overwrite) {
+            OverwriteMode.FORCE -> return false
+            OverwriteMode.SKIP -> completeSkipped(jobId, request, relativePath, existingSize, tagsEmbedded = null)
+            OverwriteMode.METADATA -> {
+                val tags = request.metadata
+                if (tags != null && toolkit.capabilities().canEmbedTags) {
+                    val result = retagExisting(jobId, request, relativePath)
+                    if (result is TagResult.Failed) return true
+                    completeSkipped(
+                        jobId = jobId,
+                        request = request,
+                        relativePath = relativePath,
+                        sizeBytes = fileStore.size(relativePath) ?: existingSize,
+                        tagsEmbedded = true,
+                        lyricsEmbedded = lyricsEmbeddedOf(result),
+                    )
+                } else {
+                    completeSkipped(
+                        jobId = jobId,
+                        request = request,
+                        relativePath = relativePath,
+                        sizeBytes = existingSize,
+                        tagsEmbedded = if (tags != null) false else null,
+                        lyricsEmbedded = if (tags?.lyrics != null) false else null,
+                    )
+                }
+            }
+        }
+        return true
+    }
+
+    /** Rewrites an existing file's tags for the `metadata` overwrite mode. */
+    private suspend fun retagExisting(
+        jobId: String,
+        request: DownloadRequest,
+        relativePath: String,
+    ): TagResult {
+        val container = AudioContainer.fromWire(relativePath.substringAfterLast('.', ""))
+        return embedTagsInto(jobId, request, fileStore.mediaFilePath(relativePath), container)
+    }
+
+    /** Completes a job without downloading because the destination exists. */
+    private fun completeSkipped(
+        jobId: String,
+        request: DownloadRequest,
+        relativePath: String,
+        sizeBytes: Long?,
+        tagsEmbedded: Boolean?,
+        lyricsEmbedded: Boolean? = if (request.metadata?.lyrics != null) false else null,
+    ) {
+        val artifact = Artifact(
+            id = "artifact-${idGenerator()}",
+            jobId = jobId,
+            kind = artifactKind(request.options.mediaType, relativePath),
+            fileName = relativePath.substringAfterLast('/'),
+            relativePath = relativePath,
+            sizeBytes = sizeBytes,
+        )
+        update(jobId) {
+            it.copy(
+                state = JobState.COMPLETED,
+                progress = JobProgress(phase = "skipped"),
+                error = null,
+                finishedAtEpochMillis = now(),
+                tagsEmbedded = tagsEmbedded,
+                lyricsEmbedded = lyricsEmbedded,
+                artifacts = it.artifacts + artifact,
+            )
+        }
+    }
+
+    private fun requestedPath(jobId: String): String? = findJob(jobId)?.request?.relativePath
+
+    /** One bounded artwork fetch; any failure or redirect means no artwork. */
+    private suspend fun fetchArtwork(url: String?): ByteArray? {
+        if (url.isNullOrBlank()) return null
+        if (urlCheck(url) !is UrlCheck.Allowed) return null
+        return try {
+            when (val response = transfer.execute(HttpRequest(url = url))) {
+                is HttpResponse.Final -> {
+                    val body = response.body
+                    if (response.statusCode !in 200..299 || body == null) {
+                        runCatching { body?.close() }
+                        null
+                    } else {
+                        readBoundedBytes(body, ARTWORK_MAX_BYTES)
+                    }
+                }
+
+                else -> null
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Reads at most [cap] bytes of a body; the caller closes nothing. */
+    private suspend fun readBoundedBytes(body: HttpBody, cap: Int): ByteArray? {
+        val out = ByteArray(cap)
+        val chunk = ByteArray(minOf(chunkSize, cap))
+        var total = 0
+        try {
+            while (total < cap) {
+                val count = withContext(ioDispatcher) { body.readNext(chunk) }
+                if (count == -1) break
+                if (count == 0) continue
+                currentCoroutineContext().ensureActive()
+                val keep = minOf(count, cap - total)
+                chunk.copyInto(out, total, 0, keep)
+                total += keep
+            }
+        } finally {
+            runCatching { body.close() }
+        }
+        return out.copyOf(total)
     }
 
 
@@ -379,7 +1071,8 @@ class HttpDownloadEngine(
         declaredSize: Long? = null,
         artifactTitle: String? = null,
         artifactExt: String? = null,
-    ) {
+        publishResult: Boolean = true,
+    ): TempDownload? {
         val initialRange = chunkSize?.takeIf { it > 0 }?.let { 0L..(it - 1) }
         var current = HttpRequest(url = url, headers = headers, range = initialRange)
         var hops = 0
@@ -389,7 +1082,7 @@ class HttpDownloadEngine(
                 when (val policy = urlCheck(current.url)) {
                     is UrlCheck.Rejected -> {
                         fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, redactedUrlReason(policy.reason))
-                        return
+                        return null
                     }
 
                     is UrlCheck.Allowed -> Unit
@@ -404,7 +1097,7 @@ class HttpDownloadEngine(
                             "A required download tool is missing on this device.",
                             retryable = false,
                         )
-                        return
+                        return null
                     }
 
                     is HttpResponse.Failed -> {
@@ -424,18 +1117,18 @@ class HttpDownloadEngine(
                             else -> JobError(JobErrorCode.NETWORK_FAILURE, response.message, retryable = true)
                         }
                         fail(jobId, error.code, error.message, error.retryable)
-                        return
+                        return null
                     }
 
                     is HttpResponse.Redirect -> {
                         if (response.location.isBlank()) {
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected without a destination.")
-                            return
+                            return null
                         }
                         hops++
                         if (hops > maxRedirects) {
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "Too many redirects.")
-                            return
+                            return null
                         }
                         current = current.copy(url = response.location)
                         currentCoroutineContext().ensureActive()
@@ -448,7 +1141,7 @@ class HttpDownloadEngine(
                             body = null
                             val error = mapHttpStatus(response.statusCode)
                             fail(jobId, error.code, error.message, error.retryable)
-                            return
+                            return null
                         }
                         when (UrlClassifier.classify(response.contentType, current.url)) {
                             UrlClassifier.Classification.NEEDS_EXTRACTOR -> {
@@ -461,39 +1154,48 @@ class HttpDownloadEngine(
                                         "The media URL returned another page instead of a file.",
                                         retryable = false,
                                     )
-                                    return
+                                    return null
                                 }
                                 val pageBody = body
                                 if (pageBody == null) {
                                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
-                                    return
+                                    return null
                                 }
                                 body = null // ownership passes to the extraction step
                                 extractMediaFromPage(jobId, pageBody, current.url, options)
-                                return
+                                return null
                             }
 
                             UrlClassifier.Classification.MANIFEST -> {
                                 val manifestBody = body
                                 if (manifestBody == null) {
                                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
-                                    return
+                                    return null
                                 }
                                 body = null // ownership passes to the manifest step
-                                streamManifestToFile(jobId, manifestBody, response.contentType, current.url, options)
-                                return
+                                val temp = streamManifestToTemp(jobId, manifestBody, response.contentType, current.url)
+                                    ?: return null
+                                return finishTemp(
+                                    jobId = jobId,
+                                    temp = temp,
+                                    publishResult = publishResult,
+                                    options = options,
+                                    sourceUrl = current.url,
+                                    artifactTitle = artifactTitle,
+                                    artifactExt = artifactExt,
+                                )
                             }
 
                             UrlClassifier.Classification.DIRECT_FILE -> {
                                 val fileBody = body
                                 if (fileBody == null) {
                                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
-                                    return
+                                    return null
                                 }
                                 body = null // ownership passes to the streaming step
                                 val chunked = chunkSize?.takeIf { it > 0 && response.statusCode == 206 }
-                                if (chunked != null) {
-                                    streamChunkedToFile(
+                                val temp = (if (chunked != null) {
+                                    streamChunkedToTemp(
                                         jobId = jobId,
                                         firstBody = fileBody,
                                         firstRangeTotal = response.totalBytes ?: declaredSize,
@@ -501,22 +1203,23 @@ class HttpDownloadEngine(
                                         sourceUrl = current.url,
                                         headers = headers,
                                         chunkSize = chunked,
-                                        options = options,
-                                        artifactTitle = artifactTitle,
-                                        artifactExt = artifactExt,
                                     )
                                 } else {
-                                    streamToFile(
+                                    streamToTemp(
                                         jobId = jobId,
                                         body = fileBody,
                                         totalBytes = response.totalBytes ?: declaredSize,
-                                        options = options,
-                                        sourceUrl = current.url,
-                                        artifactTitle = artifactTitle,
-                                        artifactExt = artifactExt,
                                     )
-                                }
-                                return
+                                }) ?: return null
+                                return finishTemp(
+                                    jobId = jobId,
+                                    temp = temp,
+                                    publishResult = publishResult,
+                                    options = options,
+                                    sourceUrl = current.url,
+                                    artifactTitle = artifactTitle,
+                                    artifactExt = artifactExt,
+                                )
                             }
                         }
                     }
@@ -604,17 +1307,16 @@ class HttpDownloadEngine(
      * unsupported key methods, and DRM fail typed. `percent` is the fragment
      * ratio and the phase marks it as an estimate.
      */
-    private suspend fun streamManifestToFile(
+    private suspend fun streamManifestToTemp(
         jobId: String,
         body: HttpBody,
         contentType: String?,
         sourceUrl: String,
-        options: DownloadOptions,
-    ) {
+    ): TempDownload? {
         val manifestText = runCatching { readManifestText(body) }.getOrNull()
         if (manifestText == null) {
             fail(jobId, JobErrorCode.EXTRACTION_FAILURE, "The manifest could not be read.", retryable = false)
-            return
+            return null
         }
         val isDash = contentType?.startsWith("application/dash+xml", ignoreCase = true) == true ||
             sourceUrl.substringBefore('?').substringBefore('#').endsWith(".mpd", ignoreCase = true) ||
@@ -627,13 +1329,13 @@ class HttpDownloadEngine(
             when (val result = Mpd.parse(sourceUrl, manifestText)) {
                 is MpdResult.Failed -> {
                     fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, result.reason, retryable = false)
-                    return
+                    return null
                 }
 
                 is MpdResult.Formats -> {
                     val format = selectBestManifestFormat(result.formats) ?: run {
                         fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The MPD declared no downloadable representation.", retryable = false)
-                        return
+                        return null
                     }
                     fragments = format.fragments ?: emptyList()
                     artifactExt = "mp4"
@@ -643,21 +1345,21 @@ class HttpDownloadEngine(
             when (val first = M3u8.parse(sourceUrl, manifestText)) {
                 is ManifestResult.Failed -> {
                     fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, first.reason, retryable = false)
-                    return
+                    return null
                 }
 
                 is ManifestResult.Master -> {
                     val variant = selectBestManifestFormat(first.formats) ?: run {
                         fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The master playlist declared no variant.", retryable = false)
-                        return
+                        return null
                     }
                     val variantUrl = variant.url ?: run {
                         fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The master playlist variant had no URI.", retryable = false)
-                        return
+                        return null
                     }
                     val variantText = fetchManifestText(variantUrl) ?: run {
                         fail(jobId, JobErrorCode.NETWORK_FAILURE, "The media playlist could not be fetched.")
-                        return
+                        return null
                     }
                     when (val second = M3u8.parse(variantUrl, variantText)) {
                         is ManifestResult.Media -> {
@@ -668,12 +1370,12 @@ class HttpDownloadEngine(
 
                         is ManifestResult.Master -> {
                             fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The playlist nested another master playlist.", retryable = false)
-                            return
+                            return null
                         }
 
                         is ManifestResult.Failed -> {
                             fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, second.reason, retryable = false)
-                            return
+                            return null
                         }
                     }
                 }
@@ -687,14 +1389,14 @@ class HttpDownloadEngine(
         }
         if (fragments.isEmpty()) {
             fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The manifest declared no fragments.", retryable = false)
-            return
+            return null
         }
         val handle = runCatching { fileStore.createTempFile() }.getOrNull()
         if (handle == null) {
             fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
-            return
+            return null
         }
-        var published = false
+        var finished = false
         var written = 0L
         try {
             val outcome = FragmentDownloader(transfer).download(
@@ -723,30 +1425,34 @@ class HttpDownloadEngine(
             when (outcome) {
                 is FragmentOutcome.Cancelled -> {
                     confirmCancelled(jobId)
-                    return
+                    return null
                 }
 
                 is FragmentOutcome.Failed -> {
                     fail(jobId, JobErrorCode.NETWORK_FAILURE, outcome.reason)
-                    return
+                    return null
                 }
 
                 is FragmentOutcome.Completed -> Unit
             }
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
-                return
+                return null
             }
             val manifestTitle = sourceUrl.substringAfterLast('/').substringBefore('?').substringBefore('#')
                 .substringBeforeLast('.', missingDelimiterValue = "")
                 .ifBlank { "media" }
-            val relativePath = artifactPath(options, sourceUrl, manifestTitle, artifactExt) ?: run {
-                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
-                return
-            }
-            published = publishAndComplete(jobId, handle, written, null, options, relativePath)
+            handle.close()
+            finished = true
+            return TempDownload(
+                handle = handle,
+                bytes = written,
+                totalBytes = null,
+                suggestedTitle = manifestTitle,
+                suggestedExt = artifactExt,
+            )
         } finally {
-            if (!published) {
+            if (!finished) {
                 runCatching { handle.discard() }
             }
         }
@@ -799,24 +1505,25 @@ class HttpDownloadEngine(
         return null
     }
 
-    private suspend fun streamToFile(
+    /**
+     * Streams [body] into a temp file and returns it closed on success. On
+     * failure or cancel the temp is removed. The caller publishes the temp or
+     * merges it.
+     */
+    private suspend fun streamToTemp(
         jobId: String,
         body: HttpBody,
         totalBytes: Long?,
-        options: DownloadOptions,
-        sourceUrl: String,
-        artifactTitle: String? = null,
-        artifactExt: String? = null,
-    ) {
+    ): TempDownload? {
         val handle = runCatching { fileStore.createTempFile() }.getOrNull()
         if (handle == null) {
             runCatching { body.close() }
             fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
-            return
+            return null
         }
 
         var downloaded = 0L
-        var published = false
+        var finished = false
         try {
             val buffer = ByteArray(chunkSize)
             while (!isCancelRequested(jobId)) {
@@ -832,17 +1539,15 @@ class HttpDownloadEngine(
 
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
-                return
+                return null
             }
 
-            val relativePath = artifactPath(options, sourceUrl, artifactTitle, artifactExt) ?: run {
-                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
-                return
-            }
-            published = publishAndComplete(jobId, handle, downloaded, totalBytes, options, relativePath)
+            handle.close()
+            finished = true
+            return TempDownload(handle, downloaded, totalBytes)
         } finally {
             runCatching { body.close() }
-            if (!published) {
+            if (!finished) {
                 runCatching { handle.discard() }
             }
         }
@@ -855,7 +1560,7 @@ class HttpDownloadEngine(
      * size). A non-2xx chunk status maps through the shared HTTP table, so a
      * mid-stream 403 is `UNAVAILABLE_OR_PRIVATE`, not `NETWORK_FAILURE`.
      */
-    private suspend fun streamChunkedToFile(
+    private suspend fun streamChunkedToTemp(
         jobId: String,
         firstBody: HttpBody,
         firstRangeTotal: Long?,
@@ -863,26 +1568,23 @@ class HttpDownloadEngine(
         sourceUrl: String,
         headers: Map<String, String>,
         chunkSize: Long,
-        options: DownloadOptions,
-        artifactTitle: String?,
-        artifactExt: String?,
-    ) {
+    ): TempDownload? {
         val handle = runCatching { fileStore.createTempFile() }.getOrNull()
         if (handle == null) {
             runCatching { firstBody.close() }
             fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
-            return
+            return null
         }
 
         var downloaded = 0L
-        var published = false
+        var finished = false
         var body: HttpBody? = firstBody
         var total = firstRangeTotal ?: declaredSize
         try {
             while (true) {
                 if (isCancelRequested(jobId)) {
                     confirmCancelled(jobId)
-                    return
+                    return null
                 }
                 val currentBody = body ?: break
                 body = null
@@ -902,12 +1604,12 @@ class HttpDownloadEngine(
 
                 if (isCancelRequested(jobId)) {
                     confirmCancelled(jobId)
-                    return
+                    return null
                 }
                 if (total != null && downloaded >= total) break
                 if (chunkRead <= 0L) {
                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
-                    return
+                    return null
                 }
 
                 val start = downloaded
@@ -924,7 +1626,7 @@ class HttpDownloadEngine(
                             runCatching { response.body?.close() }
                             val error = mapHttpStatus(response.statusCode)
                             fail(jobId, error.code, error.message, error.retryable)
-                            return
+                            return null
                         }
                         if (total == null) {
                             total = response.contentRange?.let { ContentRange.totalBytes(it) } ?: declaredSize
@@ -932,19 +1634,19 @@ class HttpDownloadEngine(
                         val nextBody = response.body
                         if (nextBody == null) {
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
-                            return
+                            return null
                         }
                         body = nextBody
                     }
 
                     is HttpResponse.Redirect -> {
                         fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected between chunks.")
-                        return
+                        return null
                     }
 
                     is HttpResponse.Failed -> {
                         fail(jobId, JobErrorCode.NETWORK_FAILURE, response.message)
-                        return
+                        return null
                     }
 
                     is HttpResponse.Unavailable -> {
@@ -954,7 +1656,7 @@ class HttpDownloadEngine(
                             "A required download tool is missing on this device.",
                             retryable = false,
                         )
-                        return
+                        return null
                     }
                 }
             }
@@ -962,21 +1664,19 @@ class HttpDownloadEngine(
             currentCoroutineContext().ensureActive()
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
-                return
+                return null
             }
             if (total != null && downloaded < total) {
                 fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
-                return
+                return null
             }
 
-            val relativePath = artifactPath(options, sourceUrl, artifactTitle, artifactExt) ?: run {
-                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
-                return
-            }
-            published = publishAndComplete(jobId, handle, downloaded, total, options, relativePath)
+            handle.close()
+            finished = true
+            return TempDownload(handle, downloaded, total)
         } finally {
             runCatching { body?.close() }
-            if (!published) {
+            if (!finished) {
                 runCatching { handle.discard() }
             }
         }
@@ -987,8 +1687,11 @@ class HttpDownloadEngine(
         sourceUrl: String,
         artifactTitle: String?,
         artifactExt: String?,
+        requestedPath: String? = null,
     ): String? = try {
-        if (artifactTitle != null) {
+        if (!requestedPath.isNullOrBlank()) {
+            requestedPath
+        } else if (artifactTitle != null) {
             ArtifactName.build(artifactTitle, artifactExt, options)
         } else {
             ArtifactName.build(sourceUrl, options)
@@ -1005,6 +1708,8 @@ class HttpDownloadEngine(
         totalBytes: Long?,
         options: DownloadOptions,
         relativePath: String,
+        tagsEmbedded: Boolean? = null,
+        lyricsEmbedded: Boolean? = null,
     ): Boolean {
         handle.close()
         val published = try {
@@ -1013,7 +1718,7 @@ class HttpDownloadEngine(
             fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
             return false
         }
-        complete(jobId, downloaded, totalBytes, options.mediaType, published, relativePath)
+        complete(jobId, downloaded, totalBytes, options.mediaType, published, relativePath, tagsEmbedded, lyricsEmbedded)
         return true
     }
 
@@ -1024,6 +1729,8 @@ class HttpDownloadEngine(
         mediaType: MediaType,
         relativePath: String,
         publishedPath: String,
+        tagsEmbedded: Boolean? = null,
+        lyricsEmbedded: Boolean? = null,
     ) {
         val sizeBytes = runCatching { fileStore.size(publishedPath) }.getOrNull() ?: downloaded
         val artifact = Artifact(
@@ -1034,6 +1741,7 @@ class HttpDownloadEngine(
             relativePath = relativePath,
             sizeBytes = sizeBytes,
         )
+        val lrcArtifact = writeLrcSibling(jobId, publishedPath)
         update(jobId) {
             it.copy(
                 state = JobState.COMPLETED,
@@ -1045,8 +1753,43 @@ class HttpDownloadEngine(
                 ),
                 error = null,
                 finishedAtEpochMillis = now(),
-                artifacts = it.artifacts + artifact,
+                tagsEmbedded = tagsEmbedded,
+                lyricsEmbedded = lyricsEmbedded,
+                artifacts = it.artifacts + artifact + listOfNotNull(lrcArtifact),
             )
+        }
+    }
+
+    /**
+     * Writes the request's timed LRC next to the published audio when the
+     * Spotify path asked for one. A failed sidecar write is not fatal: the
+     * audio is already complete and no half-file is published.
+     */
+    private fun writeLrcSibling(jobId: String, audioPath: String): Artifact? {
+        val content = findJob(jobId)?.request?.lrcContent?.takeIf { it.isNotBlank() } ?: return null
+        val dot = audioPath.lastIndexOf('.')
+        val lrcPath = if (dot > 0) audioPath.substring(0, dot) + ".lrc" else "$audioPath.lrc"
+        return try {
+            val handle = fileStore.createTempFile("lrc")
+            val published = try {
+                val bytes = content.encodeToByteArray()
+                handle.write(bytes, bytes.size)
+                handle.close()
+                fileStore.publish(handle, lrcPath)
+            } catch (failure: Throwable) {
+                runCatching { handle.discard() }
+                throw failure
+            }
+            Artifact(
+                id = "artifact-${idGenerator()}",
+                jobId = jobId,
+                kind = ArtifactKind.METADATA,
+                fileName = published.substringAfterLast('/'),
+                relativePath = published,
+                sizeBytes = runCatching { fileStore.size(published) }.getOrNull(),
+            )
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -1183,11 +1926,18 @@ class HttpDownloadEngine(
 /** Selection outcome for the registry route, testable without a network. */
 internal sealed interface FormatResolution {
     data class Ready(val format: MediaFormat) : FormatResolution
+    data class Merge(val video: MediaFormat, val audio: MediaFormat) : FormatResolution
+    data class ExtractAudio(val format: MediaFormat, val container: AudioContainer) : FormatResolution
     data class Unsupported(val message: String) : FormatResolution
 }
 
-internal fun resolveFormat(info: InfoDict, options: DownloadOptions): FormatResolution =
-    when (val compiled = OptionsToSpec.compile(options)) {
+internal fun resolveFormat(
+    info: InfoDict,
+    options: DownloadOptions,
+    canMerge: Boolean = false,
+    audioContainers: Set<AudioContainer> = emptySet(),
+): FormatResolution =
+    when (val compiled = OptionsToSpec.compile(options, canMerge, audioContainers)) {
         is CompiledSpec.NeedsToolkit -> FormatResolution.Unsupported(
             "${compiled.message} Choose M4A or Opus audio, or a single-file video, instead.",
         )
@@ -1199,15 +1949,36 @@ internal fun resolveFormat(info: InfoDict, options: DownloadOptions): FormatReso
         is CompiledSpec.SingleFile -> resolveSelection(
             FormatSelector.select(info, compiled.spec, compiled.sort),
             info.formatsNeedingJs,
+            canMerge,
         )
+
+        is CompiledSpec.ExtractAudio -> when (val selection = FormatSelector.select(info, compiled.spec)) {
+            is Selection.Single -> FormatResolution.ExtractAudio(selection.format, compiled.container)
+            else -> FormatResolution.Unsupported(
+                buildString {
+                    append("No audio-only format matches this choice.")
+                    if (info.formatsNeedingJs > 0) {
+                        append(" ${info.formatsNeedingJs} more formats need the JavaScript runtime.")
+                    }
+                },
+            )
+        }
     }
 
-internal fun resolveSelection(selection: Selection, formatsNeedingJs: Int): FormatResolution = when (selection) {
+internal fun resolveSelection(
+    selection: Selection,
+    formatsNeedingJs: Int,
+    canMerge: Boolean = false,
+): FormatResolution = when (selection) {
     is Selection.Single -> FormatResolution.Ready(selection.format)
-    is Selection.Merge -> FormatResolution.Unsupported(
-        "This choice needs merging, and the media toolkit is not built yet. " +
-            "Choose M4A or Opus audio, or a single-file video.",
-    )
+    is Selection.Merge -> if (canMerge) {
+        FormatResolution.Merge(selection.video, selection.audio)
+    } else {
+        FormatResolution.Unsupported(
+            "This host cannot merge video and audio, so this choice is unavailable. " +
+                "Choose M4A or Opus audio, or a single-file video.",
+        )
+    }
 
     Selection.None -> FormatResolution.Unsupported(
         buildString {
@@ -1216,6 +1987,27 @@ internal fun resolveSelection(selection: Selection, formatsNeedingJs: Int): Form
                 append(" $formatsNeedingJs more formats need the JavaScript runtime.")
             }
         },
+    )
+}
+
+/** Maps a host toolkit failure to the typed job error the UI reads. */
+internal fun toolkitJobError(error: ToolkitError): JobError = when (error) {
+    is ToolkitError.ToolUnavailable -> JobError(
+        JobErrorCode.UNSUPPORTED_FORMAT,
+        error.message ?: "The media toolkit is not available on this host.",
+        retryable = false,
+    )
+
+    is ToolkitError.IncompatibleStreams -> JobError(
+        JobErrorCode.UNSUPPORTED_FORMAT,
+        error.message ?: "This host cannot merge the selected streams into one file.",
+        retryable = false,
+    )
+
+    is ToolkitError.Io -> JobError(
+        JobErrorCode.POSTPROCESSING_FAILURE,
+        error.message ?: "The media toolkit could not write the merged file.",
+        retryable = error.retryable,
     )
 }
 

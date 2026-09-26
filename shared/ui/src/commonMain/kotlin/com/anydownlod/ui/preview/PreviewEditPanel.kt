@@ -20,6 +20,7 @@ import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.add.ChoiceRow
 import com.anydownlod.ui.add.bitrateOptions
@@ -30,29 +31,40 @@ import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.auto
 import com.anydownlod.ui.generated.resources.format
 import com.anydownlod.ui.generated.resources.media_type
-import com.anydownlod.ui.generated.resources.preview_needs_toolkit
+import com.anydownlod.ui.generated.resources.preview_cannot_merge
+import com.anydownlod.ui.generated.resources.preview_cannot_write
 import com.anydownlod.ui.generated.resources.preview_not_available_source
 import com.anydownlod.ui.generated.resources.quality_preference
 import com.anydownlod.ui.i18n.text
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * T-054/T-063: the collapsible download editor inside the metadata preview.
- * When the Kotlin extractor supplied [availableFormats], only the qualities
- * and containers those formats can satisfy as a single file are enabled;
- * everything else is disabled with a short reason, and the defaults are the
- * best single-file video or the best native audio. Captions, clips, cookies,
- * destination, and custom yt-dlp JSON never appear here.
+ * T-054/T-063/T-078: the collapsible download editor inside the metadata
+ * preview. When the Kotlin extractor supplied [availableFormats], a quality is
+ * enabled when a single-file format satisfies it or when the host can merge a
+ * video-only stream at that height with an audio-only stream. Audio
+ * containers are enabled only when the source carries them natively or the
+ * host toolkit can write them. Everything else is disabled with a reason that
+ * names the host gap, not a build gap. Captions, clips, cookies, destination,
+ * and custom yt-dlp JSON never appear here.
  */
 @Composable
 internal fun PreviewEditPanel(
     editor: AddFormPresenter,
     availableFormats: FormatChoices? = null,
+    capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
     modifier: Modifier = Modifier,
 ) {
     val state by editor.state.collectAsState()
-    val toolkit = stringResource(Res.string.preview_needs_toolkit)
+    val cannotMerge = stringResource(Res.string.preview_cannot_merge)
     val notAvailable = stringResource(Res.string.preview_not_available_source)
+    val cannotWrite = buildMap {
+        for (container in listOf(AudioContainer.MP3, AudioContainer.WAV, AudioContainer.FLAC)) {
+            put(container, stringResource(Res.string.preview_cannot_write, container.wireName.uppercase()))
+        }
+    }
+
+    val mergeReady = capabilities.canMerge && availableFormats?.hasSplitStreams == true
 
     // Defaults from the extracted formats: best single-file video, or the best
     // native audio when the source only offers split streams in this stage.
@@ -69,34 +81,39 @@ internal fun PreviewEditPanel(
     val qualityEnabled: (QualityPreference) -> Boolean = { quality ->
         when {
             availableFormats == null -> true
-            quality is QualityPreference.Resolution ->
-                quality.token.toIntOrNull()?.let { it in availableFormats.videoHeights } == true
+            quality is QualityPreference.Resolution -> {
+                val height = quality.token.toIntOrNull()
+                height != null && (
+                    height in availableFormats.videoHeights ||
+                        (mergeReady && height in availableFormats.mergeableVideoHeights)
+                    )
+            }
 
-            else -> availableFormats.hasSingleFileVideo
+            else -> availableFormats.hasSingleFileVideo || mergeReady
         }
     }
     val qualityReason: (QualityPreference) -> String? = { quality ->
         when {
             qualityEnabled(quality) -> null
             availableFormats == null -> null
-            !availableFormats.hasSingleFileVideo -> toolkit
-            quality is QualityPreference.Resolution &&
-                (quality.token.toIntOrNull() ?: 0) > (availableFormats.bestVideoHeight ?: 0) -> toolkit
-
+            availableFormats.hasSplitStreams && !capabilities.canMerge -> cannotMerge
             else -> notAvailable
         }
     }
     val containerEnabled: (AudioContainer) -> Boolean = { container ->
-        availableFormats == null || container in availableFormats.audioContainers
+        when {
+            availableFormats == null -> true
+            container == AudioContainer.M4A || container == AudioContainer.OPUS ->
+                container in availableFormats.audioContainers || container in capabilities.audioContainers
+
+            else -> container in capabilities.audioContainers
+        }
     }
     val containerReason: (AudioContainer) -> String? = { container ->
         if (containerEnabled(container)) {
             null
         } else {
-            when (container) {
-                AudioContainer.MP3, AudioContainer.WAV, AudioContainer.FLAC -> toolkit
-                AudioContainer.M4A, AudioContainer.OPUS -> notAvailable
-            }
+            cannotWrite[container] ?: notAvailable
         }
     }
 

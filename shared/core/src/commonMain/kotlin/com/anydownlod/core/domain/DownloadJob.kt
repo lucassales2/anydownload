@@ -114,6 +114,18 @@ data class DownloadJob(
     val thumbnailUrl: String? = null,
     /** Formats the extractor dropped because they need a JavaScript runtime. */
     val formatsNeedingJs: Int = 0,
+    /**
+     * Whether the request's Spotify tags were embedded: null when none were
+     * requested, true when the host toolkit wrote them, false when the host
+     * cannot embed (the audio file is still kept).
+     */
+    val tagsEmbedded: Boolean? = null,
+    /**
+     * Whether lyrics were embedded: null when none were requested, true when
+     * the container supports lyrics and the toolkit wrote them, false when the
+     * container cannot carry them (the audio file is still kept).
+     */
+    val lyricsEmbedded: Boolean? = null,
     val parentBatchId: String? = null,
     val subscriptionId: String? = null,
     /** Due time for [JobState.SCHEDULED] rows; null when unknown. */

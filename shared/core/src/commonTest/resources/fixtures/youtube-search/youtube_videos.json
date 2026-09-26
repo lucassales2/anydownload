@@ -1,0 +1,51 @@
+{
+  "contents": {
+    "twoColumnSearchResultsRenderer": {
+      "primaryContents": {
+        "sectionListRenderer": {
+          "contents": [
+            {
+              "itemSectionRenderer": {
+                "contents": [
+                  {
+                    "videoRenderer": {
+                      "videoId": "dQw4w9WgXcQ",
+                      "title": {
+                        "runs": [
+                          { "text": "Rick Astley - Never Gonna Give You Up (Official Video)" }
+                        ]
+                      },
+                      "ownerText": {
+                        "runs": [
+                          {
+                            "text": "Rick Astley",
+                            "navigationEndpoint": {
+                              "browseEndpoint": { "browseId": "UCuAXFkgsw1L7xaCfnd5JJOw" }
+                            }
+                          }
+                        ]
+                      },
+                      "lengthText": { "simpleText": "3:34" },
+                      "viewCountText": { "simpleText": "1,819,912,851 views" }
+                    }
+                  },
+                  {
+                    "videoRenderer": {
+                      "videoId": "3BFTio5296w",
+                      "title": {
+                        "runs": [{ "text": "Never Gonna Give You Up (2022 Remaster)" }]
+                      },
+                      "ownerText": { "runs": [{ "text": "Rick Astley" }] },
+                      "lengthText": { "simpleText": "3:34" },
+                      "viewCountText": { "simpleText": "12,809,511 views" }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

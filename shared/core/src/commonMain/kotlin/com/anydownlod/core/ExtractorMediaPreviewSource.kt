@@ -41,7 +41,8 @@ class ExtractorMediaPreviewSource(
     private fun previewOf(info: InfoDict, url: String): MediaPreview = MediaPreview(
         pageUrl = info.webpageUrl ?: url,
         title = info.title?.takeIf { it.isNotBlank() } ?: url,
-        thumbnailUrl = info.thumbnails.lastOrNull()?.url,
+        thumbnailUrl = info.thumbnails.lastOrNull()?.url
+            ?: info.media.firstOrNull()?.thumbnails?.lastOrNull()?.url,
         channel = info.channel ?: info.uploader,
         durationSeconds = info.duration?.toLong(),
         extractor = info.extractorKey,
@@ -51,6 +52,14 @@ class ExtractorMediaPreviewSource(
         playlist = false,
         entryCount = null,
         availableFormats = FormatChoices.from(info),
+        videos = info.media.map { media ->
+            MediaPreviewVideo(
+                mediaId = media.mediaId,
+                title = media.title,
+                durationSeconds = media.duration?.toLong(),
+                thumbnailUrl = media.thumbnails.lastOrNull()?.url,
+            )
+        },
     )
 
     /** Upstream `YYYYMMDD` to the display form the CLI preview also uses. */

@@ -6,6 +6,7 @@ import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.twitter.TwitterIE
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetHttpTransfer
 import java.nio.file.Path
@@ -26,7 +27,7 @@ internal object DesktopPreviewSource {
         jsRuntime: com.anydownlod.core.jsc.JsRuntime = com.anydownlod.core.jsc.NoJsRuntime,
     ): MediaPreviewSource {
         val registry = ExtractorRegistry(
-            listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
+            listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime), TwitterIE(ExtractorHttp(transfer))),
         )
         return CompositeMediaPreviewSource(
             primary = ExtractorMediaPreviewSource(registry, timeoutMillis = kotlinTimeoutMillis),

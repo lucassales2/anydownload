@@ -1,0 +1,40 @@
+{
+  "album_type": "album",
+  "artists": [
+    {
+      "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+      "id": "0gxyHStUsqpMadRV0Di1Qt",
+      "name": "Rick Astley",
+      "type": "artist",
+      "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+    }
+  ],
+  "copyrights": [{ "text": "Fixture label notice", "type": "C" }],
+  "external_urls": { "spotify": "https://open.spotify.com/album/1ATL5GLyefJaxhQzSPVrLX" },
+  "genres": ["new romantic"],
+  "id": "1ATL5GLyefJaxhQzSPVrLX",
+  "images": [
+    {
+      "height": 640,
+      "url": "https://i.scdn.co/image/ab67616d0000b273255e131abc1410833be95673",
+      "width": 640
+    }
+  ],
+  "label": "Fixture Records",
+  "name": "Whenever You Need Somebody",
+  "popularity": 80,
+  "release_date": "1987-11-12",
+  "release_date_precision": "day",
+  "total_tracks": 3,
+  "tracks": {
+    "href": "https://api.spotify.com/v1/albums/1ATL5GLyefJaxhQzSPVrLX/tracks",
+    "items": [],
+    "limit": 50,
+    "next": null,
+    "offset": 0,
+    "previous": null,
+    "total": 3
+  },
+  "type": "album",
+  "uri": "spotify:album:1ATL5GLyefJaxhQzSPVrLX"
+}

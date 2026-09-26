@@ -284,16 +284,41 @@ test('fetch-request fails typed when the response exceeds the port cap', async (
   assert.equal(reply.bodyBase64, undefined);
 });
 
+test('fetch-request carries the X syndication lookup without a cookie or authorization', async () => {
+  const lookupUrl = 'https://cdn.syndication.twimg.com/tweet-result?id=9999999999999999999&token=REDACTED';
+  const { bridge, calls } = makeBridge({
+    responses: [
+      { url: lookupUrl, method: 'GET', status: 200, headers: { 'content-type': 'application/json' }, body: '{"__typename":"Tweet"}' },
+    ],
+  });
+  const reply = await bridge.handleMessage({
+    type: 'fetch-request',
+    requestId: 'x1',
+    url: lookupUrl,
+    headers: { 'User-Agent': 'Googlebot', cookie: 'session=secret' },
+  });
+  assert.equal(reply.type, 'fetch-request-reply');
+  assert.equal(reply.kind, 'final');
+  assert.equal(reply.status, 200);
+  assert.equal(calls[0].url, lookupUrl);
+  assert.equal(calls[0].headers.cookie, undefined, 'a cookie must never ride the guest lookup');
+  assert.equal(calls[0].headers['user-agent'], undefined, 'MV3 refuses User-Agent');
+  assert.equal(reply.sentHeaders.cookie, undefined);
+  assert.equal(reply.sentHeaders['user-agent'], undefined);
+  assert.equal(reply.sentHeaders.authorization, undefined);
+});
+
 test('sanitizeRequestHeaders and effectiveRequestHeaders agree on the allowlist', () => {
   const { sanitizeRequestHeaders, effectiveRequestHeaders } = createRequire(import.meta.url)('../background.js');
   const requested = sanitizeRequestHeaders({
     Accept: '*/*',
+    Authorization: 'Bearer fixture',
     Cookie: 'secret',
     'User-Agent': 'agent',
     'X-Goog-Api-Key': 'secret',
   });
-  assert.deepEqual(requested, { accept: '*/*', 'user-agent': 'agent' });
-  assert.deepEqual(effectiveRequestHeaders(requested), { accept: '*/*' });
+  assert.deepEqual(requested, { accept: '*/*', authorization: 'Bearer fixture', 'user-agent': 'agent' });
+  assert.deepEqual(effectiveRequestHeaders(requested), { accept: '*/*', authorization: 'Bearer fixture' });
 });
 
 test('download forwards allowlisted format headers and refuses the rest', async () => {
@@ -396,4 +421,59 @@ test('the Compose/Wasm page source performs no fetch call', () => {
   };
   for (const root of roots) visit(root);
   assert.deepEqual(offenders, [], 'the page must never call fetch itself');
+});
+
+test('the page source never fetches an X or Twitter origin', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
+  const roots = [
+    path.join(repoRoot, 'apps/web/src/wasmJsMain'),
+    path.join(repoRoot, 'shared/ui/src'),
+  ];
+  const origin = /(?:x\.com|twitter\.com|syndication\.twimg\.com)/;
+  const offenders = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'build') continue;
+        visit(full);
+      } else if (entry.name.endsWith('.kt')) {
+        const source = fs.readFileSync(full, 'utf8');
+        for (const match of source.matchAll(/fetch\s*\([^)]*\)/g)) {
+          if (origin.test(match[0])) offenders.push(full);
+        }
+      }
+    }
+  };
+  for (const root of roots) visit(root);
+  assert.deepEqual(offenders, [], 'the page must not fetch X or Twitter itself');
+});
+
+test('the web page ships no process or platform muxer', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
+  const roots = [
+    path.join(repoRoot, 'apps/web/src/wasmJsMain'),
+    path.join(repoRoot, 'shared/ui/src/commonMain'),
+    path.join(repoRoot, 'shared/ui/src/wasmJsMain'),
+    path.join(repoRoot, 'shared/core/src/commonMain'),
+  ];
+  const pattern = /\b(ProcessBuilder|MediaMuxer|MediaExtractor|AVFoundation)\b/;
+  const offenders = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'build') continue;
+        visit(full);
+      } else if (entry.name.endsWith('.kt')) {
+        if (pattern.test(fs.readFileSync(full, 'utf8'))) offenders.push(full);
+      }
+    }
+  };
+  for (const root of roots) visit(root);
+  assert.deepEqual(offenders, [], 'the web page must not ship a process or platform muxer');
 });

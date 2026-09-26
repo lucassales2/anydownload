@@ -9,9 +9,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.CompositeMediaPreviewSource
+import com.anydownlod.core.SpotifyMediaPreviewSource
 import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.ui.add.AddFormPresenter
@@ -19,6 +22,7 @@ import com.anydownlod.ui.home.HomeScreen
 import com.anydownlod.ui.preview.PreviewScreen
 import com.anydownlod.ui.settings.SettingsScreen
 import com.anydownlod.ui.theme.AnyDownloadTheme
+import kotlinx.coroutines.launch
 
 /**
  * Root composable called by the Android, iOS, desktop, and web hosts.
@@ -43,6 +47,15 @@ fun App(
             settingsRepository = graph.settings,
         )
     }
+    val previewSource = remember(graph) {
+        val spotify = graph.spotify
+        if (spotify != null) {
+            CompositeMediaPreviewSource(SpotifyMediaPreviewSource(spotify), graph.previews)
+        } else {
+            graph.previews
+        }
+    }
+    val scope = rememberCoroutineScope()
     var settingsOpen by remember { mutableStateOf(false) }
     var previewUrl by remember { mutableStateOf<String?>(null) }
 
@@ -59,14 +72,27 @@ fun App(
                 settingsOpen -> SettingsScreen(graph = graph, onClose = { settingsOpen = false })
                 openPreview != null -> PreviewScreen(
                     url = openPreview,
-                    source = graph.previews,
+                    source = previewSource,
                     loadThumbnail = graph.loadThumbnail,
                     onBack = { previewUrl = null },
-                    onDownload = {
-                        addForm.submit()
+                    onDownload = { preview, selectedMediaIds ->
+                        val spotifyPreview = preview?.spotify
+                        val service = graph.spotify
+                        if (spotifyPreview != null && service != null) {
+                            scope.launch {
+                                service.queue(
+                                    preview = spotifyPreview,
+                                    options = addForm.currentOptions(),
+                                    capabilities = graph.toolkitCapabilities,
+                                )
+                            }
+                        } else {
+                            addForm.submit(selectedMediaIds)
+                        }
                         previewUrl = null
                     },
                     editor = addForm,
+                    capabilities = graph.toolkitCapabilities,
                 )
                 else -> HomeScreen(
                     graph = graph,

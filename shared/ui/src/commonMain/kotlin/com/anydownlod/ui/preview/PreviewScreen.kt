@@ -2,6 +2,7 @@ package com.anydownlod.ui.preview
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +40,7 @@ import kotlinx.coroutines.CancellationException
 import com.anydownlod.core.MediaPreviewResult
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.PreviewFailure
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.download
@@ -52,6 +55,8 @@ import com.anydownlod.ui.generated.resources.preview_playlist_count
 import com.anydownlod.ui.generated.resources.preview_timed_out
 import com.anydownlod.ui.generated.resources.preview_unavailable
 import com.anydownlod.ui.generated.resources.preview_uploaded
+import com.anydownlod.ui.generated.resources.preview_video_fallback
+import com.anydownlod.ui.generated.resources.preview_videos
 import com.anydownlod.ui.generated.resources.preview_views
 import com.anydownlod.ui.i18n.text
 import com.anydownlod.ui.theme.PageInset
@@ -78,14 +83,17 @@ fun PreviewScreen(
     source: MediaPreviewSource,
     loadThumbnail: suspend (String) -> ByteArray?,
     onBack: () -> Unit,
-    onDownload: () -> Unit,
+    onDownload: (MediaPreview?, List<String>) -> Unit,
     editor: AddFormPresenter? = null,
+    capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
 ) {
     var phase by remember(url) { mutableStateOf<PreviewPhase>(PreviewPhase.Loading) }
     var editExpanded by remember(url) { mutableStateOf(false) }
+    var selectedMediaIds by remember(url) { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(url) {
         phase = PreviewPhase.Loading
+        selectedMediaIds = emptySet()
         phase = try {
             when (val result = source.load(url)) {
                 is MediaPreviewResult.Failed -> PreviewPhase.Failed(result.failure)
@@ -93,6 +101,8 @@ fun PreviewScreen(
                     val bytes = result.preview.thumbnailUrl?.let { thumbnailUrl ->
                         runCatching { loadThumbnail(thumbnailUrl) }.getOrNull()
                     }
+                    // A status with videos starts with its first video selected.
+                    selectedMediaIds = result.preview.videos.firstOrNull()?.let { setOf(it.mediaId) } ?: emptySet()
                     PreviewPhase.Ready(result.preview, bytes)
                 }
             }
@@ -102,6 +112,10 @@ fun PreviewScreen(
             PreviewPhase.Failed(PreviewFailure.Failed)
         }
     }
+
+    val readyPreview = (phase as? PreviewPhase.Ready)?.preview
+    val selectionComplete = readyPreview == null ||
+        readyPreview.videos.isEmpty() || selectedMediaIds.isNotEmpty()
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = PageInset, vertical = 16.dp),
@@ -134,7 +148,18 @@ fun PreviewScreen(
         when (val current = phase) {
             PreviewPhase.Loading -> LoadingBody()
             is PreviewPhase.Failed -> FailedBody(current.failure)
-            is PreviewPhase.Ready -> ReadyBody(current.preview, current.thumbnail)
+            is PreviewPhase.Ready -> ReadyBody(
+                preview = current.preview,
+                thumbnail = current.thumbnail,
+                selectedMediaIds = selectedMediaIds,
+                onToggleVideo = { mediaId ->
+                    selectedMediaIds = if (mediaId in selectedMediaIds) {
+                        selectedMediaIds - mediaId
+                    } else {
+                        selectedMediaIds + mediaId
+                    }
+                },
+            )
         }
 
         if (phase !is PreviewPhase.Loading) {
@@ -143,7 +168,9 @@ fun PreviewScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                DownloadButton(onDownload)
+                DownloadButton(enabled = selectionComplete) {
+                    onDownload(readyPreview, selectedMediaIds.toList())
+                }
                 if (editor != null) {
                     OutlinedButton(
                         onClick = { editExpanded = !editExpanded },
@@ -163,6 +190,7 @@ fun PreviewScreen(
                 PreviewEditPanel(
                     editor = editor,
                     availableFormats = (phase as? PreviewPhase.Ready)?.preview?.availableFormats,
+                    capabilities = capabilities,
                 )
             }
         }
@@ -197,7 +225,12 @@ private fun FailedBody(failure: PreviewFailure) {
 }
 
 @Composable
-private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?) {
+private fun ReadyBody(
+    preview: MediaPreview,
+    thumbnail: ByteArray?,
+    selectedMediaIds: Set<String>,
+    onToggleVideo: (String) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -222,6 +255,50 @@ private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?) {
                 }
             }
         }
+        if (preview.videos.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().testTag("preview-videos"),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.preview_videos),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                preview.videos.forEachIndexed { index, video ->
+                    val selected = video.mediaId in selectedMediaIds
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("preview-video-${video.mediaId}")
+                            .clickable { onToggleVideo(video.mediaId) },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Checkbox(
+                            checked = selected,
+                            onCheckedChange = { onToggleVideo(video.mediaId) },
+                            modifier = Modifier.testTag("select-video-${video.mediaId}"),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = video.title
+                                    ?: stringResource(Res.string.preview_video_fallback, (index + 1).toString()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            video.durationSeconds?.let { seconds ->
+                                Text(
+                                    text = formatDuration(seconds),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (preview.playlist) {
             val count = preview.entryCount
             Text(
@@ -232,6 +309,34 @@ private fun ReadyBody(preview: MediaPreview, thumbnail: ByteArray?) {
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+        preview.spotify?.let { spotify ->
+            Column(
+                modifier = Modifier.fillMaxWidth().testTag("preview-songs"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                spotify.entries.forEach { entry ->
+                    val record = entry.record
+                    val label = if (record != null) {
+                        if (record.artists.isEmpty()) {
+                            record.title
+                        } else {
+                            "${record.title} — ${record.artists.joinToString(", ")}"
+                        }
+                    } else {
+                        "${entry.title ?: "Unavailable"} — ${entry.reason ?: "Unavailable"}"
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (record != null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
         }
         val formatsNeedingJs = preview.availableFormats?.formatsNeedingJs ?: 0
         if (formatsNeedingJs > 0) {
@@ -296,8 +401,12 @@ private fun Thumbnail(bytes: ByteArray?) {
 }
 
 @Composable
-private fun DownloadButton(onDownload: () -> Unit) {
-    Button(onClick = onDownload, modifier = Modifier.testTag("preview-download")) {
+private fun DownloadButton(enabled: Boolean, onDownload: () -> Unit) {
+    Button(
+        onClick = onDownload,
+        enabled = enabled,
+        modifier = Modifier.testTag("preview-download"),
+    ) {
         Text(stringResource(Res.string.download))
     }
 }

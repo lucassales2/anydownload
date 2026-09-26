@@ -9,6 +9,9 @@ package com.anydownlod.core.platform
  * against [HttpHeaders.ALLOWLIST] before transport (see [sanitized]).
  * [range] is the inclusive byte range; it becomes a `Range` header unless the
  * caller already declared one. [body] is sent only for non-GET methods.
+ * [authorization] is a full `Authorization` header value that only trusted
+ * metadata clients set (D6 Spotify); it never enters the [headers] map, so
+ * extractor-declared headers still cannot carry credentials.
  */
 data class HttpRequest(
     val url: String,
@@ -16,11 +19,15 @@ data class HttpRequest(
     val headers: Map<String, String> = emptyMap(),
     val body: ByteArray? = null,
     val range: LongRange? = null,
+    val authorization: String? = null,
 ) {
     /**
      * Applies the request-header allowlist and turns [range] into a `Range`
-     * header. The returned [SanitizedRequest.droppedHeaders] names are safe to
-     * report in redacted diagnostics (names only, never values).
+     * header. [authorization], when present, is added after the allowlist so
+     * it is the only way a credential leaves the device; the value never
+     * appears in [SanitizedRequest.droppedHeaders] or any diagnostic. The
+     * returned [SanitizedRequest.droppedHeaders] names are safe to report in
+     * redacted diagnostics (names only, never values).
      */
     fun sanitized(): SanitizedRequest {
         val withRange = if (range != null && headers.keys.none { it.equals(HeaderNames.RANGE, ignoreCase = true) }) {
@@ -29,7 +36,12 @@ data class HttpRequest(
             headers
         }
         val sanitized = HttpHeaders.sanitize(withRange)
-        return SanitizedRequest(copy(headers = sanitized.accepted), sanitized.dropped)
+        val accepted = if (!authorization.isNullOrBlank()) {
+            sanitized.accepted + (HeaderNames.AUTHORIZATION to authorization)
+        } else {
+            sanitized.accepted
+        }
+        return SanitizedRequest(copy(headers = accepted, authorization = null), sanitized.dropped)
     }
 }
 
@@ -50,14 +62,18 @@ object HeaderNames {
     const val CONTENT_TYPE = "content-type"
     const val CONTENT_LENGTH = "content-length"
     const val LOCATION = "location"
+    const val AUTHORIZATION = "authorization"
 }
 
 /**
  * The request- and response-header allowlists for the port.
  *
- * Only names in [ALLOWLIST] leave the device. `Cookie`, `Authorization`, and
- * every `X-Goog-*` auth header are refused here until T-018; the visitor id
- * is the one `x-goog-*` name upstream's innertube clients may declare.
+ * Only names in [ALLOWLIST] leave the device through [sanitize]. `Cookie`,
+ * `Authorization` from the header map, and every `X-Goog-*` auth header are
+ * refused here until T-018; the visitor id is the one `x-goog-*` name
+ * upstream's innertube clients may declare. A trusted caller may set the
+ * explicit `HttpRequest.authorization` field instead (D6 Spotify metadata);
+ * that value is added after this filter and never enters a diagnostic.
  * Refused names are dropped, never rewritten, and reported by name only.
  */
 object HttpHeaders {

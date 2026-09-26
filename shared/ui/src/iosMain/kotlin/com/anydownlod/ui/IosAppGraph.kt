@@ -11,12 +11,13 @@ import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.extract.ExtractorHttp
-import com.anydownlod.core.extract.ExtractorRegistry
-import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.youtube.YoutubeSearch
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
 import com.anydownlod.core.platform.IosFileStore
 import com.anydownlod.core.platform.IosHttpTransfer
+import com.anydownlod.core.postprocess.ToolkitCapabilities
+import com.anydownlod.ui.media.IosMediaToolkit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,9 +50,10 @@ class IosAppGraph : AppGraph {
     // NSURLSession transfer and registry serve downloads and previews.
     private val transfer = IosHttpTransfer()
     private val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
-    private val extractorRegistry = ExtractorRegistry(
-        listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
-    )
+    private val extractorRegistry = IosExtractors.registry(transfer, jsRuntime)
+
+    // D5: AVFoundation passthrough remux. Capabilities stay M4A/Opus copy-only.
+    private val toolkit = IosMediaToolkit()
 
     override val engine: DownloadEngine = HttpDownloadEngine(
         transfer = transfer,
@@ -59,13 +61,25 @@ class IosAppGraph : AppGraph {
         settings = settingsRepository,
         scope = scope,
         registry = extractorRegistry,
+        toolkit = toolkit,
     )
 
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = settingsRepository
+
+    // D6: Spotify metadata, matching, and queueing through the shared engine.
+    // The user library needs an on-device token store, which is a mobile gap.
+    override val spotify: com.anydownlod.core.music.SpotifyDownloadService =
+        com.anydownlod.core.music.SpotifyDownloadService(
+            metadata = com.anydownlod.core.music.SpotifyMetadataClients.default(ExtractorHttp(transfer)),
+            matcher = com.anydownlod.core.music.AudioMatcher.default(YoutubeSearch(ExtractorHttp(transfer))),
+            engine = engine,
+        )
+
     override val toolProbe: ToolProbe = IosToolProbe(jsRuntime)
     override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
     override val cookieStore: CookieStore = CookieStore.Unavailable
+    override val toolkitCapabilities: ToolkitCapabilities = toolkit.capabilities()
 }
 
 /** Reports the embedded Zipline QuickJS runtime as the Settings row (T-071). */

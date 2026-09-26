@@ -26,7 +26,7 @@ flowchart TD
     APP --> FILES[Platform file storage]
 ```
 
-- **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI. A Spotify URL is metadata plus a YouTube or YouTube Music match, then the same engine. See [T-037](../06-tasks/T-037-Spotify-youtube-match.md).
+- **Shared Kotlin:** extractors, download, typed options, queue, history, and Compose UI. A Spotify URL is metadata plus a YouTube or YouTube Music match, then the same engine. The full spotDL surface is [Phase 6](../00-project/Phase-6-SpotDL-Parity.md). See [T-037](../06-tasks/T-037-Spotify-youtube-match.md).
 - **Platform adapters:** HTTP (method, headers, body, range), file write, JavaScript runtime for the bundled challenge solver, share/open, and lifecycle. Common code does not spawn a process or assume Python.
 - **Web:** Compose/Wasm UI. Downloads go through a local MV3 extension with host permissions ([T-043](../06-tasks/T-043-Web-extension-download.md)). The page does not fetch arbitrary origins.
 - **iOS:** the same shared engine, with sandbox file export and no guarantee of work after suspension.

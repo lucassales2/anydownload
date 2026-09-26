@@ -67,6 +67,7 @@ class InMemoryDownloadEngine(
             updatedAtEpochMillis = createdAt,
             startedAtEpochMillis = createdAt,
             sourceHost = hostOf(request.sourceUrl),
+            parentBatchId = request.parentBatchId,
             attempts = listOf(
                 JobAttempt(
                     id = "attempt-${idGenerator()}",

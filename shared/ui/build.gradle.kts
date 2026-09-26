@@ -50,6 +50,10 @@ kotlin {
             implementation(compose.desktop.currentOs)
             implementation(kotlin("test"))
         }
+        iosTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.core)
+        }
     }
 }
 

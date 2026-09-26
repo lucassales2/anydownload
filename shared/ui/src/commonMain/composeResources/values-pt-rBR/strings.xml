@@ -196,7 +196,10 @@
     <string name="preview_views">%1$s visualizações</string>
     <string name="preview_uploaded">Publicado em %1$s</string>
     <string name="preview_playlist_count">Playlist · %1$s itens</string>
-    <string name="preview_needs_toolkit">Precisa do kit de mídia (ainda não implementado)</string>
+    <string name="preview_videos">Vídeos desta publicação</string>
+    <string name="preview_video_fallback">Vídeo %1$s</string>
+    <string name="preview_cannot_merge">Este aparelho não pode juntar vídeo e áudio</string>
+    <string name="preview_cannot_write">Este aparelho não pode gravar %1$s</string>
     <string name="preview_not_available_source">Indisponível nesta fonte</string>
     <string name="preview_formats_needing_js">Mais %1$s formatos precisam do runtime de JavaScript</string>
     <string name="paste_one_url">Cole pelo menos uma URL de origem.</string>
@@ -256,6 +259,15 @@
     <string name="cookie_warning">Um arquivo de cookies fica neste computador e pode expor uma conta. Importá-lo não garante que o site permitirá o download. O conteúdo nunca é mostrado aqui.</string>
     <string name="import_file">Importar</string>
     <string name="replace_file">Substituir</string>
+    <string name="section_spotify">Biblioteca do Spotify</string>
+    <string name="spotify_logged_in">Conectado ao Spotify. Músicas curtidas, playlists, álbuns e artistas seguidos podem ser usados.</string>
+    <string name="spotify_logged_out">Não conectado. Músicas salvas, suas playlists, álbuns salvos e artistas seguidos precisam de login no Spotify; links públicos de faixas não precisam.</string>
+    <string name="spotify_unavailable">O login do Spotify não está disponível neste host.</string>
+    <string name="spotify_token_hint">Token de acesso do seu login no Spotify</string>
+    <string name="spotify_login">Entrar</string>
+    <string name="spotify_logout">Sair</string>
+    <string name="spotify_token_saved">Login do Spotify salvo neste dispositivo.</string>
+    <string name="spotify_logout_done">Login do Spotify removido.</string>
     <string name="section_presets">Presets</string>
     <string name="presets_layer_hint">Os presets se sobrepõem nesta ordem; um preset posterior substitui um anterior na mesma chave.</string>
     <string name="no_presets_yet">Nenhum preset ainda.</string>

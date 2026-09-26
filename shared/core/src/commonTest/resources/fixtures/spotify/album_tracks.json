@@ -1,0 +1,73 @@
+{
+  "href": "https://api.spotify.com/v1/albums/1ATL5GLyefJaxhQzSPVrLX/tracks",
+  "items": [
+    {
+      "artists": [
+        {
+          "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+          "id": "0gxyHStUsqpMadRV0Di1Qt",
+          "name": "Rick Astley",
+          "type": "artist",
+          "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+        }
+      ],
+      "disc_number": 1,
+      "duration_ms": 213573,
+      "explicit": false,
+      "external_urls": { "spotify": "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC" },
+      "id": "4uLU6hMCjMI75M1A2tKUQC",
+      "is_local": false,
+      "name": "Never Gonna Give You Up",
+      "track_number": 1,
+      "type": "track",
+      "uri": "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+    },
+    {
+      "artists": [
+        {
+          "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+          "id": "0gxyHStUsqpMadRV0Di1Qt",
+          "name": "Rick Astley",
+          "type": "artist",
+          "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+        }
+      ],
+      "disc_number": 1,
+      "duration_ms": 201000,
+      "explicit": false,
+      "external_urls": { "spotify": "https://open.spotify.com/track/fixturetrack00000000002" },
+      "id": "fixturetrack00000000002",
+      "is_local": false,
+      "name": "Whenever You Need Somebody",
+      "track_number": 2,
+      "type": "track",
+      "uri": "spotify:track:fixturetrack00000000002"
+    },
+    {
+      "artists": [
+        {
+          "external_urls": { "spotify": "https://open.spotify.com/artist/0gxyHStUsqpMadRV0Di1Qt" },
+          "id": "0gxyHStUsqpMadRV0Di1Qt",
+          "name": "Rick Astley",
+          "type": "artist",
+          "uri": "spotify:artist:0gxyHStUsqpMadRV0Di1Qt"
+        }
+      ],
+      "disc_number": 2,
+      "duration_ms": 0,
+      "explicit": false,
+      "external_urls": { "spotify": "https://open.spotify.com/track/fixturetrack00000000003" },
+      "id": "fixturetrack00000000003",
+      "is_local": false,
+      "name": "Fixture Missing Duration",
+      "track_number": 3,
+      "type": "track",
+      "uri": "spotify:track:fixturetrack00000000003"
+    }
+  ],
+  "limit": 50,
+  "next": null,
+  "offset": 0,
+  "previous": null,
+  "total": 3
+}

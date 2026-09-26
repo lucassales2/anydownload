@@ -52,6 +52,7 @@ import com.anydownlod.core.domain.Preset
 import com.anydownlod.core.domain.PresetOptionKeys
 import com.anydownlod.core.domain.ToolAvailability
 import com.anydownlod.core.domain.ToolStatus
+import com.anydownlod.core.music.SpotifyAuthService
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.add_preset
 import com.anydownlod.ui.generated.resources.cancel
@@ -101,12 +102,21 @@ import com.anydownlod.ui.generated.resources.section_cookies
 import com.anydownlod.ui.generated.resources.section_filenames
 import com.anydownlod.ui.generated.resources.section_presets
 import com.anydownlod.ui.generated.resources.section_queue
+import com.anydownlod.ui.generated.resources.section_spotify
 import com.anydownlod.ui.generated.resources.section_storage
 import com.anydownlod.ui.generated.resources.section_tools
 import com.anydownlod.ui.generated.resources.settings_js_runtime
 import com.anydownlod.ui.generated.resources.settings_kotlin_extractors
 import com.anydownlod.ui.generated.resources.settings
 import com.anydownlod.ui.generated.resources.settings_subtitle
+import com.anydownlod.ui.generated.resources.spotify_login
+import com.anydownlod.ui.generated.resources.spotify_logged_in
+import com.anydownlod.ui.generated.resources.spotify_logged_out
+import com.anydownlod.ui.generated.resources.spotify_logout
+import com.anydownlod.ui.generated.resources.spotify_logout_done
+import com.anydownlod.ui.generated.resources.spotify_token_hint
+import com.anydownlod.ui.generated.resources.spotify_token_saved
+import com.anydownlod.ui.generated.resources.spotify_unavailable
 import com.anydownlod.ui.generated.resources.templates_hint
 import com.anydownlod.ui.generated.resources.theme
 import com.anydownlod.ui.generated.resources.tool_available
@@ -263,6 +273,11 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
                     }
                 },
                 onDelete = { confirmCookieDelete = true },
+            )
+
+            SpotifySection(
+                auth = graph.spotifyAuth,
+                onNotice = { message -> notice = message },
             )
 
             PresetsSection(
@@ -495,6 +510,63 @@ private fun NumberField(
         },
         singleLine = true,
     )
+}
+
+@Composable
+private fun SpotifySection(auth: SpotifyAuthService?, onNotice: (UiText) -> Unit) {
+    SettingsSection(stringResource(Res.string.section_spotify)) {
+        if (auth == null) {
+            Text(
+                text = stringResource(Res.string.spotify_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SettingsSection
+        }
+        var loggedIn by remember(auth) { mutableStateOf(auth.isLoggedIn()) }
+        var token by remember(auth) { mutableStateOf("") }
+        if (loggedIn) {
+            Text(
+                text = stringResource(Res.string.spotify_logged_in),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            FilledTonalButton(
+                onClick = {
+                    auth.logout()
+                    loggedIn = false
+                    onNotice(UiText.of(Res.string.spotify_logout_done))
+                },
+                modifier = Modifier.testTag("spotify-logout"),
+            ) {
+                Text(stringResource(Res.string.spotify_logout))
+            }
+        } else {
+            Text(
+                text = stringResource(Res.string.spotify_logged_out),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            AppTextField(
+                value = token,
+                onValueChange = { token = it },
+                modifier = Modifier.fillMaxWidth().testTag("spotify-token-field"),
+                label = { Text(stringResource(Res.string.spotify_token_hint)) },
+                singleLine = true,
+            )
+            Button(
+                onClick = {
+                    auth.login(token)
+                    token = ""
+                    loggedIn = true
+                    onNotice(UiText.of(Res.string.spotify_token_saved))
+                },
+                enabled = token.isNotBlank(),
+                modifier = Modifier.testTag("spotify-login"),
+            ) {
+                Text(stringResource(Res.string.spotify_login))
+            }
+        }
+    }
 }
 
 @Composable

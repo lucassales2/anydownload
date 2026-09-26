@@ -15,6 +15,15 @@ import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.twitter.TwitterIE
+import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.music.AudioMatcher
+import com.anydownlod.core.music.AudioProviders
+import com.anydownlod.core.music.LyricsFetcher
+import com.anydownlod.core.music.SpotifyAuthService
+import com.anydownlod.core.music.SpotifyDownloadService
+import com.anydownlod.core.music.SpotifyLibraryClient
+import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
@@ -24,12 +33,15 @@ import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
 import com.anydownlod.core.platform.JavaNetHttpTransfer
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.desktop.engine.CliProcessRunner
+import com.anydownlod.desktop.engine.DesktopFfmpegToolkit
 import com.anydownlod.desktop.engine.DesktopFileStore
 import com.anydownlod.desktop.engine.DesktopRoute
 import com.anydownlod.desktop.engine.DesktopRouteClassifier
 import com.anydownlod.desktop.engine.DesktopPreviewSource
 import com.anydownlod.desktop.engine.DesktopRoutingEngine
+import com.anydownlod.desktop.engine.DesktopSpotifyListStore
 import com.anydownlod.desktop.engine.DownloadPaths
 import com.anydownlod.desktop.engine.ExecutableOnPath
 import com.anydownlod.desktop.engine.JavaCliProcessRunner
@@ -37,6 +49,7 @@ import com.anydownlod.desktop.engine.PathToolProbe
 import com.anydownlod.desktop.engine.ThumbnailBytes
 import com.anydownlod.desktop.engine.YtDlpCliEngine
 import com.anydownlod.desktop.store.DesktopCookieStore
+import com.anydownlod.desktop.store.DesktopSpotifyTokenStore
 import com.anydownlod.desktop.store.DesktopStore
 import com.anydownlod.desktop.store.PersistingSettingsRepository
 import com.anydownlod.desktop.store.defaultDownloadRootPath
@@ -116,11 +129,13 @@ internal class DesktopApp(
             // installed CLI keeps every other URL. One transfer and registry
             // serve routing, downloads, and the startup job split.
             val transfer = com.anydownlod.core.platform.JavaNetHttpTransfer()
+            val extractorHttp = ExtractorHttp(transfer)
             val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
             val extractorRegistry = ExtractorRegistry(
-                listOf(YoutubeIE(ExtractorHttp(transfer), jsRuntime)),
+                listOf(YoutubeIE(extractorHttp, jsRuntime), TwitterIE(extractorHttp)),
             )
             val classifier = DesktopRouteClassifier(registry = extractorRegistry)
+            val toolkit = DesktopFfmpegToolkit(runner = processRunner, resolveExecutable = resolveExecutable)
 
             val cliEngine = YtDlpCliEngine(
                 settingsRepository = settings,
@@ -143,6 +158,7 @@ internal class DesktopApp(
                 ioDispatcher = ioDispatcher,
                 persist = persistAll,
                 registry = extractorRegistry,
+                toolkit = toolkit,
                 seedJobs = persisted.jobs.filter {
                     DesktopRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) !=
                         DesktopRoute.YTDLP_CLI
@@ -155,6 +171,30 @@ internal class DesktopApp(
                 scope = scope,
             )
             val engine: DownloadEngine = routing
+            val spotify = SpotifyDownloadService(
+                metadata = SpotifyMetadataClients.default(extractorHttp),
+                matcher = AudioMatcher.withFallbacks(
+                    search = YoutubeSearch(extractorHttp),
+                    fallbacks = AudioProviders.fallbacks(
+                        extractorHttp,
+                        settings.settings.value.spotifyFallbackProviders,
+                    ),
+                    canDownload = { url ->
+                        extractorRegistry.suitableFor(url) != null || isDirectMediaUrl(url)
+                    },
+                ),
+                engine = engine,
+                listStore = DesktopSpotifyListStore { settings.settings.value.downloadRoot },
+                lyrics = LyricsFetcher.default(extractorHttp),
+                library = SpotifyLibraryClient(
+                    http = extractorHttp,
+                    tokenStore = DesktopSpotifyTokenStore(stateDirectory),
+                ),
+            )
+            val spotifyAuth = SpotifyAuthService(
+                tokenStore = DesktopSpotifyTokenStore(stateDirectory),
+                http = extractorHttp,
+            )
 
             val subscriptions = DesktopSubscriptionRepository(
                 delegate = InMemorySubscriptionRepository(seedSubscriptions = persisted.subscriptions),
@@ -195,6 +235,9 @@ internal class DesktopApp(
                         workingDirectory = previewDirectory,
                         jsRuntime = jsRuntime,
                     ),
+                    toolkitCapabilities = toolkit.capabilities(),
+                    spotify = spotify,
+                    spotifyAuth = spotifyAuth,
                     loadThumbnail = { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } },
                 ),
                 shutdownEngine = {
@@ -214,6 +257,9 @@ private fun desktopGraph(
     cookieStore: CookieStore,
     startupWarning: String?,
     previews: MediaPreviewSource,
+    toolkitCapabilities: ToolkitCapabilities,
+    spotify: SpotifyDownloadService?,
+    spotifyAuth: SpotifyAuthService?,
     loadThumbnail: suspend (String) -> ByteArray?,
 ): AppGraph = object : AppGraph {
     override val engine: DownloadEngine = downloadEngine
@@ -222,6 +268,9 @@ private fun desktopGraph(
     override val toolProbe: ToolProbe = toolProbe
     override val cookieStore: CookieStore = cookieStore
     override val previews: MediaPreviewSource = previews
+    override val toolkitCapabilities: ToolkitCapabilities = toolkitCapabilities
+    override val spotify: SpotifyDownloadService? = spotify
+    override val spotifyAuth: SpotifyAuthService? = spotifyAuth
     override val loadThumbnail: suspend (String) -> ByteArray? = loadThumbnail
     override val openUrl: (String) -> Unit = { url -> openInBrowser(url) }
     override val openFile: (Artifact) -> Unit = { artifact ->
@@ -234,6 +283,14 @@ private fun desktopGraph(
     override val pickCookieFile: () -> String? = { chooseCookieFile() }
     override val startupWarning: String? = startupWarning
 }
+
+/** Media extensions the engine can download without an extractor. */
+private val SPOTIFY_MEDIA_EXTENSIONS = setOf(
+    "mp3", "m4a", "opus", "ogg", "wav", "flac", "mp4", "webm",
+)
+
+private fun isDirectMediaUrl(url: String): Boolean =
+    url.substringBefore('?').substringBefore('#').substringAfterLast('.').lowercase() in SPOTIFY_MEDIA_EXTENSIONS
 
 private fun openInBrowser(url: String) {
     runCatching {

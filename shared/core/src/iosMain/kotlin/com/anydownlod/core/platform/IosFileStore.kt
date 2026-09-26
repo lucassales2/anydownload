@@ -1,5 +1,6 @@
 package com.anydownlod.core.platform
 
+import com.anydownlod.core.postprocess.MediaFilePath
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
@@ -45,6 +46,19 @@ class IosFileStore(
         val stream = fopen(path, "wb") ?: error("Could not create a temp file under the download root.")
         return IosFileHandle(path, stream)
     }
+
+    override fun createTempFile(extension: String): FileHandle {
+        val suffix = if (extension.startsWith(".")) extension else ".$extension"
+        val path = "$tempDir/.anydownload-${Random.nextLong().toULong().toString(16)}$suffix"
+        val stream = fopen(path, "wb") ?: error("Could not create a temp file under the download root.")
+        return IosFileHandle(path, stream)
+    }
+
+    override fun mediaFilePath(temp: FileHandle): MediaFilePath =
+        MediaFilePath((temp as IosFileHandle).path)
+
+    override fun mediaFilePath(relativePath: String): MediaFilePath =
+        MediaFilePath(resolve(relativePath))
 
     override fun publish(temp: FileHandle, relativePath: String): String {
         val target = resolve(relativePath)

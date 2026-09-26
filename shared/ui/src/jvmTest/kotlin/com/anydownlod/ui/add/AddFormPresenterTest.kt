@@ -348,10 +348,6 @@ class AddFormPresenterTest {
         assertEquals(null, f.presenter.validateForPreview())
         assertEquals(Res.string.url_error_blank, f.presenter.status.value?.message?.resourceOrNull())
 
-        f.presenter.setUrl("not-a-url")
-        assertEquals(null, f.presenter.validateForPreview())
-        assertEquals(Res.string.url_error_scheme, f.presenter.status.value?.message?.resourceOrNull())
-
         f.presenter.setUrl("https://user:pass@example.com/watch")
         assertEquals(null, f.presenter.validateForPreview())
         assertEquals(Res.string.url_error_userinfo, f.presenter.status.value?.message?.resourceOrNull())
@@ -360,6 +356,30 @@ class AddFormPresenterTest {
         assertEquals(null, f.presenter.validateForPreview())
         assertEquals(Res.string.url_error_one_only, f.presenter.status.value?.message?.resourceOrNull())
         assertTrue(f.engine.jobs.value.isEmpty())
+    }
+
+    @Test
+    fun validateForPreviewAcceptsASpotifyUrlOrSearchText() {
+        val f = fixture()
+
+        f.presenter.setUrl("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC")
+        assertEquals(
+            "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC",
+            f.presenter.validateForPreview(),
+        )
+
+        f.presenter.setUrl("Rick Astley - Never Gonna Give You Up")
+        assertEquals("Rick Astley - Never Gonna Give You Up", f.presenter.validateForPreview())
+
+        f.presenter.setUrl("album:Whenever You Need Somebody")
+        assertEquals("album:Whenever You Need Somebody", f.presenter.validateForPreview())
+
+        f.presenter.setUrl("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC")
+        assertEquals(
+            "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC",
+            f.presenter.singleSourceUrl(),
+        )
+        assertTrue(f.engine.jobs.value.isEmpty(), "preview must not start a job")
     }
 
     @Test

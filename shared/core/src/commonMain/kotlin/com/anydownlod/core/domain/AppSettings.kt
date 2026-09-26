@@ -90,6 +90,13 @@ data class AppSettings(
     val handledClipboardUrl: String = "",
     val cookiesConfigured: Boolean = false,
     val presets: List<Preset> = emptyList(),
+    /**
+     * Opt-in Spotify fallback audio providers (`soundcloud`, `bandcamp`,
+     * `piped`, `slider.kz`). Empty keeps the default YouTube Music + YouTube
+     * search; the values are the names [com.anydownlod.core.music.AudioProviders]
+     * understands.
+     */
+    val spotifyFallbackProviders: List<String> = emptyList(),
 )
 
 /** Result of looking for one external tool on the local machine. */

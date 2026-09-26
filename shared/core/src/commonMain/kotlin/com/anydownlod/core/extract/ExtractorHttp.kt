@@ -43,12 +43,16 @@ class ExtractorHttp(
         url: String,
         headers: Map<String, String> = emptyMap(),
         maxBytes: Int = defaultMaxBytes,
-    ): String = downloadBytes(HttpRequest(url = url, headers = headers), maxBytes).decodeToString()
+        authorization: String? = null,
+    ): String =
+        downloadBytes(HttpRequest(url = url, headers = headers, authorization = authorization), maxBytes)
+            .decodeToString()
 
     /**
      * Upstream `_download_json`: a request whose response must be JSON. The
      * body is sent with `Content-Type: application/json` unless the caller
-     * declared one.
+     * declared one. [authorization] is a full `Authorization` value for the
+     * trusted metadata clients; extractors leave it null.
      */
     suspend fun downloadJson(
         url: String,
@@ -56,13 +60,17 @@ class ExtractorHttp(
         headers: Map<String, String> = emptyMap(),
         body: ByteArray? = null,
         maxBytes: Int = defaultMaxBytes,
+        authorization: String? = null,
     ): JsonElement {
         val withContentType = if (body != null && headers.keys.none { it.equals("content-type", true) }) {
             headers + ("content-type" to "application/json")
         } else {
             headers
         }
-        val text = downloadBytes(HttpRequest(url, method, withContentType, body), maxBytes).decodeToString()
+        val text = downloadBytes(
+            HttpRequest(url, method, withContentType, body, authorization = authorization),
+            maxBytes,
+        ).decodeToString()
         return ExtractorUtils.parseJson(text, fatal = true)
             ?: throw ExtractionError.Malformed("The response was empty.")
     }

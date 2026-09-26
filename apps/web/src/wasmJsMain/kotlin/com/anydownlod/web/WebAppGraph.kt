@@ -12,6 +12,11 @@ import com.anydownlod.core.engine.WebExtensionEngine
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.twitter.TwitterIE
+import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.music.AudioMatcher
+import com.anydownlod.core.music.SpotifyDownloadService
+import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.platform.WebExtensionTransfer
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
@@ -35,8 +40,9 @@ class WebAppGraph : AppGraph {
     // request port; the browser downloader saves the selected format. The
     // page's own JavaScript runs the bundled solver (T-072).
     internal val browserJsRuntime = com.anydownlod.core.jsc.BrowserJsRuntime()
+    private val extensionHttp = ExtractorHttp(WebExtensionTransfer(bridge))
     private val extractorRegistry = ExtractorRegistry(
-        listOf(YoutubeIE(ExtractorHttp(WebExtensionTransfer(bridge)), browserJsRuntime)),
+        listOf(YoutubeIE(extensionHttp, browserJsRuntime), TwitterIE(extensionHttp)),
     )
 
     override val engine: DownloadEngine = WebExtensionEngine(
@@ -47,6 +53,16 @@ class WebAppGraph : AppGraph {
 
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = InMemorySettingsRepository()
+
+    // D6: Spotify metadata, matching, and queueing through the extension.
+    // The page itself never fetches; the extension carries every request. The
+    // user library has no on-device token store on web, so it is a gap.
+    override val spotify: SpotifyDownloadService = SpotifyDownloadService(
+        metadata = SpotifyMetadataClients.default(extensionHttp),
+        matcher = AudioMatcher.default(YoutubeSearch(extensionHttp)),
+        engine = engine,
+    )
+
     override val toolProbe: ToolProbe = WebToolProbe(browserJsRuntime)
     override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
     override val cookieStore: CookieStore = CookieStore.Unavailable

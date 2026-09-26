@@ -3,6 +3,10 @@ package com.anydownlod.core
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.InfoExtractor
+import com.anydownlod.core.extract.InfoMedia
+import com.anydownlod.core.extract.Thumbnail
 import com.anydownlod.core.extract.harness.FixtureHttpTransfer
 import com.anydownlod.core.extract.harness.FixtureRoute
 import com.anydownlod.core.extract.youtube.YoutubeIE
@@ -58,9 +62,13 @@ class ExtractorMediaPreviewSourceTest {
         assertEquals(123_456L, preview.viewCount)
         assertEquals("https://i.example/large.jpg", preview.thumbnailUrl)
         assertEquals(watchUrl, preview.pageUrl)
+        assertTrue(preview.videos.isEmpty(), "a YouTube preview has no selectable video list")
 
         val choices = assertIs<FormatChoices>(preview.availableFormats)
         assertEquals(listOf(720, 360), choices.videoHeights)
+        assertEquals(listOf(1080), choices.mergeableVideoHeights)
+        assertTrue(choices.hasAudioOnly)
+        assertTrue(choices.hasSplitStreams)
         assertEquals(setOf(AudioContainer.M4A, AudioContainer.OPUS), choices.audioContainers)
         assertEquals(2, choices.formatsNeedingJs)
 
@@ -122,9 +130,60 @@ class ExtractorMediaPreviewSourceTest {
         )
         assertEquals(listOf(720, 360), choices.videoHeights)
         assertEquals(720, choices.bestVideoHeight)
+        assertEquals(listOf(1080), choices.mergeableVideoHeights)
+        assertTrue(choices.hasAudioOnly)
+        assertTrue(choices.hasSplitStreams)
         assertEquals(setOf(AudioContainer.M4A, AudioContainer.OPUS), choices.audioContainers)
         assertEquals(3, choices.formatsNeedingJs)
         assertTrue(choices.hasSingleFileVideo)
+    }
+
+    @Test
+    fun mediaBecomesSelectableVideosInExtractionOrder() = runTest {
+        val transfer = FixtureHttpTransfer(emptyList())
+        val fake = object : InfoExtractor(
+            ieKey = "Fake",
+            http = ExtractorHttp(transfer),
+            validUrl = Regex("https://x\\.com/.*"),
+        ) {
+            override suspend fun extract(url: String): InfoDict = InfoDict(
+                id = "1",
+                title = "Fixture status",
+                thumbnails = emptyList(),
+                media = listOf(
+                    InfoMedia(
+                        mediaId = "333",
+                        title = "Fixture status #1",
+                        duration = 5.0,
+                        thumbnails = listOf(Thumbnail("https://pbs.example/media/first.jpg")),
+                        formats = listOf(
+                            format(id = "http-256", ext = "mp4", vcodec = null, acodec = null, height = 180),
+                        ),
+                    ),
+                    InfoMedia(
+                        mediaId = "444",
+                        title = "Fixture status #2",
+                        duration = 7.0,
+                        thumbnails = listOf(Thumbnail("https://pbs.example/media/second.jpg")),
+                        formats = listOf(
+                            format(id = "http-832", ext = "mp4", vcodec = null, acodec = null, height = 360),
+                        ),
+                    ),
+                ),
+            )
+        }
+        val source = ExtractorMediaPreviewSource(ExtractorRegistry(listOf(fake)))
+        val result = assertIs<MediaPreviewResult.Ready>(source.load("https://x.com/fixture/status/1"))
+        val preview = result.preview
+
+        assertEquals(listOf("333", "444"), preview.videos.map { it.mediaId })
+        assertEquals(listOf("Fixture status #1", "Fixture status #2"), preview.videos.map { it.title })
+        assertEquals(listOf(5L, 7L), preview.videos.map { it.durationSeconds })
+        assertEquals("https://pbs.example/media/first.jpg", preview.videos.first().thumbnailUrl)
+        // The preview thumbnail falls back to the first video's thumbnail.
+        assertEquals("https://pbs.example/media/first.jpg", preview.thumbnailUrl)
+        assertEquals(listOf(360, 180), preview.availableFormats?.videoHeights)
+        assertTrue(transfer.requests.isEmpty(), "a preview never requests the media")
     }
 
     @Test

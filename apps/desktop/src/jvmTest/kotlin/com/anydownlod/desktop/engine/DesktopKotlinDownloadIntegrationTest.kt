@@ -218,7 +218,7 @@ class DesktopKotlinDownloadIntegrationTest {
             val finished = waitForTerminal(engine, job.id)
             assertEquals(JobState.FAILED, finished.state)
             assertEquals(com.anydownlod.core.domain.JobErrorCode.UNSUPPORTED_FORMAT, finished.error?.code)
-            assertTrue(finished.error?.message?.contains("media toolkit") == true, finished.error?.message)
+            assertTrue(finished.error?.message?.contains("cannot write MP3") == true, finished.error?.message)
             assertFalse(processStarted.get(), "MP3 must fail typed, not fall back to a process")
             assertEquals(0L, Files.list(root).use { it.count() })
         } finally {

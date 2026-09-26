@@ -5,6 +5,7 @@ tags: [project, board]
 
 ## Backlog
 
+
 - [ ] [T-007 — Define UX and review the contract](06-tasks/T-007-Define-UX-and-contract.md) #M0 #P1
 
 - [ ] [T-009 — Local engine vertical slice](06-tasks/T-009-Backend-vertical-slice.md) #M1 #P0
@@ -14,7 +15,6 @@ tags: [project, board]
 - [ ] [T-013 — Video profiles and audio extraction](06-tasks/T-013-Media-formats.md) #M2 #P1
 - [ ] [T-014 — History, storage and artifact delivery](06-tasks/T-014-Storage-and-delivery.md) #M2 #P1
 - [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #M3 #P1
-- [ ] [T-037 — Spotify URLs via a YouTube match](06-tasks/T-037-Spotify-youtube-match.md) #M3 #P1
 - [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #M3 #P1
 - [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #M3 #P1
 - [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #M3 #P0
@@ -41,6 +41,33 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-100 — Phase 7 verification](06-tasks/T-100-Phase-7-verification.md) #D7 #P0
+- [x] [T-099 — Web: the extension carries the X lookup and the media GET](06-tasks/T-099-Web-extension-x-requests.md) #D7 #P0
+- [x] [T-098 — iOS downloads a selected status video fixture](06-tasks/T-098-Ios-x-status-download.md) #D7 #P0
+- [x] [T-097 — Android routes a matched X status through Kotlin](06-tasks/T-097-Android-routes-x-status.md) #D7 #P0
+- [x] [T-096 — Gate: selected status videos download as separate files](06-tasks/T-096-Gate-selected-media-download.md) #D7 #P0
+- [x] [T-095 — Preview lists the status videos and the user selects them](06-tasks/T-095-Preview-status-videos.md) #D7 #P0
+- [x] [T-094 — TwitterIE for public status videos](06-tasks/T-094-Twitter-status-extractor.md) #D7 #P0
+- [x] [T-093 — Phase 6 verification](06-tasks/T-093-Phase-6-verification.md) #D6 #P0
+- [x] [T-092 — Spotify library](06-tasks/T-092-Spotify-library.md) #D6 #P1
+- [x] [T-091 — Sync](06-tasks/T-091-Sync.md) #D6 #P1
+- [x] [T-090 — Save, url, and meta](06-tasks/T-090-Save-url-meta.md) #D6 #P1
+- [x] [T-089 — Fallback audio providers](06-tasks/T-089-Fallback-providers.md) #D6 #P1
+- [x] [T-088 — Lyrics](06-tasks/T-088-Lyrics.md) #D6 #P1
+- [x] [T-087 — Names, m3u, and archive](06-tasks/T-087-Names-m3u-archive.md) #D6 #P1
+- [x] [T-086 — Spotify download](06-tasks/T-086-Spotify-download.md) #D6 #P0
+- [x] [T-037 — Spotify URLs via a YouTube match](06-tasks/T-037-Spotify-youtube-match.md) #M3 #P1
+- [x] [T-085 — Audio match](06-tasks/T-085-Audio-match.md) #D6 #P0
+- [x] [T-084 — Spotify metadata](06-tasks/T-084-Spotify-metadata.md) #D6 #P0
+- [x] [T-083 — Phase 5 verification](06-tasks/T-083-Phase-5-verification.md) #D5 #P0
+- [x] [T-082 — Audio containers](06-tasks/T-082-Audio-containers.md) #D5 #P1
+- [x] [T-081 — iOS AVFoundation remux](06-tasks/T-081-Ios-avfoundation.md) #D5 #P0
+- [x] [T-080 — Android MediaMuxer remux](06-tasks/T-080-Android-mediamuxer.md) #D5 #P0
+- [x] [T-079 — Gate: desktop merge, web still refuses](06-tasks/T-079-Gate-desktop-merge.md) #D5 #P0
+- [x] [T-078 — Edit follows host capabilities](06-tasks/T-078-Edit-follows-capabilities.md) #D5 #P0
+- [x] [T-077 — Engine executes a merge](06-tasks/T-077-Engine-executes-a-merge.md) #D5 #P0
+- [x] [T-076 — Desktop FFmpeg adapter](06-tasks/T-076-Desktop-ffmpeg.md) #D5 #P0
+- [x] [T-075 — MediaToolkit contract](06-tasks/T-075-Media-toolkit-contract.md) #D5 #P0
 - [x] [T-074 — Phase 4 verification](06-tasks/T-074-Phase-4-verification.md) #D4 #P0
 - [x] [T-073 — Native HLS and DASH fragment downloaders](06-tasks/T-073-Native-hls-dash-downloaders.md) #D4 #P1
 - [x] [T-072 — Web page runs the solver in its own JavaScript](06-tasks/T-072-Js-runtime-web-page.md) #D4 #P0

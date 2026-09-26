@@ -111,3 +111,26 @@ vendored.
   is the embedded JavaScript runtime for JVM, Android, and Kotlin/Native. The
   spike recorded QuickJS version `2021-03-27` and solver-script evaluation on
   the JVM and iOS Simulator. The runtime only evaluates the bundled solver.
+
+
+## NOTICE — X / Twitter status extractor (T-094)
+
+`com.anydownlod.core.extract.twitter.TwitterIE` translates a subset of
+`yt_dlp/extractor/twitter.py` at tag `2026.08.19`, commit
+`3a08beaf031ab68f966401ead017ac81fe8486cf`, read 2026-09-25, Unlicense:
+
+- `TwitterBaseIE._BASE_REGEX` restricted to `twitter.com` and `x.com`
+  (`www.`, `m.`, and `mobile.` hosts) for `TwitterIE._VALID_URL` placed on the
+  shared `InfoExtractor` base.
+- `TwitterBaseIE._call_syndication_api` — the public
+  `cdn.syndication.twimg.com/tweet-result` lookup with the Googlebot user
+  agent, and `_generate_syndication_token` / `jsinterp.js_number_to_string`
+  for the per-request token, which is derived in memory and never stored.
+- `TwitterBaseIE._extract_variant_formats` and `_search_dimensions_in_video_url`
+  for MP4 and HLS variants, and the `TwitterIE._real_extract` metadata and
+  `extract_from_video_info` media fields, grouped here by stable media id.
+
+Not translated: the GraphQL and legacy API selections (including their
+hard-coded bearer values), cookies, any guest-token storage, photos, quoted
+tweets, cards, Spaces, broadcasts, Amplify, the `t.co` shortener, and the
+other classes in `twitter.py`. `twitter.py` is not vendored.

@@ -99,6 +99,22 @@ data class Thumbnail(
 )
 
 /**
+ * Port-only (not an upstream field): one selectable media item of a source
+ * that carries several videos (an X status). Each item has a stable
+ * [mediaId], its own metadata, and its own formats. `formats` on the
+ * [InfoDict] stays empty for such a source; the engine resolves each selected
+ * item instead. Empty for every other extractor.
+ */
+@Serializable
+data class InfoMedia(
+    val mediaId: String,
+    val title: String? = null,
+    val duration: Double? = null,
+    val thumbnails: List<Thumbnail> = emptyList(),
+    val formats: List<MediaFormat> = emptyList(),
+)
+
+/**
  * Upstream info dict. Fields not filled stay null or empty; the extractor key
  * and display name come from the owning [InfoExtractor].
  */
@@ -109,6 +125,12 @@ data class InfoDict(
     val ext: String? = null,
     val url: String? = null,
     val formats: List<MediaFormat> = emptyList(),
+    /**
+     * Port-only: selectable media of one page, grouped by stable media id.
+     * Non-empty only for a source that carries several videos; [formats]
+     * then stays empty and a download names the media it wants.
+     */
+    val media: List<InfoMedia> = emptyList(),
     val thumbnails: List<Thumbnail> = emptyList(),
     val duration: Double? = null,
     val uploader: String? = null,

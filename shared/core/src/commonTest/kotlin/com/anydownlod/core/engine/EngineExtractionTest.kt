@@ -16,6 +16,7 @@ import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.InfoDict
 import com.anydownlod.core.extract.InfoExtractor
+import com.anydownlod.core.extract.InfoMedia
 import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.extract.Thumbnail
 import com.anydownlod.core.fake.InMemorySettingsRepository
@@ -26,9 +27,11 @@ import com.anydownlod.core.format.Selection
 import com.anydownlod.core.platform.ByteArrayHttpBody
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
+import com.anydownlod.core.platform.HttpBody
 import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -72,7 +75,13 @@ class EngineExtractionTest {
         url: String = "https://youtube.example/watch?v=fixture",
         options: DownloadOptions = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
         key: String = "",
-    ) = DownloadRequest(sourceUrl = url, options = options, idempotencyKey = key)
+        selectedMediaIds: List<String> = emptyList(),
+    ) = DownloadRequest(
+        sourceUrl = url,
+        options = options,
+        idempotencyKey = key,
+        selectedMediaIds = selectedMediaIds,
+    )
 
     @Test
     fun matchedUrlExtractsSelectsAndDownloadsOneFormat() = runTest {
@@ -143,7 +152,7 @@ class EngineExtractionTest {
     }
 
     @Test
-    fun mp3FailsTypedBecauseTheMediaToolkitIsNotBuilt() = runTest {
+    fun mp3FailsTypedWhenTheHostCannotWriteIt() = runTest {
         val engine = engine(this, FixedExtractor(singleFormatInfo()), ScriptedTransfer(payload))
         val job = engine.submit(
             request(
@@ -160,7 +169,7 @@ class EngineExtractionTest {
         val finished = engine.jobs.value.first { it.id == job.id }
         assertEquals(JobState.FAILED, finished.state)
         assertEquals(JobErrorCode.UNSUPPORTED_FORMAT, finished.error?.code)
-        assertTrue(finished.error?.message?.contains("media toolkit") == true, finished.error?.message)
+        assertTrue(finished.error?.message?.contains("cannot write MP3") == true, finished.error?.message)
         assertTrue(finished.error?.message?.contains("M4A") == true, finished.error?.message)
     }
 
@@ -172,8 +181,14 @@ class EngineExtractionTest {
         val merged = assertIs<FormatResolution.Unsupported>(
             resolveSelection(Selection.Merge(video, audio), formatsNeedingJs = 0),
         )
-        assertTrue(merged.message.contains("merging"), merged.message)
-        assertTrue(merged.message.contains("media toolkit"), merged.message)
+        assertTrue(merged.message.contains("cannot merge"), merged.message)
+        assertTrue(merged.message.contains("M4A"), merged.message)
+
+        val mergeReady = assertIs<FormatResolution.Merge>(
+            resolveSelection(Selection.Merge(video, audio), formatsNeedingJs = 0, canMerge = true),
+        )
+        assertEquals("v", mergeReady.video.formatId)
+        assertEquals("a", mergeReady.audio.formatId)
 
         val none = assertIs<FormatResolution.Unsupported>(resolveSelection(Selection.None, formatsNeedingJs = 3))
         assertTrue(none.message.contains("3 more formats need the JavaScript runtime"), none.message)
@@ -183,7 +198,7 @@ class EngineExtractionTest {
     }
 
     @Test
-    fun noCompiledSpecEverRequestsAMerge() {
+    fun compiledSpecMergesOnlyWhenTheHostCan() {
         for (profile in com.anydownlod.core.domain.VideoContainerProfile.entries) {
             for (codec in com.anydownlod.core.domain.VideoCodec.entries) {
                 for (quality in listOf(
@@ -191,17 +206,24 @@ class EngineExtractionTest {
                     com.anydownlod.core.domain.QualityPreference.Worst,
                     com.anydownlod.core.domain.QualityPreference.Resolution("720"),
                 )) {
-                    val compiled = OptionsToSpec.compile(
-                        DownloadOptions(videoProfile = profile, videoCodec = codec, quality = quality),
-                    )
-                    val single = assertIs<CompiledSpec.SingleFile>(compiled)
+                    val options = DownloadOptions(videoProfile = profile, videoCodec = codec, quality = quality)
+                    val single = assertIs<CompiledSpec.SingleFile>(OptionsToSpec.compile(options))
                     assertFalse(single.specText.contains("+"), "compiled spec must never merge: ${single.specText}")
                     assertFalse(single.sort.any { it.contains("+") })
+
+                    val mergeCapable = assertIs<CompiledSpec.SingleFile>(OptionsToSpec.compile(options, canMerge = true))
+                    assertEquals(
+                        1,
+                        mergeCapable.specText.count { it == '+' },
+                        "a merge-capable host must compile exactly one merge: ${mergeCapable.specText}",
+                    )
+                    assertTrue(mergeCapable.specText.contains("/"), mergeCapable.specText)
                 }
             }
         }
         val selections = OptionsToSpec.compile(
             DownloadOptions(mediaType = MediaType.AUDIO, audioContainer = AudioContainer.M4A),
+            canMerge = true,
         )
         assertFalse(assertIs<CompiledSpec.SingleFile>(selections).specText.contains("+"))
     }
@@ -254,6 +276,165 @@ class EngineExtractionTest {
         assertNotNull(ready.format.url)
     }
 
+    // ------------------------------------------------------- media selection
+
+    private val statusUrl = "https://x.example/fixture/status/9999999999999999999"
+
+    private fun media(id: String, url: String, title: String) = InfoMedia(
+        mediaId = id,
+        title = title,
+        duration = 5.0,
+        formats = listOf(
+            MediaFormat(formatId = "http-256", url = url, ext = "mp4", height = 360),
+        ),
+    )
+
+    @Test
+    fun twoSelectedOfThreeVideosDownloadTwoFilesFromAFreshExtraction() = runTest {
+        val urlA = "https://cdn.fixtures.example.net/a.mp4"
+        val urlB = "https://cdn.fixtures.example.net/b.mp4"
+        val urlC = "https://cdn.fixtures.example.net/c.mp4"
+        val extractor = FixedExtractor(
+            InfoDict(
+                id = "9999999999999999999",
+                title = "Fixture status",
+                media = listOf(
+                    media("a", urlA, "First video"),
+                    media("b", urlB, "Second video"),
+                    media("c", urlC, "Third video"),
+                ),
+            ),
+            validUrl = Regex("""https?://x\.example/.+"""),
+        )
+        val transfer = ScriptedTransfer(payload)
+        val store = FakeFileStore()
+        val engine = engine(this, extractor, transfer, store)
+
+        val job = engine.submit(
+            request(url = statusUrl, key = "media-key", selectedMediaIds = listOf("c", "a")),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        assertEquals(statusUrl, finished.request.sourceUrl)
+        assertEquals(1, extractor.calls, "the engine re-extracts at download time")
+
+        // One file per selected video, in extraction order; the unselected
+        // video's URL is never fetched.
+        assertEquals(listOf(urlA, urlC), transfer.requests.map { it.url })
+        assertEquals(listOf("First video.mp4", "Third video.mp4"), finished.artifacts.map { it.relativePath })
+        assertTrue(finished.artifacts.all { it.jobId == job.id })
+        assertTrue(store.live.getValue("First video.mp4").bytes.toByteArray().contentEquals(payload))
+        assertTrue(store.live.getValue("Third video.mp4").bytes.toByteArray().contentEquals(payload))
+    }
+
+    @Test
+    fun anEmptySelectionFailsTypedAndNeverFetchesMedia() = runTest {
+        val transfer = ScriptedTransfer(payload)
+        val engine = engine(
+            this,
+            FixedExtractor(
+                InfoDict(media = listOf(media("a", "https://cdn.fixtures.example.net/a.mp4", "First"))),
+                validUrl = Regex("""https?://x\.example/.+"""),
+            ),
+            transfer,
+        )
+        val job = engine.submit(request(url = statusUrl, key = "empty-media-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, finished.error?.code)
+        assertTrue(finished.error?.message?.contains("Select at least one video") == true, finished.error?.message)
+        assertFalse(finished.error?.retryable ?: true)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(transfer.requests.isEmpty(), "an empty selection must not fetch media")
+    }
+
+    @Test
+    fun aSelectedIdGoneFromTheFreshExtractionFailsBeforeAnyMediaGet() = runTest {
+        val transfer = ScriptedTransfer(payload)
+        val engine = engine(
+            this,
+            FixedExtractor(
+                InfoDict(media = listOf(media("a", "https://cdn.fixtures.example.net/a.mp4", "First"))),
+                validUrl = Regex("""https?://x\.example/.+"""),
+            ),
+            transfer,
+        )
+        val job = engine.submit(
+            request(url = statusUrl, key = "stale-media-key", selectedMediaIds = listOf("a", "gone")),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.UNAVAILABLE_OR_PRIVATE, finished.error?.code)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(transfer.requests.isEmpty(), "a stale selection must not half-download")
+    }
+
+    @Test
+    fun cancellingBetweenSelectedVideosDiscardsTheCurrentTemp() = runTest {
+        val info = InfoDict(
+            media = listOf(
+                media("a", "https://cdn.fixtures.example.net/a.mp4", "First"),
+                media("b", "https://cdn.fixtures.example.net/b.mp4", "Second"),
+            ),
+        )
+        val gate = CompletableDeferred<Unit>()
+        val transfer = GatedSecondBodyTransfer(payload, gate)
+        val store = FakeFileStore()
+        val engine = engine(this, FixedExtractor(info, Regex("""https?://x\.example/.+""")), transfer, store)
+
+        val job = engine.submit(
+            request(url = statusUrl, key = "cancel-media-key", selectedMediaIds = listOf("a", "b")),
+        )
+        testScheduler.advanceUntilIdle()
+        engine.cancel(job.id)
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.CANCELLED, finished.state)
+        assertEquals(1, finished.artifacts.size, "the published file stays; the current temp is discarded")
+        assertTrue(store.created.last().discarded, "the cancelled temp must be discarded")
+        assertTrue(store.live.values.none { it.discarded })
+    }
+
+    @Test
+    fun aMidWayFailureKeepsPublishedFilesAndFailsTyped() = runTest {
+        val info = InfoDict(
+            media = listOf(
+                media("a", "https://cdn.fixtures.example.net/a.mp4", "First"),
+                media("b", "https://cdn.fixtures.example.net/b.mp4", "Second"),
+                media("c", "https://cdn.fixtures.example.net/c.mp4", "Third"),
+            ),
+        )
+        val store = FakeFileStore()
+        val transfer = FailsOnSecondTransfer(payload)
+        val engine = engine(this, FixedExtractor(info, Regex("""https?://x\.example/.+""")), transfer, store)
+
+        val job = engine.submit(
+            request(url = statusUrl, key = "midway-media-key", selectedMediaIds = listOf("a", "b")),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.NETWORK_FAILURE, finished.error?.code)
+        assertEquals(1, finished.artifacts.size, "the file already published stays")
+        assertEquals("First.mp4", finished.artifacts.single().relativePath)
+        // A non-2xx response fails before the second temp is created, so the
+        // only created temp is the published one.
+        assertEquals(1, store.created.size)
+        assertTrue(store.created.single().published)
+        assertEquals(
+            listOf("https://cdn.fixtures.example.net/a.mp4", "https://cdn.fixtures.example.net/b.mp4"),
+            transfer.requests.map { it.url },
+        )
+    }
+
     // ------------------------------------------------------------------ fakes
 
     private fun singleFormatInfo() = InfoDict(
@@ -271,12 +452,21 @@ class EngineExtractionTest {
         ),
     )
 
-    private class FixedExtractor(private val info: InfoDict) : InfoExtractor(
+    private class FixedExtractor(
+        private val info: InfoDict,
+        validUrl: Regex = Regex("""https?://youtube\.example/.+"""),
+    ) : InfoExtractor(
         ieKey = ExtractorRegistry.GENERIC_KEY,
         http = ExtractorHttp(NoopTransfer),
-        validUrl = Regex("""https?://youtube\.example/.+"""),
+        validUrl = validUrl,
     ) {
-        override suspend fun extract(url: String): InfoDict = info
+        var calls: Int = 0
+            private set
+
+        override suspend fun extract(url: String): InfoDict {
+            calls++
+            return info
+        }
     }
 
     private class ThrowingExtractor(private val error: ExtractionError) : InfoExtractor(
@@ -312,6 +502,71 @@ class EngineExtractionTest {
             return HttpResponse.Final(
                 statusCode = statusCode,
                 contentType = contentType,
+                totalBytes = body.size.toLong(),
+                body = ByteArrayHttpBody(body),
+            )
+        }
+    }
+
+    /** Suspends inside the second body's first read so a test can cancel. */
+    private class GatedSecondBodyTransfer(
+        private val body: ByteArray,
+        private val gate: CompletableDeferred<Unit>,
+    ) : HttpTransfer {
+        val requests = mutableListOf<HttpRequest>()
+
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            requests += request
+            val responseBody: HttpBody = if (requests.size == 1) {
+                ByteArrayHttpBody(body)
+            } else {
+                GatedBody(body, gate)
+            }
+            return HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                totalBytes = body.size.toLong(),
+                body = responseBody,
+            )
+        }
+    }
+
+    private class GatedBody(
+        private val bytes: ByteArray,
+        private val gate: CompletableDeferred<Unit>,
+    ) : HttpBody {
+        private var position = 0
+        private var released = false
+
+        override suspend fun readNext(buffer: ByteArray): Int {
+            if (!released) {
+                gate.await()
+                released = true
+            }
+            if (position >= bytes.size) return -1
+            val count = minOf(bytes.size - position, buffer.size)
+            bytes.copyInto(buffer, 0, position, position + count)
+            position += count
+            return count
+        }
+
+        override suspend fun close() = Unit
+    }
+
+    /** Fails the second request so a mid-way media failure can be checked. */
+    private class FailsOnSecondTransfer(
+        private val body: ByteArray,
+    ) : HttpTransfer {
+        val requests = mutableListOf<HttpRequest>()
+
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            requests += request
+            if (requests.size >= 2) {
+                return HttpResponse.Final(statusCode = 500, contentType = "text/plain")
+            }
+            return HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
                 totalBytes = body.size.toLong(),
                 body = ByteArrayHttpBody(body),
             )

@@ -108,6 +108,32 @@ class HttpRequestTest {
     }
 
     @Test
+    fun explicitAuthorizationFieldLeavesTheDeviceAndTheHeaderMapCannot() {
+        val sanitized = HttpRequest(
+            url = "https://api.spotify.com/v1/tracks/fixture",
+            headers = mapOf("authorization" to "Bearer from-map", "accept" to "application/json"),
+            authorization = "Bearer from-field",
+        ).sanitized()
+        assertEquals("Bearer from-field", sanitized.request.headers["authorization"])
+        assertEquals("application/json", sanitized.request.headers["accept"])
+        // The map-declared name is still reported as dropped, but the value
+        // never appears anywhere: only the field value is sent.
+        assertEquals(listOf("authorization"), sanitized.droppedHeaders)
+        assertEquals(null, sanitized.request.authorization)
+        assertFalse(HttpHeaders.isAllowedRequestHeader("Authorization"))
+    }
+
+    @Test
+    fun blankAuthorizationFieldAddsNoHeader() {
+        val sanitized = HttpRequest(
+            url = "https://fixtures.example.com/files/tiny.bin",
+            authorization = "   ",
+        ).sanitized()
+        assertFalse(sanitized.request.headers.containsKey("authorization"))
+        assertTrue(sanitized.droppedHeaders.isEmpty())
+    }
+
+    @Test
     fun contentRangeTotalParsesAndRejectsWildcards() {
         assertEquals(100L, ContentRange.totalBytes("bytes 0-9/100"))
         assertEquals(100L, ContentRange.totalBytes("bytes 0-9/100"))

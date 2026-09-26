@@ -63,4 +63,8 @@ dependencies {
 
     testImplementation("org.jetbrains.kotlin:kotlin-test:${libs.versions.kotlin.get()}")
     testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.kotlinx.coroutines.core)
 }

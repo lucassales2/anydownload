@@ -18,6 +18,8 @@ import com.anydownlod.core.extract.GenericExtraction
 import com.anydownlod.core.extract.GenericExtractionFailure
 import com.anydownlod.core.extract.GenericExtractor
 import com.anydownlod.core.extract.ExtractorRegistry
+import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.platform.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -339,6 +341,10 @@ class WebExtensionEngine(
                 formatsNeedingJs = info.formatsNeedingJs,
             )
         }
+        if (info.media.isNotEmpty()) {
+            downloadSelectedMediaViaBridge(jobId, url, info, options)
+            return
+        }
         when (val resolution = resolveFormat(info, options)) {
             is FormatResolution.Unsupported -> {
                 fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
@@ -368,6 +374,24 @@ class WebExtensionEngine(
                     saveViaBlob = true,
                 )
             }
+
+            is FormatResolution.Merge -> {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "Web cannot merge video and audio. Choose M4A or Opus audio, or a single-file video.",
+                    retryable = false,
+                )
+            }
+
+            is FormatResolution.ExtractAudio -> {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "Web cannot write ${resolution.container.wireName.uppercase()} audio. Choose M4A or Opus audio.",
+                    retryable = false,
+                )
+            }
         }
     }
 
@@ -380,16 +404,40 @@ class WebExtensionEngine(
         headers: Map<String, String> = emptyMap(),
         saveViaBlob: Boolean = false,
     ) {
+        val outcome = bridgeDownload(jobId, url, headers, saveViaBlob) ?: return
+        currentCoroutineContext().ensureActive()
+        when (outcome) {
+            is WebDownload.Completed -> complete(jobId, outcome, mediaType, totalBytes)
+            is WebDownload.Failed -> fail(jobId, mapFailure(outcome.code, outcome.message, outcome.retryable))
+            is WebDownload.Aborted -> if (cancelRequested[jobId] == true) {
+                confirmCancelled(jobId)
+            } else {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download stopped before finishing.")
+            }
+        }
+    }
+
+    /**
+     * Policy check plus one extension download. Returns null when the job was
+     * already failed (a refused URL); the caller decides how to complete, so
+     * the multi-media path can publish several files on one job.
+     */
+    private suspend fun bridgeDownload(
+        jobId: String,
+        url: String,
+        headers: Map<String, String>,
+        saveViaBlob: Boolean,
+    ): WebDownload? {
         when (val policy = UrlPolicy.check(url)) {
             is UrlCheck.Rejected -> {
                 fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, redactedUrlReason(policy.reason))
-                return
+                return null
             }
 
             is UrlCheck.Allowed -> Unit
         }
         val safeHeaders = HttpHeaders.sanitize(headers).accepted
-        val outcome = withContext(ioDispatcher) {
+        return withContext(ioDispatcher) {
             bridge.download(url, jobId, safeHeaders, saveViaBlob) { downloaded, total ->
                 update(jobId, persistNow = false) {
                     it.copy(
@@ -404,16 +452,142 @@ class WebExtensionEngine(
                 }
             }
         }
-        currentCoroutineContext().ensureActive()
-        when (outcome) {
-            is WebDownload.Completed -> complete(jobId, outcome, mediaType, totalBytes)
-            is WebDownload.Failed -> fail(jobId, mapFailure(outcome.code, outcome.message, outcome.retryable))
-            is WebDownload.Aborted -> if (cancelRequested[jobId] == true) {
-                confirmCancelled(jobId)
-            } else {
-                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download stopped before finishing.")
+    }
+
+    /**
+     * The D7 media route over the extension: a source with several videos (an
+     * X status) hands one selected media URL at a time to the browser
+     * downloader, so one file lands per selected video on the same status
+     * job. Every id is resolved against the fresh extraction before any media
+     * URL is sent. Web has no toolkit, so a merge or audio extract fails typed.
+     */
+    private suspend fun downloadSelectedMediaViaBridge(
+        jobId: String,
+        sourceUrl: String,
+        info: InfoDict,
+        options: DownloadOptions,
+    ) {
+        val selectedIds = findJob(jobId)?.request?.selectedMediaIds.orEmpty()
+        if (selectedIds.isEmpty()) {
+            fail(
+                jobId,
+                JobErrorCode.INVALID_URL_OPTIONS,
+                "Select at least one video before downloading this post.",
+                retryable = false,
+            )
+            return
+        }
+        val selected = info.media.filter { it.mediaId in selectedIds }
+        if (selected.size != selectedIds.size) {
+            fail(
+                jobId,
+                JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+                "A selected video is no longer part of this post.",
+                retryable = false,
+            )
+            return
+        }
+        val resolved = mutableListOf<MediaFormat>()
+        for (media in selected) {
+            val mediaInfo = info.copy(formats = media.formats, media = emptyList())
+            when (val resolution = resolveFormat(mediaInfo, options)) {
+                is FormatResolution.Ready -> resolved += resolution.format
+                is FormatResolution.Unsupported -> {
+                    fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, resolution.message, retryable = false)
+                    return
+                }
+
+                is FormatResolution.Merge -> {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "Web cannot merge video and audio. Choose a single-file video.",
+                        retryable = false,
+                    )
+                    return
+                }
+
+                is FormatResolution.ExtractAudio -> {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "Web cannot write ${resolution.container.wireName.uppercase()} audio.",
+                        retryable = false,
+                    )
+                    return
+                }
             }
         }
+
+        var downloaded = 0L
+        selected.forEachIndexed { index, media ->
+            val format = resolved[index]
+            val formatUrl = format.url
+            if (formatUrl.isNullOrBlank()) {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "The selected format has no downloadable URL.",
+                    retryable = false,
+                )
+                return
+            }
+            if (cancelRequested[jobId] == true) {
+                confirmCancelled(jobId)
+                return
+            }
+            update(jobId, persistNow = false) {
+                it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+            }
+            val outcome = bridgeDownload(
+                jobId = jobId,
+                url = formatUrl,
+                headers = format.httpHeaders.orEmpty(),
+                saveViaBlob = true,
+            ) ?: return
+            currentCoroutineContext().ensureActive()
+            when (outcome) {
+                is WebDownload.Completed -> {
+                    appendArtifact(jobId, options.mediaType, outcome)
+                    downloaded += outcome.sizeBytes ?: 0L
+                }
+
+                is WebDownload.Failed -> {
+                    fail(jobId, mapFailure(outcome.code, outcome.message, outcome.retryable))
+                    return
+                }
+
+                is WebDownload.Aborted -> {
+                    if (cancelRequested[jobId] == true) {
+                        confirmCancelled(jobId)
+                    } else {
+                        fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download stopped before finishing.")
+                    }
+                    return
+                }
+            }
+        }
+        update(jobId) {
+            it.copy(
+                state = JobState.COMPLETED,
+                progress = JobProgress(phase = "completed", percent = 100.0, downloadedBytes = downloaded),
+                error = null,
+                finishedAtEpochMillis = now(),
+            )
+        }
+    }
+
+    /** Appends one browser-saved file without completing the job. */
+    private fun appendArtifact(jobId: String, mediaType: MediaType, outcome: WebDownload.Completed) {
+        val artifact = Artifact(
+            id = "artifact-${idGenerator()}",
+            jobId = jobId,
+            kind = artifactKind(mediaType, outcome.fileName),
+            fileName = outcome.fileName,
+            relativePath = outcome.fileName,
+            sizeBytes = outcome.sizeBytes,
+        )
+        update(jobId) { it.copy(artifacts = it.artifacts + artifact) }
     }
 
     private fun redactedExtractionMessage(reason: GenericExtractionFailure): String = when (reason) {

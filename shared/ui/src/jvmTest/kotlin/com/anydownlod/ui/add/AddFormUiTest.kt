@@ -137,16 +137,17 @@ class AddFormUiTest {
         val graph = InMemoryAppGraph()
         setContent { App(graph) }
 
-        onNodeWithTag("add-url-field").performTextInput("not-a-url")
-        onNodeWithTag("add-download-button").assertIsEnabled().performClick()
-        onNodeWithText("Only http:// and https:// sources are supported.").assertExists()
-        onNodeWithText("Preview title").assertDoesNotExist()
-        assertTrue(graph.engine.jobs.value.isEmpty())
-
-        // A userinfo URL embeds credentials and stays on the field too.
-        onNodeWithTag("add-url-field").performTextReplacement("https://user:pass@example.com/watch")
+        // A userinfo URL embeds credentials and stays on the field.
+        onNodeWithTag("add-url-field").performTextInput("https://user:pass@example.com/watch")
         onNodeWithTag("add-download-button").assertIsEnabled().performClick()
         onNodeWithText("This URL embeds credentials and was refused.").assertExists()
+        assertTrue(graph.engine.jobs.value.isEmpty())
+
+        // Plain text is a Spotify search now; the idle field opens the preview
+        // instead of reporting a scheme error.
+        onNodeWithTag("add-url-field").performTextReplacement("not-a-url")
+        onNodeWithTag("add-download-button").assertIsEnabled().performClick()
+        onNodeWithText("Preview title").assertExists()
         assertTrue(graph.engine.jobs.value.isEmpty())
     }
 

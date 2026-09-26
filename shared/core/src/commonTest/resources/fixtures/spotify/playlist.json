@@ -1,0 +1,35 @@
+{
+  "collaborative": false,
+  "description": "Fixture playlist.",
+  "external_urls": { "spotify": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" },
+  "followers": { "href": null, "total": 100 },
+  "id": "37i9dQZF1DXcBWIGoYBM5M",
+  "images": [
+    {
+      "height": 640,
+      "url": "https://i.scdn.co/image/ab67706f00000003a3e1f0a6f0a6f0a6",
+      "width": 640
+    }
+  ],
+  "name": "Fixture Hits",
+  "owner": {
+    "display_name": "Fixture Curator",
+    "external_urls": { "spotify": "https://open.spotify.com/user/fixture" },
+    "id": "fixture",
+    "type": "user",
+    "uri": "spotify:user:fixture"
+  },
+  "public": true,
+  "snapshot_id": "fixture-snapshot",
+  "tracks": {
+    "href": "https://api.spotify.com/v1/playlists/37i9dQZF1DXcBWIGoYBM5M/tracks",
+    "items": [],
+    "limit": 50,
+    "next": null,
+    "offset": 0,
+    "previous": null,
+    "total": 3
+  },
+  "type": "playlist",
+  "uri": "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"
+}

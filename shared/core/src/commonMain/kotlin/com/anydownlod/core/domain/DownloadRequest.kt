@@ -100,6 +100,24 @@ enum class CaptionPreference(val wireName: String) {
 }
 
 /**
+ * What a download does when the destination file already exists. [SKIP] is
+ * the default: the existing file is kept and the job completes as skipped.
+ * [METADATA] keeps the audio and rewrites its tags when the request carries
+ * them. [FORCE] replaces the file.
+ */
+enum class OverwriteMode(val wireName: String) {
+    SKIP("skip"),
+    METADATA("metadata"),
+    FORCE("force"),
+    ;
+
+    companion object {
+        fun fromWire(value: String): OverwriteMode? =
+            entries.firstOrNull { it.wireName == value.lowercase() }
+    }
+}
+
+/**
  * The option set of one download, kept separate from the source URL so a
  * subscription can capture the options without a one-off media URL.
  *
@@ -126,6 +144,8 @@ data class DownloadOptions(
     val destinationFolder: String? = null,
     /** 0 means no extra cap from the app. */
     val playlistItemLimit: Int = 0,
+    /** What to do when the destination file already exists. */
+    val overwrite: OverwriteMode = OverwriteMode.SKIP,
     val clipStart: String? = null,
     val clipEnd: String? = null,
     val splitByChapters: Boolean = false,
@@ -143,9 +163,36 @@ data class DownloadOptions(
 /**
  * One add-form submission: a validated source URL, the chosen options, and
  * the key that makes a repeated click land on the original job.
+ *
+ * [metadata] and [artworkUrl] are set only by the Spotify path: the engine
+ * embeds the tags after the audio is written when the host toolkit can. They
+ * are never logged. [parentBatchId] groups the child jobs of one Spotify
+ * album, playlist, or artist expansion.
  */
 data class DownloadRequest(
     val sourceUrl: String,
     val options: DownloadOptions = DownloadOptions(),
     val idempotencyKey: String = "",
+    val metadata: MediaTags? = null,
+    val artworkUrl: String? = null,
+    val parentBatchId: String? = null,
+    /**
+     * Stable media ids the user selected in a multi-media preview (an X
+     * status). Empty for every other source. Never logged. The engine
+     * re-extracts the source at download time and resolves each id again;
+     * preview media URLs are never reused.
+     */
+    val selectedMediaIds: List<String> = emptyList(),
+    /**
+     * The exact path the artifact must be written to, relative to the download
+     * root. Set by the Spotify path from its output template; null keeps the
+     * extractor/URL-derived name. The engine validates it against the root.
+     */
+    val relativePath: String? = null,
+    /**
+     * Timed LRC lines for a sibling `.lrc` next to the audio. Set only by the
+     * Spotify path when `generate-lrc` is on and the synced provider returned
+     * timed lines; null writes no LRC.
+     */
+    val lrcContent: String? = null,
 )

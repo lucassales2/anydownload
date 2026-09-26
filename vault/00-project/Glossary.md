@@ -11,7 +11,7 @@ tags: [project, glossary]
 | --- | --- |
 | KMP | Kotlin Multiplatform: shared Kotlin code compiled for multiple targets. It does not make native executables portable to every target. |
 | Compose Multiplatform | Proposed shared UI framework; platform support and browser behavior must be validated separately from core KMP. |
-| Engine | End state: an in-app Kotlin port of yt-dlp. During Phase D1 the desktop app instead calls an installed yt-dlp through `DownloadEngine`. Shared code still does not spawn a process. See ADR-005. Spotify URLs are matched onto YouTube inside this engine. See T-037. |
+| Engine | End state: an in-app Kotlin port of yt-dlp. During Phase D1 the desktop app instead calls an installed yt-dlp through `DownloadEngine`. Shared code still does not spawn a process. See ADR-005. Spotify URLs are matched onto YouTube inside this engine. See T-037 and Phase 6. |
 | Extractor | yt-dlp's site-specific or generic implementation for discovering metadata/media URLs. Support varies by engine version and site behavior. |
 | Remote mode | Withdrawn product shape. A server performed extraction and clients fetched finished files. See ADR-001. |
 | Local mode | The app executes the Kotlin engine and stores files on the device. This is the product on every target. |
