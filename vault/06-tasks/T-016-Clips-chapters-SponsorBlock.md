@@ -2,7 +2,7 @@
 id: T-016
 type: task
 priority: P1
-milestone: M3
+milestone: D13
 tags: [task, media, parity]
 ---
 
@@ -18,6 +18,7 @@ F-16/F-17 advanced media output plus chapter naming/delivery aspects of F-11/F-1
 
 - [T-013](T-013-Media-formats.md).
 - [T-014](T-014-Storage-and-delivery.md).
+- [T-015](T-015-Captions-thumbnails-metadata.md). Phase: [Phase 13](../00-project/Phase-13-Postprocessors.md).
 
 ## Acceptance criteria
 
@@ -28,4 +29,4 @@ F-16/F-17 advanced media output plus chapter naming/delivery aspects of F-11/F-1
 
 ## Evidence / notes
 
-Not started. Extra external service use and format limitations must be visible to users.
+Not started. Scheduled 2026-09-29 as D13 in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). Extra external service use and format limitations must be visible to users. Web clip and chapter split fail typed.

@@ -2,7 +2,7 @@
 id: T-022
 type: task
 priority: P0
-milestone: M3
+milestone: D22
 tags: [task, testing, parity]
 ---
 
@@ -20,6 +20,7 @@ A reproducible result for every F-ID, with versions/targets and approved differe
 - [T-015](T-015-Captions-thumbnails-metadata.md), [T-016](T-016-Clips-chapters-SponsorBlock.md).
 - [T-017](T-017-Options-and-presets.md), [T-018](T-018-Cookie-lifecycle.md), [T-019](T-019-Subscriptions.md).
 - [T-020](T-020-Sharing-and-UX.md). [T-021](T-021-Self-host-operations.md) is withdrawn; audit F-24 and F-25 as out of scope.
+- [T-131](T-131-Remove-ytdlp-fallback.md). Phase: [Phase 22](../00-project/Phase-22-Remove-ytdlp-fallback.md). This audit also covers the [equivalence matrix](../01-product/Ytdlp-equivalence.md): every E-row Done, Partial with a host note, or Out with a reason, and all 1,751 extractor classes accounted for.
 
 ## Acceptance criteria
 
@@ -30,4 +31,4 @@ A reproducible result for every F-ID, with versions/targets and approved differe
 
 ## Evidence / notes
 
-Not started. Unsafe arbitrary options and external-client compatibility need explicit difference decisions, not hidden exceptions.
+Not started. Scheduled 2026-09-29 as the D22 audit in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). It cannot pass while catalog classes are still unstarted. Unsafe arbitrary options and external-client compatibility need explicit difference decisions, not hidden exceptions.

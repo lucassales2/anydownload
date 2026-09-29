@@ -2,7 +2,7 @@
 id: T-019
 type: task
 priority: P1
-milestone: M3
+milestone: D15
 tags: [task, subscriptions, scheduling]
 ---
 
@@ -20,6 +20,7 @@ F-21 on-device recurring scans and controls. Scans run while the app is open.
 - [T-012](T-012-Playlists-and-batches.md).
 - [T-017](T-017-Options-and-presets.md).
 - [T-018](T-018-Cookie-lifecycle.md).
+- [T-124](T-124-Youtube-done.md). Channel scans need the tab extractor from D12. Phase: [Phase 15](../00-project/Phase-15-Subscriptions-sharing.md).
 
 ## Acceptance criteria
 
@@ -30,4 +31,4 @@ F-21 on-device recurring scans and controls. Scans run while the app is open.
 
 ## Evidence / notes
 
-Not started. iOS and the browser will not keep scans running after the app is suspended. Say that in the UI.
+Not started. Scheduled 2026-09-29 as D15 in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). iOS and the browser will not keep scans running after the app is suspended. Say that in the UI.

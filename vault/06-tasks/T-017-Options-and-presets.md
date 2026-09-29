@@ -2,7 +2,7 @@
 id: T-017
 type: task
 priority: P1
-milestone: M3
+milestone: D14
 tags: [task, configuration, security]
 ---
 
@@ -16,7 +16,7 @@ F-19/F-20 configurable options with an approved safety boundary, also supporting
 
 ## Dependencies
 
-- [T-009](T-009-Backend-vertical-slice.md).
+- [T-016](T-016-Clips-chapters-SponsorBlock.md). Phase: [Phase 14](../00-project/Phase-14-Options-archive.md). Estimate 8 engineer-days.
 
 ## Acceptance criteria
 
@@ -28,4 +28,4 @@ F-19/F-20 configurable options with an approved safety boundary, also supporting
 
 ## Evidence / notes
 
-Not started. Free-form yt-dlp options can execute commands. Q-09 decides allowlist versus a closer pass-through. Shell execution stays out.
+Not started. Scheduled 2026-09-29 as D14 in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). Q-09 is the allowlist. Free-form JSON stays disabled. Shell execution stays out. This phase also covers output templates, the download-archive file, proxy, rate limit, and sleep.

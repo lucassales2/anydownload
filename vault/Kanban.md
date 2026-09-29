@@ -6,20 +6,38 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #M3 #P1
-- [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #M3 #P1
-- [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #M3 #P1
-- [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #M3 #P0
-- [ ] [T-019 — Channel and playlist subscriptions](06-tasks/T-019-Subscriptions.md) #M3 #P1
-- [ ] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #M3 #P1
-- [ ] [T-022 — Audit MeTube parity with evidence](06-tasks/T-022-Parity-audit.md) #M3 #P0
-- [ ] [T-023 — Portfolio builds](06-tasks/T-023-Release-readiness.md) #M4 #P0
+- [ ] [T-116 — Desktop Metro graph](06-tasks/T-116-Desktop-Metro-graph.md) #metro #D9
+- [ ] [T-117 — Android Metro graph](06-tasks/T-117-Android-Metro-graph.md) #metro #D9
+- [ ] [T-118 — iOS Metro graph](06-tasks/T-118-Ios-Metro-graph.md) #metro #D9
+- [ ] [T-119 — Web Metro graph](06-tasks/T-119-Web-Metro-graph.md) #metro #D9
+- [ ] [T-121 — ViewModel factory and LocalMetroViewModelFactory](06-tasks/T-121-ViewModel-factory.md) #metro #D9
+- [ ] [T-122 — QueueViewModel and QueueScreen](06-tasks/T-122-Queue-view-model.md) #metro #D9
+- [ ] [T-120 — Metro verification](06-tasks/T-120-Metro-verification.md) #metro #D9
+- [ ] [T-123 — Finish the shared downloader](06-tasks/T-123-Shared-downloader.md) #D10 #P0
+- [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #D11 #P0
+- [ ] [T-124 — YouTube done at the pin](06-tasks/T-124-Youtube-done.md) #D12 #P0
+- [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #D13 #P1
+- [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #D13 #P1
+- [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #D14 #P1
+- [ ] [T-019 — Channel and playlist subscriptions](06-tasks/T-019-Subscriptions.md) #D15 #P1
+- [ ] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #D15 #P1
+- [ ] [T-125 — Priority sites](06-tasks/T-125-Priority-sites.md) #D16 #P0
+- [ ] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
+- [ ] [T-127 — Medium extractors, first half](06-tasks/T-127-Medium-extractors-a.md) #D18 #P1
+- [ ] [T-128 — Medium extractors, second half](06-tasks/T-128-Medium-extractors-b.md) #D19 #P1
+- [ ] [T-129 — Small extractors, first half](06-tasks/T-129-Small-extractors-a.md) #D20 #P1
+- [ ] [T-130 — Small extractors, second half](06-tasks/T-130-Small-extractors-b.md) #D21 #P1
+- [ ] [T-131 — Remove the yt-dlp and Chaquopy fallbacks](06-tasks/T-131-Remove-ytdlp-fallback.md) #D22 #P0
+- [ ] [T-022 — Audit MeTube parity with evidence](06-tasks/T-022-Parity-audit.md) #D22 #P0
+- [ ] [T-023 — Portfolio builds](06-tasks/T-023-Release-readiness.md) #D22 #P0
 
 ## Ready
 
 
 ## In progress
 
+
+- [ ] [T-115 — SharedEngineBindings and one production extractor list](06-tasks/T-115-Shared-engine-bindings.md) #metro #D9
 
 ## Blocked
 
@@ -33,6 +51,8 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-114 — Pin Metro 1.4.5 and prove the plugin](06-tasks/T-114-Pin-Metro-and-smoke-graph.md) #metro #D9
+- [x] [T-113 — Metro migration plan and prompt](06-tasks/T-113-Metro-migration-plan.md) #metro #D9
 - [x] [T-112 — Phase 8 verification](06-tasks/T-112-Phase-8-verification.md) #D8 #P0
 - [x] [T-011 — Durable queue, recovery and live events](06-tasks/T-011-Durable-queue.md) #M2 #P0
 - [x] [T-012 — Playlists, channels and batch links](06-tasks/T-012-Playlists-and-batches.md) #M2 #P1

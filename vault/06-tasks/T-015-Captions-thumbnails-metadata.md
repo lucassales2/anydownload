@@ -2,7 +2,7 @@
 id: T-015
 type: task
 priority: P1
-milestone: M3
+milestone: D13
 tags: [task, media, parity]
 ---
 
@@ -18,6 +18,7 @@ Standalone captions/artwork and format-appropriate embedding/sidecars for F-14/F
 
 - [T-013](T-013-Media-formats.md).
 - [T-014](T-014-Storage-and-delivery.md).
+- [T-124](T-124-Youtube-done.md). Subtitle and chapter fields come from D12. Phase: [Phase 13](../00-project/Phase-13-Postprocessors.md). The 10 engineer-days are shared with T-016.
 
 ## Acceptance criteria
 
@@ -28,4 +29,4 @@ Standalone captions/artwork and format-appropriate embedding/sidecars for F-14/F
 
 ## Evidence / notes
 
-Not started. This task does not look up Spotify or any other music catalog. Embedding title, artists, album, and artwork for a Spotify match is [T-037](T-037-Spotify-youtube-match.md), which depends on this task.
+Not started. Scheduled 2026-09-29 as D13 in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). This task does not look up Spotify or any other music catalog. Embedding title, artists, album, and artwork for a Spotify match is [T-037](T-037-Spotify-youtube-match.md), which is already done.

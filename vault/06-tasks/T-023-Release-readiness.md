@@ -2,7 +2,7 @@
 id: T-023
 type: task
 priority: P0
-milestone: M4
+milestone: D22
 tags: [task, release, testing]
 ---
 
@@ -16,7 +16,7 @@ Repeatable portfolio builds for iOS, Compose/Wasm, Android, and desktop, with li
 
 ## Dependencies
 
-- [T-022](T-022-Parity-audit.md), plus the approved T-004/T-006 platform/distribution decisions.
+- [T-022](T-022-Parity-audit.md), plus the approved T-004/T-006 platform/distribution decisions. Phase: [Phase 22](../00-project/Phase-22-Remove-ytdlp-fallback.md). M4 closes here.
 
 ## Acceptance criteria
 
@@ -27,4 +27,4 @@ Repeatable portfolio builds for iOS, Compose/Wasm, Android, and desktop, with li
 
 ## Evidence / notes
 
-Not started. A successful local build is the exit gate. App Store and Play submission are not.
+Not started. Scheduled 2026-09-29 as the last D22 card in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). A successful local build is the exit gate. App Store and Play submission are not.

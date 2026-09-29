@@ -7,21 +7,25 @@ tags: [project, delivery]
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Feature parity](../01-product/Feature-parity.md)
 
-Dates and effort estimates are intentionally unset until feasibility work is complete. All milestones describe future work; the initial deliverable is documentation only.
+Dates for M0–M2 are historical. The engine estimate after D8 is in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md): 614 engineer-days.
 
 | Milestone | Deliverable | Exit gate | Tasks |
 | --- | --- | --- | --- |
 | **M0 — Plan and de-risk** | Vault, public repository, accepted local-only scope, four-target local-engine feasibility, license notes for a Kotlin port, local UX flows. | Owner scope is recorded in ADR-004. A local download is shown on iOS, Compose/Wasm, Android, and desktop, or a target is documented as blocked with the reason. | T-001–T-007 |
 | **M1 — Local vertical slice** | Shared Kotlin engine and UI shell. One public URL downloads on each target and the file stays on the device. | Same workflow on all four families, including a failed URL. Record desktop OS and browser coverage. | T-008–T-010 |
 | **M2 — On-device downloader core** | Durable local queue, retries, playlists/channels, batch links, video/audio profiles, history, on-device files. | Queue survives app restart; retries do not duplicate finished files; files are not loaded wholly into memory. This is the usable MVP, not full parity. Channels and the upcoming-source countdown are outside [Phase 8](Phase-8-On-device-core.md); a not-yet-available source becomes `SCHEDULED` with no timer, and the playlist cap is 50. **Done 2026-09-29** (verified by T-112). | T-011–T-014, implemented by T-101–T-112 |
-| **M3 — yt-dlp and MeTube workflow parity** | Captions, thumbnails, clips, chapters, SponsorBlock, presets/options, local cookies, subscriptions, sharing, and Spotify URLs matched onto YouTube. | Every parity row has tested evidence or a documented platform gap. Self-host server operations are out of scope. | T-015–T-022, except T-021, plus T-037 |
-| **M4 — Portfolio builds** | Repeatable build/run instructions for all four targets and license notices. | A person can build each target from the README. Store submission is not required. | T-023 |
+| **M3 — yt-dlp and MeTube workflow parity** | Captions, thumbnails, clips, chapters, SponsorBlock, presets/options, local cookies, subscriptions, sharing, and Spotify URLs matched onto YouTube. | Every parity row has tested evidence or a documented platform gap. Self-host server operations are out of scope. Scheduled inside D11–D15 of the [full engine schedule](Full-engine-schedule.md), after the core those workflows need. | T-015–T-022, except T-021, plus T-037 |
+| **M4 — Portfolio builds** | Repeatable build/run instructions for all four targets and license notices. | A person can build each target from the README. Store submission is not required. Closes with D22, after the yt-dlp fallbacks are gone. | T-023 |
 
 Local execution is the product, not a later optional track. T-024 and T-025 fold into M0/M1 feasibility.
 
 ## Current priorities
 
-Phase **D8** is verified (2026-09-29): the remaining M1 and M2 work. A shared job document, restore on Android, iOS, and web, bounded playlist expansion, and history actions, all on the existing engine. Spec: [Phase 8 — On-device core](Phase-8-On-device-core.md). Decision: [ADR-012](../03-decisions/ADR-012-On-device-core-phase.md), accepted. Tasks T-101–T-112 are done; T-011, T-012, T-013, and T-014 are closed with the M3 gaps noted. M3 and M4 stay later.
+Phase **D9** (Metro graphs and ViewModels) is in progress. It changes construction, not download behavior. Spec: [ADR-013](../03-decisions/ADR-013-Metro-graphs-and-viewmodels.md). Tasks T-113–T-122. T-113 and T-114 are done.
+
+The full Kotlin engine is scheduled and not started. **D10–D22, 614 engineer-days, about 28 months** for one person. YouTube without the CLI is 39 days. Priority sites are 90 days. Spec: [Full engine schedule](Full-engine-schedule.md). Decision: [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md), accepted 2026-09-29 as the plan of record. D10 starts after T-120. M3 cards T-015–T-020 and M4 card T-023 are retargeted onto D11–D22. New cards are T-123–T-131.
+
+Phase **D8** is verified (2026-09-29): the remaining M1 and M2 work. A shared job document, restore on Android, iOS, and web, bounded playlist expansion, and history actions, all on the existing engine. Spec: [Phase 8 — On-device core](Phase-8-On-device-core.md). Decision: [ADR-012](../03-decisions/ADR-012-On-device-core-phase.md), accepted. Tasks T-101–T-112 are done; T-011, T-012, T-013, and T-014 are closed with the M3 gaps noted.
 
 Phases **D1** through **D7** are done. Phase **D4** was verified on 2026-09-24. Phase **D5** was verified on 2026-09-25: the media toolkit, merge and audio extract, on desktop, Android, and iOS; web stays a documented gap. Spec: [Phase 5 — Media toolkit](Phase-5-Media-Toolkit.md). Decision: [ADR-009](../03-decisions/ADR-009-Media-toolkit-phase.md). Phase **D6** was verified on 2026-09-25: [spotDL](https://github.com/spotDL/spotify-downloader) v4.5.2 parity on the shared engine, with desktop passing the fixture rows and the mobile/web gaps recorded. Spec: [Phase 6 — spotDL parity](Phase-6-SpotDL-Parity.md). Decision: [ADR-010](../03-decisions/ADR-010-Spotdl-parity-phase.md). Phase **D7** was verified on 2026-09-25: the public X/Twitter status video on all four hosts, with the opt-in live status and the web end-to-end gaps recorded. Spec: [Phase 7 — X/Twitter status video](Phase-7-X-Twitter.md). Decision: [ADR-011](../03-decisions/ADR-011-X-twitter-phase.md). D4 spec: [Phase 4 — Extractor core and YouTube](Phase-4-Extractor-Core-and-YouTube.md).
 

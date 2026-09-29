@@ -2,7 +2,7 @@
 id: T-018
 type: task
 priority: P0
-milestone: M3
+milestone: D11
 tags: [task, credentials, security]
 ---
 
@@ -16,7 +16,7 @@ F-18 local cookie import, replace, status, and delete. Cookies stay on this devi
 
 ## Dependencies
 
-- [T-009](T-009-Backend-vertical-slice.md), including approved T-006 security requirements.
+- [T-123](T-123-Shared-downloader.md). Phase: [Phase 11](../00-project/Phase-11-Cookies.md). Estimate 6 engineer-days. Pulled ahead of the other M3 cards because later extractors attach the jar.
 
 ## Acceptance criteria
 
@@ -28,4 +28,4 @@ F-18 local cookie import, replace, status, and delete. Cookies stay on this devi
 
 ## Evidence / notes
 
-Not started. Never use personal cookie files as committed fixtures or public issue evidence.
+Not started. Scheduled 2026-09-29 as D11 in [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md). The jar attaches in the shared HTTP helper. Never use personal cookie files as committed fixtures or public issue evidence. Browser-store reading stays out on mobile and web.

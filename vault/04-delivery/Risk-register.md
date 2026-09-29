@@ -7,7 +7,7 @@ tags: [delivery, risks]
 
 [Home](../Home.md) · [Security and licensing](Security-and-licensing.md) · [Testing](Testing-strategy.md) · [Open questions](../00-project/Open-questions.md)
 
-Risks are open until evidence or an accepted decision closes them. Severity is qualitative; no probabilities or schedules have been invented.
+Risks are open until evidence or an accepted decision closes them. Severity is qualitative. The only schedule in this register is the one [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md) calculated on 2026-09-29.
 
 | ID | Risk / severity | Mitigation and validation | Owning task |
 | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ Risks are open until evidence or an accepted decision closes them. Severity is q
 | R-05 | A later store submission is rejected. **Low** | Publication is out of scope. Revisit only if distribution returns to the plan. | [T-003](../06-tasks/T-003-Approve-product-scope.md) |
 | R-06 | URL/option injection, path traversal, or secret exposure inside the local engine. **Critical** | Safe option contract, scoped storage, redaction, and adversarial tests. | T-006, [T-009](../06-tasks/T-009-Backend-vertical-slice.md), [T-017](../06-tasks/T-017-Options-and-presets.md), T-018 |
 | R-07 | Site breakage and JavaScript challenge changes. **High** | Version the port, show the engine revision, and surface degraded-source errors. | T-009, [T-022](../06-tasks/T-022-Parity-audit.md) |
-| R-08 | A full yt-dlp/MeTube port is larger than the first milestones imply. **High** | Parity inventory; M1 is one URL; MVP is separate from the parity candidate. | T-022 |
+| R-08 | A full yt-dlp/MeTube port is larger than the first milestones imply. **High** | Measured 2026-09-29: 614 engineer-days (about 28 months, one person) to match pin `2026.08.19`, plus 2–5 days a month afterward. The [full engine schedule](../00-project/Full-engine-schedule.md) is the mitigation. M1 and M2 are already done and are not that port. | [T-022](../06-tasks/T-022-Parity-audit.md), [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md) |
 | R-09 | MeTube protocol compatibility is assumed. **Closed** | ADR-004 targets workflow parity, not MeTube HTTP or Socket.IO. | [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) |
 | R-10 | Lost/duplicated jobs or a file marked complete before it is finalized. **High** | Durable attempts, idempotency, restart/cancel tests, artifact finalization. | [T-011](../06-tasks/T-011-Durable-queue.md) |
 | R-11 | Large playlists/media exhaust disk, memory, CPU, or network. **High** | Bounded extraction/queue, streaming writes, disk checks, and retention. | [T-012](../06-tasks/T-012-Playlists-and-batches.md), [T-014](../06-tasks/T-014-Storage-and-delivery.md) |
