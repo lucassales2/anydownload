@@ -291,7 +291,7 @@ private fun Workspace(
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
-                ShellTab.DOWNLOADING -> QueueScreen(graph = graph, onCopyUrls = onCopyUrls)
+                ShellTab.DOWNLOADING -> QueueScreen(onCopyUrls = onCopyUrls, onOpenSource = graph.openUrl)
                 ShellTab.COMPLETED -> HistoryScreen(graph = graph, onCopyUrls = onCopyUrls)
                 ShellTab.SUBSCRIPTIONS -> SubscriptionsScreen(graph = graph)
             }

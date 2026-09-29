@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.remember
 import com.anydownlod.ui.App
+import dev.zacsweers.metro.createGraphFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,7 +16,7 @@ class MainActivity : ComponentActivity() {
             // The real Android graph: shared HTTP engine for direct files and
             // the Chaquopy adapter for other URLs. remember keeps one graph
             // (and its engine scope) for the activity lifetime.
-            val graph = remember { AndroidAppGraph(applicationContext) }
+            val graph = remember { createGraphFactory<AndroidAppGraph.Factory>().create(applicationContext) }
             App(graph = graph)
         }
     }

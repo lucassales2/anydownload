@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.metro)
 }
 
 kotlin {
@@ -38,6 +39,9 @@ kotlin {
             // api so platform hosts can use the graph and domain types directly.
             api(project(":shared:core"))
             implementation(libs.kotlinx.coroutines.core)
+            // api so every host graph can extend ViewModelGraph and install the factory.
+            api(libs.androidx.lifecycle.viewmodel.compose)
+            api(libs.metrox.viewmodel.compose)
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
@@ -49,6 +53,7 @@ kotlin {
             implementation(compose.uiTest)
             implementation(compose.desktop.currentOs)
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
         iosTest.dependencies {
             implementation(kotlin("test"))

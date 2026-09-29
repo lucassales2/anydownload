@@ -145,10 +145,10 @@ class DesktopXStatusGateTest {
             // Preview first, exactly like the app: the selection comes from
             // the preview's stable media ids.
             val previewSource = DesktopPreviewSource.create(
+                registry = registry,
                 runner = CliProcessRunner { _, _ -> error("the CLI must not start") },
                 resolveExecutable = { null },
                 workingDirectory = { root },
-                transfer = transfer,
             )
             val preview = assertIs<MediaPreviewResult.Ready>(previewSource.load(statusUrl)).preview
             assertEquals(

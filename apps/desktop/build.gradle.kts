@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.metro)
 }
 
 kotlin {
@@ -32,6 +33,8 @@ dependencies {
     implementation(project(":shared:ui"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.serialization.json)
+    // The desktop ViewModel's Dispatchers.Main comes from the Swing dispatcher.
+    implementation(libs.kotlinx.coroutines.swing)
 
     testImplementation(kotlin("test"))
     testImplementation(compose.desktop.currentOs)

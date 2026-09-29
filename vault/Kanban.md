@@ -6,13 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-116 — Desktop Metro graph](06-tasks/T-116-Desktop-Metro-graph.md) #metro #D9
-- [ ] [T-117 — Android Metro graph](06-tasks/T-117-Android-Metro-graph.md) #metro #D9
-- [ ] [T-118 — iOS Metro graph](06-tasks/T-118-Ios-Metro-graph.md) #metro #D9
-- [ ] [T-119 — Web Metro graph](06-tasks/T-119-Web-Metro-graph.md) #metro #D9
-- [ ] [T-121 — ViewModel factory and LocalMetroViewModelFactory](06-tasks/T-121-ViewModel-factory.md) #metro #D9
-- [ ] [T-122 — QueueViewModel and QueueScreen](06-tasks/T-122-Queue-view-model.md) #metro #D9
-- [ ] [T-120 — Metro verification](06-tasks/T-120-Metro-verification.md) #metro #D9
 - [ ] [T-123 — Finish the shared downloader](06-tasks/T-123-Shared-downloader.md) #D10 #P0
 - [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #D11 #P0
 - [ ] [T-124 — YouTube done at the pin](06-tasks/T-124-Youtube-done.md) #D12 #P0
@@ -30,14 +23,13 @@ tags: [project, board]
 - [ ] [T-131 — Remove the yt-dlp and Chaquopy fallbacks](06-tasks/T-131-Remove-ytdlp-fallback.md) #D22 #P0
 - [ ] [T-022 — Audit MeTube parity with evidence](06-tasks/T-022-Parity-audit.md) #D22 #P0
 - [ ] [T-023 — Portfolio builds](06-tasks/T-023-Release-readiness.md) #D22 #P0
+- [ ] [T-132 — Localize the UI for 50 locales](06-tasks/T-132-Localization.md) #i18n #P2
 
 ## Ready
 
 
 ## In progress
 
-
-- [ ] [T-115 — SharedEngineBindings and one production extractor list](06-tasks/T-115-Shared-engine-bindings.md) #metro #D9
 
 ## Blocked
 
@@ -51,6 +43,14 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-120 — Metro verification](06-tasks/T-120-Metro-verification.md) #metro #D9
+- [x] [T-122 — QueueViewModel and QueueScreen](06-tasks/T-122-Queue-view-model.md) #metro #D9
+- [x] [T-121 — ViewModel factory and LocalMetroViewModelFactory](06-tasks/T-121-ViewModel-factory.md) #metro #D9
+- [x] [T-119 — Web Metro graph](06-tasks/T-119-Web-Metro-graph.md) #metro #D9
+- [x] [T-118 — iOS Metro graph](06-tasks/T-118-Ios-Metro-graph.md) #metro #D9
+- [x] [T-117 — Android Metro graph](06-tasks/T-117-Android-Metro-graph.md) #metro #D9
+- [x] [T-116 — Desktop Metro graph](06-tasks/T-116-Desktop-Metro-graph.md) #metro #D9
+- [x] [T-115 — SharedEngineBindings and one production extractor list](06-tasks/T-115-Shared-engine-bindings.md) #metro #D9
 - [x] [T-114 — Pin Metro 1.4.5 and prove the plugin](06-tasks/T-114-Pin-Metro-and-smoke-graph.md) #metro #D9
 - [x] [T-113 — Metro migration plan and prompt](06-tasks/T-113-Metro-migration-plan.md) #metro #D9
 - [x] [T-112 — Phase 8 verification](06-tasks/T-112-Phase-8-verification.md) #D8 #P0

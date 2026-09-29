@@ -48,13 +48,20 @@ tags: [task, metro, viewmodel]
 
 ## Acceptance criteria
 
-- [ ] `QueueViewModel` and `QueueUiState` exist with the listed fields and methods; the ViewModel is contributed with `@ViewModelKey` and `@ContributesIntoMap(AppScope::class)`.
-- [ ] `state` combines `engine.jobs` with the state flows and calls `QueuePresenter.rows`.
-- [ ] `QueueScreen` takes `onCopyUrls`, `onOpenSource`, and a `QueueViewModel` default of `metroViewModel()`; it does not call `engine.start`, `engine.cancel`, or read `engine.jobs`.
-- [ ] `AppShell` passes `graph.openUrl` and no longer passes the graph into the list.
-- [ ] The test factory maps `QueueViewModel::class` to `QueueViewModel(engine)`; `QueuePresenterTest` runs without a Compose rule and with `Dispatchers.setMain`.
-- [ ] `./gradlew :shared:ui:jvmTest` passes, including `QueueHistoryUiTest`.
+- [x] `QueueViewModel` and `QueueUiState` exist with the listed fields and methods; the ViewModel is contributed with `@ViewModelKey` and `@ContributesIntoMap(AppScope::class)`.
+- [x] `state` combines `engine.jobs` with the state flows and calls `QueuePresenter.rows`.
+- [x] `QueueScreen` takes `onCopyUrls`, `onOpenSource`, and a `QueueViewModel` default of `metroViewModel()`; it does not call `engine.start`, `engine.cancel`, or read `engine.jobs`.
+- [x] `AppShell` passes `graph.openUrl` and no longer passes the graph into the list.
+- [x] The test factory maps `QueueViewModel::class` to `QueueViewModel(engine)`; `QueuePresenterTest` runs without a Compose rule and with `Dispatchers.setMain`.
+- [x] `./gradlew :shared:ui:jvmTest` passes, including `QueueHistoryUiTest`.
 
 ## Evidence / notes
 
-Not started.
+2026-09-29, macOS 26.5.2 (Darwin 25.5.0).
+
+- **ViewModel:** `shared/ui/src/commonMain/kotlin/com/anydownlod/ui/queue/QueueViewModel.kt` adds `@Inject @ViewModelKey @ContributesIntoMap(AppScope::class) class QueueViewModel(private val engine: DownloadEngine) : ViewModel()` and `QueueUiState(rows, selectedIds, pendingCancelIds, statusMessage, working, notStarted, batchCopyEnabled)`. `state` is a `combine(engine.jobs, selectedIds, pendingCancelIds, statusMessage)` over `QueuePresenter.rows`, started eagerly in `viewModelScope`. An init collector prunes selection and pending ids when a row leaves the list (the old screen-side `LaunchedEffect`).
+- **Methods:** `toggle`, `toggleAll`, `startSelected`, `requestCancelSelected`, `confirmCancel`, `dismissCancel`, `copySelected`, `copyBatch`, `noteCopied`. `startSelected(ids = selectedIds)` and `requestCancelSelected(ids = selectedIds)` carry an optional id set so the row-level Start and Cancel buttons go through the same ViewModel decisions without new method names. `noteCopied` sets `UiText.of(Res.string.copied_urls, count)`; the copy methods return URL strings and the screen does the clipboard write.
+- **Screen:** `QueueScreen(onCopyUrls, onOpenSource, modifier, viewModel = metroViewModel())` renders `state` and forwards events only. `stringResource` and `LocalClipboardManager` stay in the composable. `grep -n "engine\.\(start\|cancel\|jobs\)"` and `grep -n AppGraph` on the file both return nothing, and the only call site is `AppShell` (`QueueScreen(onCopyUrls = onCopyUrls, onOpenSource = graph.openUrl)`).
+- **Tests:** `ShellUiHarness` now maps `QueueViewModel::class` to `QueueViewModel(graph.engine)` in its fallback factory, so the shell click-through uses the real ViewModel. `QueuePresenterTest` was rewritten against `QueueViewModel` and `InMemoryDownloadEngine` with `Dispatchers.setMain(UnconfinedTestDispatcher())` and `resetMain`, no Compose rule. It covers row filtering, indeterminate/known progress, unknown state, start and cancel rules, the confirm flow, toggle/toggle-all, selection pruning, batch copy (including completed/failed siblings and the forbidden-token check), disabled batch copy, and the copied status message.
+- **Verification:** `./gradlew --console=plain :shared:ui:jvmTest` → BUILD SUCCESSFUL in 32s; 103 tests, 0 failures (`QueuePresenterTest` 13/0, `QueueHistoryUiTest` 4/0, `AppShellTest` 2/0). Then `./gradlew --console=plain :shared:ui:compileKotlinWasmJs :shared:ui:compileKotlinIosSimulatorArm64 :apps:desktop:compileKotlin :apps:android:compileDebugKotlin :apps:web:compileKotlinWasmJs` → BUILD SUCCESSFUL in 44s.
+- No commit was made.

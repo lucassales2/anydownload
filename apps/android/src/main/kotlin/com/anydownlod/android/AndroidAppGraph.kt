@@ -1,9 +1,21 @@
+/*
+ * Android Metro graph — AnyDownload
+ *
+ * T-117: the Android host assembly becomes a Metro `@DependencyGraph`. The
+ * factory takes the `Context` and a `ChaquopyPort` (default [NoChaquopyPort]).
+ * One `JavaNetHttpTransfer`, one `QuickJsRuntime`, and the shared
+ * `ExtractorRegistry` feed the routing engine, previews, and the Spotify
+ * helper. Unmatched URLs still route to Chaquopy; when the port is missing
+ * they fail typed with the engine-unavailable error and no Python runs.
+ *
+ * `@DependencyGraph` stays out of `com.anydownlod.android.engine`; that
+ * package is compiled by `:apps:android-engine-tests` on the JVM.
+ */
 package com.anydownlod.android
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import com.anydownlod.android.engine.AndroidExtractors
 import com.anydownlod.android.engine.AndroidJobDocumentStorage
 import com.anydownlod.android.engine.AndroidRoute
 import com.anydownlod.android.engine.AndroidRouteClassifier
@@ -20,160 +32,272 @@ import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
-import com.anydownlod.core.UnavailableMediaPreviewSource
+import com.anydownlod.core.di.SharedEngineBindings
 import com.anydownlod.core.domain.AppSettings
+import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadRequest
-import com.anydownlod.core.domain.JobErrorCode
 import com.anydownlod.core.domain.ToolAvailability
 import com.anydownlod.core.domain.ToolStatus
 import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.extract.ExtractorHttp
+import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.fake.InMemorySettingsRepository
+import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.jsc.JsRuntime
+import com.anydownlod.core.jsc.QuickJsRuntime
 import com.anydownlod.core.music.AudioMatcher
 import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
-import com.anydownlod.core.fake.InMemorySettingsRepository
-import com.anydownlod.core.fake.InMemorySubscriptionRepository
-import com.anydownlod.core.persist.JobDocumentRestore
 import com.anydownlod.core.persist.JobDocumentStore
 import com.anydownlod.core.persist.PersistingDownloadEngine
+import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
 import com.anydownlod.core.platform.JavaNetHttpTransfer
 import com.anydownlod.core.postprocess.ToolkitCapabilities
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.DependencyGraph
+import dev.zacsweers.metro.Provider
+import dev.zacsweers.metro.Provides
+import dev.zacsweers.metro.SingleIn
+import dev.zacsweers.metrox.viewmodel.ViewModelGraph
 import java.io.File
 import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-/**
- * The Android app graph: shared HTTP engine for direct files and the
- * Chaquopy adapter (pinned yt-dlp, `apps/android` only) for everything else.
- * Files land under app-scoped storage ([Context.filesDir]); the HTTP engine
- * streams in chunks and never loads a whole media file into memory.
- *
- * When [port] is unavailable, site URLs fail with an honest
- * “engine unavailable” error and no Python runs, so Add never pretends a
- * site URL started. Direct files work regardless.
- */
-class AndroidAppGraph(
-    context: Context,
-    private val port: ChaquopyPort = NoChaquopyPort,
-) : AppGraph {
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
 
-    private val downloadRoot: String = context.filesDir.absolutePath
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    override val engine: DownloadEngine
+    override val subscriptions: SubscriptionRepository
+    override val settings: SettingsRepository
+    override val toolProbe: ToolProbe
 
-    private val settingsRepository: SettingsRepository =
-        InMemorySettingsRepository(AppSettings(downloadRoot = downloadRoot))
+    // Core AppGraph gives these properties default getters. Metro does not
+    // generate accessors for overrides of default properties, so the host
+    // accessors carry the Android bindings and the concrete overrides read
+    // them (the desktop graph hit the same Metro behavior in T-116).
+    val hostPreviews: MediaPreviewSource
+    val hostStartupWarning: String?
+    val hostToolkitCapabilities: ToolkitCapabilities
+    val hostSpotify: SpotifyDownloadService
+    val hostOpenUrl: (String) -> Unit
 
-    // D4: the shared Kotlin extractor owns matched URLs; Chaquopy keeps the
-    // rest. One transfer and registry serve routing, downloads, and previews.
-    private val transfer = JavaNetHttpTransfer()
-    private val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
-    private val extractorRegistry = AndroidExtractors.registry(transfer, jsRuntime)
-    private val classifier = AndroidRouteClassifier(registry = extractorRegistry)
+    override val previews: MediaPreviewSource get() = hostPreviews
+    override val startupWarning: String? get() = hostStartupWarning
+    override val toolkitCapabilities: ToolkitCapabilities get() = hostToolkitCapabilities
+    override val spotify: SpotifyDownloadService? get() = hostSpotify
+    override val openUrl: (String) -> Unit get() = hostOpenUrl
 
-    // D5: MediaMuxer/MediaExtractor remux. Capabilities stay M4A/Opus copy-only.
-    private val toolkit = AndroidMediaToolkit(AndroidPlatformMuxer())
-
-    // D8: the shared jobs document in an app state directory, separate from
-    // the download root (`filesDir`). A restart marks active rows failed and
-    // retryable; nothing resumes by itself.
-    private val jobStorage = AndroidJobDocumentStorage(
-        File(context.getDir("state", Context.MODE_PRIVATE), "jobs.json"),
-    )
-    private val jobDocumentStore = JobDocumentStore()
-    private val restoreResult: JobDocumentRestore? = try {
-        jobDocumentStore.restore(jobStorage, settingsRepository.settings.value.clearCompletedAfterSeconds)
-    } catch (failure: Exception) {
-        null
-    }
-    private val restoredHttpJobs = (restoreResult?.jobs ?: emptyList()).filter {
-        AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) != AndroidRoute.CHAQUOPY
-    }
-    private val restoredChaquopyJobs = (restoreResult?.jobs ?: emptyList()).filter {
-        AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) == AndroidRoute.CHAQUOPY
+    @DependencyGraph.Factory
+    interface Factory {
+        fun create(
+            @Provides context: Context,
+            @Provides port: ChaquopyPort = NoChaquopyPort,
+        ): AndroidAppGraph
     }
 
-    /** Assigned in init; the engines' synchronous persist callbacks need it. */
-    private lateinit var persistingEngine: PersistingDownloadEngine
+    @Provides
+    @SingleIn(AppScope::class)
+    fun httpTransfer(): HttpTransfer = JavaNetHttpTransfer()
 
-    private fun saveJobs() {
-        if (::persistingEngine.isInitialized) persistingEngine.persistNow()
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jsRuntime(): JsRuntime = QuickJsRuntime()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun scope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun settings(context: Context): SettingsRepository =
+        InMemorySettingsRepository(AppSettings(downloadRoot = context.filesDir.absolutePath))
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun classifier(registry: ExtractorRegistry): AndroidRouteClassifier =
+        AndroidRouteClassifier(registry = registry)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolkit(): AndroidMediaToolkit = AndroidMediaToolkit(AndroidPlatformMuxer())
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolProbe(port: ChaquopyPort, jsRuntime: JsRuntime): ToolProbe =
+        AndroidToolProbe(port, jsRuntime)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobDocumentStore(): JobDocumentStore = JobDocumentStore()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobStorage(context: Context): AndroidJobDocumentStorage =
+        AndroidJobDocumentStorage(
+            File(context.getDir("state", Context.MODE_PRIVATE), "jobs.json"),
+        )
+
+    /**
+     * One restore, split by route. A corrupt document yields empty seeds and
+     * a startup warning; interrupted active rows come back from the document
+     * as failed and retryable.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun restoredJobs(
+        jobStorage: AndroidJobDocumentStorage,
+        jobDocumentStore: JobDocumentStore,
+        settings: SettingsRepository,
+        registry: ExtractorRegistry,
+    ): AndroidRestoredJobs {
+        val restoreResult = try {
+            jobDocumentStore.restore(jobStorage, settings.settings.value.clearCompletedAfterSeconds)
+        } catch (failure: Exception) {
+            null
+        }
+        val jobs = restoreResult?.jobs ?: emptyList()
+        return AndroidRestoredJobs(
+            httpJobs = jobs.filter {
+                AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, registry) != AndroidRoute.CHAQUOPY
+            },
+            chaquopyJobs = jobs.filter {
+                AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, registry) == AndroidRoute.CHAQUOPY
+            },
+            warning = when {
+                restoreResult == null ->
+                    "The saved queue could not be read. It will be replaced when the queue changes."
+
+                restoreResult.interruptedActive > 0 ->
+                    "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+
+                else -> null
+            },
+        )
     }
 
-    private val httpEngine = HttpDownloadEngine(
+    /**
+     * Both child engines persist after a mutation. The provider resolves the
+     * persisting engine only when a write happens, after construction, which
+     * breaks the constructor cycle.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persist(persisting: Provider<PersistingDownloadEngine>): (List<DownloadJob>) -> Unit =
+        { persisting().persistNow() }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun httpEngine(
+        context: Context,
+        transfer: HttpTransfer,
+        settings: SettingsRepository,
+        scope: CoroutineScope,
+        persist: (List<DownloadJob>) -> Unit,
+        registry: ExtractorRegistry,
+        toolkit: AndroidMediaToolkit,
+        restored: AndroidRestoredJobs,
+    ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
-        fileStore = JavaNetFileStore(Path.of(downloadRoot)),
-        settings = settingsRepository,
+        fileStore = JavaNetFileStore(Path.of(context.filesDir.absolutePath)),
+        settings = settings,
         scope = scope,
         ioDispatcher = Dispatchers.Default,
-        registry = extractorRegistry,
+        registry = registry,
         toolkit = toolkit,
-        persist = { saveJobs() },
-        seedJobs = restoredHttpJobs,
+        persist = persist,
+        seedJobs = restored.httpJobs,
     )
 
-    private val chaquopyEngine = ChaquopyEngine(
+    @Provides
+    @SingleIn(AppScope::class)
+    fun chaquopyEngine(
+        context: Context,
+        port: ChaquopyPort,
+        scope: CoroutineScope,
+        persist: (List<DownloadJob>) -> Unit,
+        restored: AndroidRestoredJobs,
+    ): ChaquopyEngine = ChaquopyEngine(
         port = port,
-        downloadRoot = { downloadRoot },
+        downloadRoot = { context.filesDir.absolutePath },
         scope = scope,
         ioDispatcher = Dispatchers.Default,
-        persist = { saveJobs() },
-        seedJobs = restoredChaquopyJobs,
+        persist = persist,
+        seedJobs = restored.chaquopyJobs,
     )
 
-    private val routingEngine = AndroidRoutingEngine(
-        http = httpEngine,
-        chaquopy = chaquopyEngine,
+    @Provides
+    @SingleIn(AppScope::class)
+    fun routingEngine(
+        http: HttpDownloadEngine,
+        chaquopy: ChaquopyEngine,
+        classifier: AndroidRouteClassifier,
+        scope: CoroutineScope,
+    ): AndroidRoutingEngine = AndroidRoutingEngine(
+        http = http,
+        chaquopy = chaquopy,
         classify = { url -> classifier.route(url) },
         scope = scope,
     )
 
-    override val engine: DownloadEngine get() = persistingEngine
+    @Provides
+    @SingleIn(AppScope::class)
+    fun downloadEngine(routing: AndroidRoutingEngine): DownloadEngine = routing
 
-    override val startupWarning: String? = when {
-        restoreResult == null ->
-            "The saved queue could not be read. It will be replaced when the queue changes."
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persistingEngine(
+        routing: AndroidRoutingEngine,
+        http: HttpDownloadEngine,
+        chaquopy: ChaquopyEngine,
+        documentStore: JobDocumentStore,
+        jobStorage: AndroidJobDocumentStorage,
+        settings: SettingsRepository,
+    ): PersistingDownloadEngine = PersistingDownloadEngine(
+        delegate = routing,
+        documentStore = documentStore,
+        writeDocument = jobStorage::write,
+        clearAfterSeconds = { settings.settings.value.clearCompletedAfterSeconds },
+        // The routing flow merges asynchronously; the child engines' values
+        // are synchronous after a mutation.
+        jobsSnapshot = { chaquopy.jobs.value + http.jobs.value },
+    )
 
-        restoreResult.interruptedActive > 0 ->
-            "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+    @Provides
+    @SingleIn(AppScope::class)
+    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
 
-        else -> null
-    }
+    @Provides
+    @SingleIn(AppScope::class)
+    fun previews(registry: ExtractorRegistry): MediaPreviewSource =
+        ExtractorMediaPreviewSource(registry)
 
-    init {
-        persistingEngine = PersistingDownloadEngine(
-            delegate = routingEngine,
-            documentStore = jobDocumentStore,
-            writeDocument = jobStorage::write,
-            clearAfterSeconds = { settingsRepository.settings.value.clearCompletedAfterSeconds },
-            // The routing flow merges asynchronously; the child engines' values
-            // are synchronous after a mutation.
-            jobsSnapshot = { chaquopyEngine.jobs.value + httpEngine.jobs.value },
-        )
-        // Persist the normalized rows (interrupted jobs) right away, like desktop.
-        persistingEngine.persistNow()
-    }
+    @Provides
+    @SingleIn(AppScope::class)
+    fun startupWarning(restored: AndroidRestoredJobs): String? = restored.warning
 
-    override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
-    override val settings: SettingsRepository = settingsRepository
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolkitCapabilities(toolkit: AndroidMediaToolkit): ToolkitCapabilities =
+        toolkit.capabilities()
 
-    // D6: Spotify metadata, matching, and queueing through the shared engine.
-    // The user library needs an on-device token store, which is a mobile gap.
-    override val spotify: SpotifyDownloadService = SpotifyDownloadService(
-        metadata = SpotifyMetadataClients.default(ExtractorHttp(transfer)),
-        matcher = AudioMatcher.default(YoutubeSearch(ExtractorHttp(transfer))),
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotify(
+        extractorHttp: ExtractorHttp,
+        engine: DownloadEngine,
+    ): SpotifyDownloadService = SpotifyDownloadService(
+        metadata = SpotifyMetadataClients.default(extractorHttp),
+        matcher = AudioMatcher.default(YoutubeSearch(extractorHttp)),
         engine = engine,
     )
 
-    override val toolProbe: ToolProbe = AndroidToolProbe(port, jsRuntime)
-    override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
-    override val cookieStore: CookieStore = CookieStore.Unavailable
-    override val toolkitCapabilities: ToolkitCapabilities = toolkit.capabilities()
-
-    override val openUrl: (String) -> Unit = { url ->
+    @Provides
+    @SingleIn(AppScope::class)
+    fun openUrl(context: Context): (String) -> Unit = { url ->
         runCatching {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -181,6 +305,13 @@ class AndroidAppGraph(
         }
     }
 }
+
+/** The restored rows, already split by route, plus the startup warning. */
+internal class AndroidRestoredJobs(
+    val httpJobs: List<DownloadJob>,
+    val chaquopyJobs: List<DownloadJob>,
+    val warning: String?,
+)
 
 /** Runtime absent by default; a build with Chaquopy wires its real port here. */
 object NoChaquopyPort : ChaquopyPort {

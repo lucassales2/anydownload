@@ -1,7 +1,7 @@
 ---
 id: ADR-013
 type: adr
-status: proposed
+status: accepted
 created: 2026-09-29
 tags: [architecture, decisions, metro, viewmodel]
 ---
@@ -58,4 +58,4 @@ Costs and risks: new Gradle plugin and runtime dependencies; the Metro pin is co
 
 ## Validation / approval
 
-Directed by the owner on 2026-09-29. Accepted by [T-120](../06-tasks/T-120-Metro-verification.md) only after its ten-command suite passes and the three invariants hold: `shared/core` commonMain has no `ProcessBuilder`, `App()` still takes `AppGraph`, and `QueueScreen` does not call `engine.start`, `engine.cancel`, or read `engine.jobs`. Proposed until then.
+Accepted 2026-09-29 by [T-120](../06-tasks/T-120-Metro-verification.md). The ten-command verification passed: nine tasks in one run — `:shared:core:jvmTest`, `:shared:ui:jvmTest`, `:shared:core:iosSimulatorArm64Test`, `:shared:ui:iosSimulatorArm64Test`, `:apps:android-engine-tests:test`, `:apps:android:assembleDebug`, `:apps:android:compileDebugAndroidTestKotlin`, `:apps:web:wasmJsBrowserDistribution`, `:tools:port-manifest:check` — and `:apps:desktop:cleanTest :apps:desktop:test` separately for the documented load-sensitive desktop tests. Counts: core JVM 527, UI JVM 103, core iOS 484, UI iOS 8, Android engine 26, desktop 132 with 0 failures (15 opt-in live tests skipped). The three invariants hold: `shared/core` commonMain has no `ProcessBuilder`; `App()` still takes `AppGraph`; `QueueScreen` does not call `engine.start`, `engine.cancel`, or read `engine.jobs`.

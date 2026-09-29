@@ -2,6 +2,7 @@ package com.anydownlod.android.engine
 
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewResult
+import com.anydownlod.core.di.productionExtractorRegistry
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadRequest
@@ -31,7 +32,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
 /**
- * T-097 JVM-equivalent Android fixture path: the same [AndroidExtractors]
+ * T-097 JVM-equivalent Android fixture path: the same [productionExtractorRegistry]
  * registry the app graph builds routes a matched X status to Kotlin, previews
  * its two videos, and downloads both through the shared engine while the
  * Chaquopy port stays untouched. The syndication JSON and media bytes are
@@ -126,7 +127,7 @@ class AndroidXStatusTest {
 
     @Test
     fun aMatchedStatusRoutesToKotlinWithoutAProbe() {
-        val registry = AndroidExtractors.registry(StatusFixtureTransfer(statusJson()), NoJsRuntime)
+        val registry = productionExtractorRegistry(StatusFixtureTransfer(statusJson()), NoJsRuntime)
         assertIs<TwitterIE>(registry.suitableFor(statusUrl))
 
         val classifier = AndroidRouteClassifier(registry = registry)
@@ -138,7 +139,7 @@ class AndroidXStatusTest {
         val root: Path = Files.createTempDirectory("anydownlod-android-x-status")
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val transfer = StatusFixtureTransfer(statusJson())
-        val registry = AndroidExtractors.registry(transfer, NoJsRuntime)
+        val registry = productionExtractorRegistry(transfer, NoJsRuntime)
         val port = RecordingPort()
         try {
             val preview = assertIs<MediaPreviewResult.Ready>(

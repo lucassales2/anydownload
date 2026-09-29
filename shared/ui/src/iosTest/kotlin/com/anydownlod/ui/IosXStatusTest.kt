@@ -4,6 +4,7 @@ package com.anydownlod.ui
 
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewResult
+import com.anydownlod.core.di.productionExtractorRegistry
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadRequest
@@ -34,8 +35,8 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSTemporaryDirectory
 
 /**
- * T-098 simulator fixture: the same [IosExtractors] registry the app graph
- * builds previews a two-video status and downloads both selected videos
+ * T-098 simulator fixture: the same [productionExtractorRegistry] registry the
+ * app graph builds previews a two-video status and downloads both selected videos
  * through the shared engine and the real sandbox [IosFileStore]. The
  * syndication JSON and media bytes are synthesized; no live X/Twitter call.
  * Work is foreground-only, as on the iOS host.
@@ -123,7 +124,7 @@ class IosXStatusTest {
             "/anydownlod-ios-x-${Random.nextLong().toULong().toString(16)}"
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val transfer = FixtureTransfer(statusJson())
-        val registry = IosExtractors.registry(transfer, NoJsRuntime)
+        val registry = productionExtractorRegistry(transfer, NoJsRuntime)
         assertIs<TwitterIE>(registry.suitableFor(statusUrl))
         try {
             val preview = assertIs<MediaPreviewResult.Ready>(

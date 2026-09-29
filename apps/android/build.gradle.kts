@@ -15,6 +15,7 @@ buildscript {
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.metro)
 
     val chaquopyVersion = System.getProperty("chaquopyVersion")
     if (chaquopyVersion != null) {

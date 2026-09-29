@@ -17,12 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -31,7 +27,6 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anydownlod.core.AppGraph
 import com.anydownlod.ui.export.JobSourceUrls
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.cancel
@@ -56,10 +51,8 @@ import com.anydownlod.ui.generated.resources.queue_title
 import com.anydownlod.ui.generated.resources.start
 import com.anydownlod.ui.generated.resources.start_selected
 import com.anydownlod.ui.generated.resources.waiting_until
-import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.shell.EmptyStatePanel
-import org.jetbrains.compose.resources.stringResource
 import com.anydownlod.ui.shell.formatBytes
 import com.anydownlod.ui.shell.formatDueTime
 import com.anydownlod.ui.shell.formatEta
@@ -78,38 +71,32 @@ import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
 import com.anydownlod.ui.theme.colors
 import com.anydownlod.ui.theme.statusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
+import org.jetbrains.compose.resources.stringResource
 
 /**
- * Downloading list bound to the engine flow: pending, waiting, queued,
- * resolving, downloading, and post-processing rows.
+ * Downloading list bound to [QueueViewModel]: pending, waiting, queued,
+ * resolving, downloading, and post-processing rows. The screen only lays out,
+ * resolves strings, writes the clipboard, and shows the confirm dialog; the
+ * ViewModel owns selection, the cancel decision, and the copy rules.
  */
 @Composable
 fun QueueScreen(
-    graph: AppGraph,
-    modifier: Modifier = Modifier,
     onCopyUrls: ((String) -> Unit)? = null,
+    onOpenSource: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: QueueViewModel = metroViewModel(),
 ) {
-    val jobs by graph.engine.jobs.collectAsState()
-    val rows = remember(jobs) { QueuePresenter.rows(jobs) }
-    val presenter = remember(graph.engine) { QueuePresenter(graph.engine) }
+    val state by viewModel.state.collectAsState()
+    val rows = state.rows
     val clipboard = LocalClipboardManager.current
     val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
-    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var pendingCancelIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var statusMessage by remember { mutableStateOf<UiText?>(null) }
 
     fun copy(urls: List<String>) {
         if (urls.isEmpty()) return
         copyUrls(JobSourceUrls.text(urls))
-        statusMessage = UiText.of(Res.string.copied_urls, urls.size)
+        viewModel.noteCopied(urls.size)
     }
-
-    LaunchedEffect(rows) {
-        selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
-    }
-
-    val working = rows.count { it.state.isActive }
-    val notStarted = rows.size - working
 
     Box(modifier.fillMaxSize()) {
         Column(
@@ -128,17 +115,17 @@ fun QueueScreen(
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiTile(
-                        value = working.toString(),
+                        value = state.working.toString(),
                         label = stringResource(Res.string.kpi_working),
                         tone = StatusTone.Information,
                     )
                     KpiTile(
-                        value = notStarted.toString(),
+                        value = state.notStarted.toString(),
                         label = stringResource(Res.string.kpi_not_started),
                         tone = StatusTone.Critical,
                     )
                 }
-                statusMessage?.let { message ->
+                state.statusMessage?.let { message ->
                     MessageStrip(
                         text = message.resolve(),
                         tone = StatusTone.Information,
@@ -146,43 +133,34 @@ fun QueueScreen(
                     )
                 }
                 SelectionBar(
-                    selection = selectionState(selectedIds.size, rows.size),
-                    onToggleAll = {
-                        selectedIds = if (selectedIds.size == rows.size) emptySet() else rows.map { it.id }.toSet()
-                    },
+                    selection = selectionState(state.selectedIds.size, rows.size),
+                    onToggleAll = { viewModel.toggleAll() },
                     selectAllTag = "queue-select-all",
                     modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
                 ) {
                     FilledTonalButton(
-                        onClick = { presenter.startSelected(selectedIds) },
-                        enabled = selectedIds.isNotEmpty(),
+                        onClick = { viewModel.startSelected() },
+                        enabled = state.selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("queue-start-selected"),
                     ) {
                         Text(stringResource(Res.string.start_selected))
                     }
                     DestructiveOutlinedButton(
                         text = stringResource(Res.string.cancel_selected),
-                        onClick = {
-                            if (rows.any { it.id in selectedIds && it.cancelNeedsConfirm }) {
-                                pendingCancelIds = selectedIds
-                            } else {
-                                presenter.cancelSelected(selectedIds)
-                                selectedIds = emptySet()
-                            }
-                        },
-                        enabled = selectedIds.isNotEmpty(),
+                        onClick = { viewModel.requestCancelSelected() },
+                        enabled = state.selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("queue-cancel-selected"),
                     )
                     TextButton(
-                        onClick = { copy(presenter.selectedUrls(selectedIds)) },
-                        enabled = selectedIds.isNotEmpty(),
+                        onClick = { copy(viewModel.copySelected()) },
+                        enabled = state.selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("queue-copy-selected"),
                     ) {
                         Text(stringResource(Res.string.copy_urls))
                     }
                     TextButton(
-                        onClick = { copy(presenter.batchUrls(selectedIds)) },
-                        enabled = presenter.batchUrls(selectedIds).isNotEmpty(),
+                        onClick = { copy(viewModel.copyBatch()) },
+                        enabled = state.batchCopyEnabled,
                         modifier = Modifier.testTag("queue-copy-batch"),
                     ) {
                         Text(stringResource(Res.string.copy_batch))
@@ -196,31 +174,23 @@ fun QueueScreen(
                     items(rows, key = { it.id }) { row ->
                         QueueRowItem(
                             row = row,
-                            selected = row.id in selectedIds,
-                            onSelectedChange = { checked ->
-                                selectedIds = if (checked) selectedIds + row.id else selectedIds - row.id
-                            },
-                            onStart = { presenter.start(row.id) },
-                            onCancel = {
-                                if (row.cancelNeedsConfirm) {
-                                    pendingCancelIds = setOf(row.id)
-                                } else {
-                                    presenter.cancel(row.id)
-                                }
-                            },
-                            onOpenSource = { graph.openUrl(row.sourceUrl) },
+                            selected = row.id in state.selectedIds,
+                            onSelectedChange = { viewModel.toggle(row.id) },
+                            onStart = { viewModel.startSelected(setOf(row.id)) },
+                            onCancel = { viewModel.requestCancelSelected(setOf(row.id)) },
+                            onOpenSource = { onOpenSource(row.sourceUrl) },
                         )
                     }
                 }
             }
         }
 
-        if (pendingCancelIds.isNotEmpty()) {
+        if (state.pendingCancelIds.isNotEmpty()) {
             AlertDialog(
-                onDismissRequest = { pendingCancelIds = emptySet() },
+                onDismissRequest = { viewModel.dismissCancel() },
                 title = {
                     Text(
-                        if (pendingCancelIds.size == 1) {
+                        if (state.pendingCancelIds.size == 1) {
                             stringResource(Res.string.cancel_one_title)
                         } else {
                             stringResource(Res.string.cancel_many_title)
@@ -231,16 +201,12 @@ fun QueueScreen(
                 confirmButton = {
                     DestructiveTextButton(
                         text = stringResource(Res.string.cancel_download),
-                        onClick = {
-                            presenter.cancelSelected(pendingCancelIds)
-                            selectedIds = selectedIds - pendingCancelIds
-                            pendingCancelIds = emptySet()
-                        },
+                        onClick = { viewModel.confirmCancel() },
                         modifier = Modifier.testTag("queue-confirm-cancel"),
                     )
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingCancelIds = emptySet() }) {
+                    TextButton(onClick = { viewModel.dismissCancel() }) {
                         Text(stringResource(Res.string.keep_downloading))
                     }
                 },

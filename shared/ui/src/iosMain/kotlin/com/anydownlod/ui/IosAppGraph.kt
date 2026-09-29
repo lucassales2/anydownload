@@ -1,3 +1,14 @@
+/*
+ * iOS Metro graph — AnyDownload
+ *
+ * T-118: the iOS host assembly becomes a Metro `@DependencyGraph` in the
+ * shared UI module's Apple source set. One `IosHttpTransfer`, one
+ * `QuickJsRuntime`, and the shared `ExtractorRegistry` serve downloads,
+ * previews, the startup split, and the Spotify helper. The file store stays
+ * rooted in Documents; the jobs document stays under Application Support.
+ * Work is foreground-only and non-direct URLs fail with the engine's typed
+ * "extractor not implemented" error; there is no Python or CLI on iOS.
+ */
 package com.anydownlod.ui
 
 import com.anydownlod.core.AppGraph
@@ -8,20 +19,35 @@ import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
+import com.anydownlod.core.di.SharedEngineBindings
 import com.anydownlod.core.domain.AppSettings
+import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.HttpDownloadEngine
 import com.anydownlod.core.extract.ExtractorHttp
+import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeSearch
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.jsc.JsRuntime
+import com.anydownlod.core.jsc.QuickJsRuntime
+import com.anydownlod.core.music.AudioMatcher
+import com.anydownlod.core.music.SpotifyDownloadService
+import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.persist.JobDocumentRestore
 import com.anydownlod.core.persist.JobDocumentStore
 import com.anydownlod.core.persist.PersistingDownloadEngine
 import com.anydownlod.core.platform.IosFileStore
 import com.anydownlod.core.platform.IosHttpTransfer
+import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.media.IosMediaToolkit
 import com.anydownlod.ui.persist.IosJobDocumentStorage
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.DependencyGraph
+import dev.zacsweers.metro.Provider
+import dev.zacsweers.metro.Provides
+import dev.zacsweers.metro.SingleIn
+import dev.zacsweers.metrox.viewmodel.ViewModelGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,109 +57,196 @@ import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUserDomainMask
 
-/**
- * The iOS app graph: the shared [HttpDownloadEngine] with in-process
- * NSURLSession transport and a sandbox [IosFileStore] rooted in Documents.
- * Non-direct URLs fail with the engine's typed "extractor not implemented"
- * error; there is no Python or CLI on iOS. Work is foreground-only.
- */
-class IosAppGraph : AppGraph {
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+internal interface IosAppGraph : ViewModelGraph, AppGraph {
 
-    private val sandboxRoot: String =
-        (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true)
-            .firstOrNull() as? String)
-            ?.takeIf { it.isNotEmpty() }
-            ?: NSTemporaryDirectory()
+    override val engine: DownloadEngine
+    override val subscriptions: SubscriptionRepository
+    override val settings: SettingsRepository
+    override val toolProbe: ToolProbe
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Core AppGraph gives these properties default getters. Metro does not
+    // generate accessors for overrides of default properties, so the host
+    // accessors carry the iOS bindings and the concrete overrides read them
+    // (same Metro behavior the desktop and Android hosts recorded).
+    val hostPreviews: MediaPreviewSource
+    val hostStartupWarning: String?
+    val hostToolkitCapabilities: ToolkitCapabilities
+    val hostSpotify: SpotifyDownloadService
 
-    private val settingsRepository = InMemorySettingsRepository(
-        AppSettings(downloadRoot = sandboxRoot)
-    )
+    override val previews: MediaPreviewSource get() = hostPreviews
+    override val startupWarning: String? get() = hostStartupWarning
+    override val toolkitCapabilities: ToolkitCapabilities get() = hostToolkitCapabilities
+    override val spotify: SpotifyDownloadService? get() = hostSpotify
 
-    // D4: the shared Kotlin extractor owns matched URLs on iOS. One
-    // NSURLSession transfer and registry serve downloads and previews.
-    private val transfer = IosHttpTransfer()
-    private val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
-    private val extractorRegistry = IosExtractors.registry(transfer, jsRuntime)
+    @Provides
+    @SingleIn(AppScope::class)
+    fun sandboxRoot(): IosSandboxRoot =
+        IosSandboxRoot(
+            (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true)
+                .firstOrNull() as? String)
+                ?.takeIf { it.isNotEmpty() }
+                ?: NSTemporaryDirectory(),
+        )
 
-    // D5: AVFoundation passthrough remux. Capabilities stay M4A/Opus copy-only.
-    private val toolkit = IosMediaToolkit()
+    @Provides
+    @SingleIn(AppScope::class)
+    fun httpTransfer(): HttpTransfer = IosHttpTransfer()
 
-    // D8: the shared jobs document under Application Support, separate from
-    // the Documents download root. Foreground only; no background transfer.
-    private val stateRoot: String =
-        (NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jsRuntime(): JsRuntime = QuickJsRuntime()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun scope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun settings(sandboxRoot: IosSandboxRoot): SettingsRepository =
+        InMemorySettingsRepository(AppSettings(downloadRoot = sandboxRoot.value))
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolkit(): IosMediaToolkit = IosMediaToolkit()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobDocumentStore(): JobDocumentStore = JobDocumentStore()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobStorage(): IosJobDocumentStorage {
+        val stateRoot = (NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
             .firstOrNull() as? String)
             ?.takeIf { it.isNotEmpty() }
             ?.let { "$it/AnyDownload" }
             ?: (NSTemporaryDirectory().trimEnd('/') + "/AnyDownload")
-
-    private val jobStorage = IosJobDocumentStorage("$stateRoot/jobs.json")
-    private val jobDocumentStore = JobDocumentStore()
-    private val restoreResult: JobDocumentRestore? = try {
-        jobDocumentStore.restore(jobStorage, settingsRepository.settings.value.clearCompletedAfterSeconds)
-    } catch (failure: Exception) {
-        null
+        return IosJobDocumentStorage("$stateRoot/jobs.json")
     }
 
-    /** Assigned in init; the engine's synchronous persist callback needs it. */
-    private lateinit var persistingEngine: PersistingDownloadEngine
+    /**
+     * One restore under Application Support. A corrupt document yields empty
+     * seeds and a startup warning; interrupted active rows come back from the
+     * document as failed and retryable.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun restoredQueue(
+        jobStorage: IosJobDocumentStorage,
+        jobDocumentStore: JobDocumentStore,
+        settings: SettingsRepository,
+    ): IosRestoredQueue {
+        val restoreResult: JobDocumentRestore? = try {
+            jobDocumentStore.restore(jobStorage, settings.settings.value.clearCompletedAfterSeconds)
+        } catch (failure: Exception) {
+            null
+        }
+        return IosRestoredQueue(
+            jobs = restoreResult?.jobs ?: emptyList(),
+            warning = when {
+                restoreResult == null ->
+                    "The saved queue could not be read. It will be replaced when the queue changes."
 
-    private fun saveJobs() {
-        if (::persistingEngine.isInitialized) persistingEngine.persistNow()
-    }
+                restoreResult.interruptedActive > 0 ->
+                    "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
 
-    override val engine: DownloadEngine get() = persistingEngine
-
-    override val startupWarning: String? = when {
-        restoreResult == null ->
-            "The saved queue could not be read. It will be replaced when the queue changes."
-
-        restoreResult.interruptedActive > 0 ->
-            "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
-
-        else -> null
-    }
-
-    init {
-        val httpEngine = HttpDownloadEngine(
-            transfer = transfer,
-            fileStore = IosFileStore(sandboxRoot),
-            settings = settingsRepository,
-            scope = scope,
-            registry = extractorRegistry,
-            toolkit = toolkit,
-            persist = { saveJobs() },
-            seedJobs = restoreResult?.jobs ?: emptyList(),
+                else -> null
+            },
         )
-        persistingEngine = PersistingDownloadEngine(
-            delegate = httpEngine,
-            documentStore = jobDocumentStore,
-            writeDocument = jobStorage::write,
-            clearAfterSeconds = { settingsRepository.settings.value.clearCompletedAfterSeconds },
-        )
-        // Persist the normalized rows (interrupted jobs) right away, like desktop.
-        persistingEngine.persistNow()
     }
 
-    override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
-    override val settings: SettingsRepository = settingsRepository
+    /**
+     * The engine persists after a mutation; the lambda resolves the
+     * persisting engine only when a write happens, breaking the cycle.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persist(persisting: Provider<PersistingDownloadEngine>): (List<DownloadJob>) -> Unit =
+        { persisting().persistNow() }
 
-    // D6: Spotify metadata, matching, and queueing through the shared engine.
-    // The user library needs an on-device token store, which is a mobile gap.
-    override val spotify: com.anydownlod.core.music.SpotifyDownloadService =
-        com.anydownlod.core.music.SpotifyDownloadService(
-            metadata = com.anydownlod.core.music.SpotifyMetadataClients.default(ExtractorHttp(transfer)),
-            matcher = com.anydownlod.core.music.AudioMatcher.default(YoutubeSearch(ExtractorHttp(transfer))),
-            engine = engine,
-        )
+    @Provides
+    @SingleIn(AppScope::class)
+    fun httpEngine(
+        sandboxRoot: IosSandboxRoot,
+        transfer: HttpTransfer,
+        settings: SettingsRepository,
+        scope: CoroutineScope,
+        persist: (List<DownloadJob>) -> Unit,
+        registry: ExtractorRegistry,
+        toolkit: IosMediaToolkit,
+        restored: IosRestoredQueue,
+    ): HttpDownloadEngine = HttpDownloadEngine(
+        transfer = transfer,
+        fileStore = IosFileStore(sandboxRoot.value),
+        settings = settings,
+        scope = scope,
+        registry = registry,
+        toolkit = toolkit,
+        persist = persist,
+        seedJobs = restored.jobs,
+    )
 
-    override val toolProbe: ToolProbe = IosToolProbe(jsRuntime)
-    override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
-    override val cookieStore: CookieStore = CookieStore.Unavailable
-    override val toolkitCapabilities: ToolkitCapabilities = toolkit.capabilities()
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persistingEngine(
+        httpEngine: HttpDownloadEngine,
+        documentStore: JobDocumentStore,
+        jobStorage: IosJobDocumentStorage,
+        settings: SettingsRepository,
+    ): PersistingDownloadEngine = PersistingDownloadEngine(
+        delegate = httpEngine,
+        documentStore = documentStore,
+        writeDocument = jobStorage::write,
+        clearAfterSeconds = { settings.settings.value.clearCompletedAfterSeconds },
+    )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun downloadEngine(persisting: PersistingDownloadEngine): DownloadEngine = persisting
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun previews(registry: ExtractorRegistry): MediaPreviewSource =
+        ExtractorMediaPreviewSource(registry)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun startupWarning(restored: IosRestoredQueue): String? = restored.warning
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolkitCapabilities(toolkit: IosMediaToolkit): ToolkitCapabilities =
+        toolkit.capabilities()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolProbe(jsRuntime: JsRuntime): ToolProbe = IosToolProbe(jsRuntime)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotify(
+        extractorHttp: ExtractorHttp,
+        engine: DownloadEngine,
+    ): SpotifyDownloadService = SpotifyDownloadService(
+        metadata = SpotifyMetadataClients.default(extractorHttp),
+        matcher = AudioMatcher.default(YoutubeSearch(extractorHttp)),
+        engine = engine,
+    )
 }
+
+/** Documents-rooted sandbox path, wrapped so it is one unique binding. */
+internal class IosSandboxRoot(val value: String)
+
+/** The one restored queue plus the startup warning. */
+internal class IosRestoredQueue(
+    val jobs: List<DownloadJob>,
+    val warning: String?,
+)
 
 /** Reports the embedded Zipline QuickJS runtime as the Settings row (T-071). */
 private class IosToolProbe(

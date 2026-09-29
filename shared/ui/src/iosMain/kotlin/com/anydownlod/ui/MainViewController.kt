@@ -2,6 +2,7 @@ package com.anydownlod.ui
 
 import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
+import dev.zacsweers.metro.createGraph
 import platform.UIKit.UIViewController
 
 /**
@@ -13,6 +14,6 @@ import platform.UIKit.UIViewController
  * non-direct URLs fail with the typed extractor-not-implemented error.
  */
 fun MainViewController(): UIViewController = ComposeUIViewController {
-    val graph = remember { IosAppGraph() }
+    val graph = remember { createGraph<IosAppGraph>() }
     App(graph = graph)
 }

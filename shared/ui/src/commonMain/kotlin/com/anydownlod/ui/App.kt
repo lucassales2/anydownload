@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,10 @@ import com.anydownlod.ui.home.HomeScreen
 import com.anydownlod.ui.preview.PreviewScreen
 import com.anydownlod.ui.settings.SettingsScreen
 import com.anydownlod.ui.theme.AnyDownloadTheme
+import com.anydownlod.ui.viewmodel.AnyDownloadViewModelFactory
+import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
+import dev.zacsweers.metrox.viewmodel.MetroViewModelFactory
+import dev.zacsweers.metrox.viewmodel.ViewModelGraph
 import kotlinx.coroutines.launch
 
 /**
@@ -38,6 +43,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun App(
     graph: AppGraph = remember { InMemoryAppGraph() },
+    viewModelFactory: MetroViewModelFactory? = null,
 ) {
     val settings by graph.settings.settings.collectAsState()
     val addForm = remember(graph) {
@@ -59,13 +65,20 @@ fun App(
     var settingsOpen by remember { mutableStateOf(false) }
     var previewUrl by remember { mutableStateOf<String?>(null) }
 
+    // T-121: production hosts are Metro graphs and bring their contributed
+    // factory; previews and in-memory tests fall back to an empty factory.
+    val metroViewModelFactory = viewModelFactory
+        ?: (graph as? ViewModelGraph)?.metroViewModelFactory
+        ?: remember { AnyDownloadViewModelFactory(emptyMap(), emptyMap(), emptyMap()) }
+
     val darkTheme = when (settings.theme) {
         ThemePreference.SYSTEM -> isSystemInDarkTheme()
         ThemePreference.LIGHT -> false
         ThemePreference.DARK -> true
     }
 
-    AnyDownloadTheme(darkTheme = darkTheme) {
+    CompositionLocalProvider(LocalMetroViewModelFactory provides metroViewModelFactory) {
+        AnyDownloadTheme(darkTheme = darkTheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             val openPreview = previewUrl
             when {
@@ -101,6 +114,7 @@ fun App(
                     onPreviewSingleUrl = { previewUrl = it },
                 )
             }
+        }
         }
     }
 }

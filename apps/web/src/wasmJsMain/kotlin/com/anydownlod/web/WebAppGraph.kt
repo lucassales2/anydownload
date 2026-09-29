@@ -1,20 +1,32 @@
+/*
+ * Web Metro graph — AnyDownload
+ *
+ * T-119: the web host assembly becomes a Metro `@DependencyGraph` in the
+ * wasm source set. One `WindowExtensionBridge`, one `BrowserJsRuntime`, one
+ * `WebExtensionTransfer`, and one `WebExtensionEngine`. The page never
+ * fetches an arbitrary origin; the extension carries every request through
+ * the shared `ExtractorHttp`. The jobs document stays in localStorage and the
+ * KSP-style storage error is still exposed for the host.
+ */
 package com.anydownlod.web
 
 import com.anydownlod.core.AppGraph
-import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
+import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.WebExtensionEngine
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
-import com.anydownlod.core.extract.youtube.YoutubeIE
-import com.anydownlod.core.extract.twitter.TwitterIE
 import com.anydownlod.core.extract.youtube.YoutubeSearch
-import com.anydownlod.core.extract.youtube.YoutubeTabIE
+import com.anydownlod.core.fake.InMemorySettingsRepository
+import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.jsc.BrowserJsRuntime
+import com.anydownlod.core.jsc.JsRuntime
 import com.anydownlod.core.music.AudioMatcher
 import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
@@ -22,107 +34,189 @@ import com.anydownlod.core.persist.JobDocumentRestore
 import com.anydownlod.core.persist.JobDocumentStorageError
 import com.anydownlod.core.persist.JobDocumentStore
 import com.anydownlod.core.persist.PersistingDownloadEngine
+import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.WebExtensionTransfer
-import com.anydownlod.core.fake.InMemorySettingsRepository
-import com.anydownlod.core.fake.InMemorySubscriptionRepository
-import com.anydownlod.core.fake.InMemoryToolProbe
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.DependencyGraph
+import dev.zacsweers.metro.Provider
+import dev.zacsweers.metro.Provides
+import dev.zacsweers.metro.SingleIn
+import dev.zacsweers.metrox.viewmodel.ViewModelGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * The web graph: the shared UI plus [WebExtensionEngine] over the
- * [WindowExtensionBridge]. The page never fetches arbitrary origins — the
- * extension does. Without the extension, submissions fail with an honest
- * “extension required” error.
- */
-class WebAppGraph : AppGraph {
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+internal interface WebAppGraph : ViewModelGraph, AppGraph {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val bridge = WindowExtensionBridge()
+    override val engine: DownloadEngine
+    override val subscriptions: SubscriptionRepository
+    override val settings: SettingsRepository
+    override val toolProbe: ToolProbe
 
-    // D4: matched URLs go through the Kotlin extractor over the extension
-    // request port; the browser downloader saves the selected format. The
-    // page's own JavaScript runs the bundled solver (T-072).
-    internal val browserJsRuntime = com.anydownlod.core.jsc.BrowserJsRuntime()
-    private val extensionHttp = ExtractorHttp(WebExtensionTransfer(bridge))
-    private val extractorRegistry = ExtractorRegistry(
-        listOf(YoutubeIE(extensionHttp, browserJsRuntime), YoutubeTabIE(extensionHttp), TwitterIE(extensionHttp)),
-    )
+    // Core AppGraph gives these properties default getters; the host
+    // accessors carry the web bindings and the concrete overrides read them
+    // (same Metro behavior the other host graphs recorded).
+    val hostPreviews: MediaPreviewSource
+    val hostStartupWarning: String?
+    val hostSpotify: SpotifyDownloadService
 
-    // D8: the jobs document lives in localStorage (metadata only). The page
-    // keeps the live queue in memory; a refused write surfaces a typed error
-    // and never drops a row already on screen.
-    private val jobStorage = WebJobDocumentStorage()
-    private val jobDocumentStore = JobDocumentStore()
-    private val restoreResult: JobDocumentRestore? = try {
-        jobDocumentStore.restore(jobStorage, clearAfterSeconds = 0)
-    } catch (failure: Exception) {
-        null
+    override val previews: MediaPreviewSource get() = hostPreviews
+    override val startupWarning: String? get() = hostStartupWarning
+    override val spotify: SpotifyDownloadService? get() = hostSpotify
+
+    /** The page runtime the T-072 `?solverHook=1` hook installs on. */
+    val browserJsRuntime: BrowserJsRuntime
+
+    /** The typed web persistence state, exposed for the host. */
+    val jobStorageError: StateFlow<JobDocumentStorageError?>
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun scope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun bridge(): WindowExtensionBridge = WindowExtensionBridge()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun browserJsRuntime(): BrowserJsRuntime = BrowserJsRuntime()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jsRuntime(browserJsRuntime: BrowserJsRuntime): JsRuntime = browserJsRuntime
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun extensionTransfer(bridge: WindowExtensionBridge): HttpTransfer =
+        WebExtensionTransfer(bridge)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobStorage(): WebJobDocumentStorage = WebJobDocumentStorage()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobDocumentStore(): JobDocumentStore = JobDocumentStore()
+
+    /** One localStorage restore; a refused read yields empty seeds and a warning. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun restoredQueue(
+        jobStorage: WebJobDocumentStorage,
+        jobDocumentStore: JobDocumentStore,
+    ): WebRestoredQueue {
+        val restoreResult: JobDocumentRestore? = try {
+            jobDocumentStore.restore(jobStorage, clearAfterSeconds = 0)
+        } catch (failure: Exception) {
+            null
+        }
+        return WebRestoredQueue(
+            jobs = restoreResult?.jobs ?: emptyList(),
+            warning = when {
+                restoreResult == null ->
+                    "The saved queue could not be read. It will be replaced when the queue changes."
+
+                restoreResult.interruptedActive > 0 ->
+                    "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+
+                else -> null
+            },
+        )
     }
 
-    /** Assigned in init; the engine's synchronous persist callback needs it. */
-    private lateinit var persistingEngine: PersistingDownloadEngine
+    /**
+     * The engine persists after a mutation; the lambda resolves the
+     * persisting engine only when a write happens, breaking the cycle.
+     */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persist(persisting: Provider<PersistingDownloadEngine>): (List<DownloadJob>) -> Unit =
+        { persisting().persistNow() }
 
-    private fun saveJobs() {
-        if (::persistingEngine.isInitialized) persistingEngine.persistNow()
-    }
-
-    private val delegateEngine = WebExtensionEngine(
+    @Provides
+    @SingleIn(AppScope::class)
+    fun delegateEngine(
+        bridge: WindowExtensionBridge,
+        scope: CoroutineScope,
+        registry: ExtractorRegistry,
+        persist: (List<DownloadJob>) -> Unit,
+        restored: WebRestoredQueue,
+    ): WebExtensionEngine = WebExtensionEngine(
         bridge = bridge,
         scope = scope,
-        registry = extractorRegistry,
-        persist = { saveJobs() },
-        seedJobs = restoreResult?.jobs ?: emptyList(),
+        registry = registry,
+        persist = persist,
+        seedJobs = restored.jobs,
     )
 
-    override val engine: DownloadEngine get() = persistingEngine
+    @Provides
+    @SingleIn(AppScope::class)
+    fun persistingEngine(
+        delegate: WebExtensionEngine,
+        documentStore: JobDocumentStore,
+        jobStorage: WebJobDocumentStorage,
+    ): PersistingDownloadEngine = PersistingDownloadEngine(
+        delegate = delegate,
+        documentStore = documentStore,
+        writeDocument = jobStorage::write,
+        clearAfterSeconds = { 0L },
+    )
 
-    /** The typed web persistence state, exposed for the host and its tests. */
-    val jobStorageError: StateFlow<JobDocumentStorageError?> get() = persistingEngine.storageError
+    @Provides
+    @SingleIn(AppScope::class)
+    fun downloadEngine(persisting: PersistingDownloadEngine): DownloadEngine = persisting
 
-    override val startupWarning: String? = when {
-        restoreResult == null ->
-            "The saved queue could not be read. It will be replaced when the queue changes."
+    @Provides
+    @SingleIn(AppScope::class)
+    fun jobStorageError(
+        persisting: PersistingDownloadEngine,
+    ): StateFlow<JobDocumentStorageError?> = persisting.storageError
 
-        restoreResult.interruptedActive > 0 ->
-            "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+    @Provides
+    @SingleIn(AppScope::class)
+    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
 
-        else -> null
-    }
+    @Provides
+    @SingleIn(AppScope::class)
+    fun settings(): SettingsRepository = InMemorySettingsRepository()
 
-    init {
-        persistingEngine = PersistingDownloadEngine(
-            delegate = delegateEngine,
-            documentStore = jobDocumentStore,
-            writeDocument = jobStorage::write,
-            clearAfterSeconds = { 0L },
-        )
-        // Persist the normalized rows (interrupted jobs) right away, like desktop.
-        persistingEngine.persistNow()
-    }
+    @Provides
+    @SingleIn(AppScope::class)
+    fun previews(registry: ExtractorRegistry): MediaPreviewSource =
+        ExtractorMediaPreviewSource(registry)
 
-    override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
-    override val settings: SettingsRepository = InMemorySettingsRepository()
+    @Provides
+    @SingleIn(AppScope::class)
+    fun startupWarning(restored: WebRestoredQueue): String? = restored.warning
 
-    // D6: Spotify metadata, matching, and queueing through the extension.
-    // The page itself never fetches; the extension carries every request. The
-    // user library has no on-device token store on web, so it is a gap.
-    override val spotify: SpotifyDownloadService = SpotifyDownloadService(
-        metadata = SpotifyMetadataClients.default(extensionHttp),
-        matcher = AudioMatcher.default(YoutubeSearch(extensionHttp)),
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolProbe(jsRuntime: JsRuntime): ToolProbe = WebToolProbe(jsRuntime)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotify(
+        extractorHttp: ExtractorHttp,
+        engine: DownloadEngine,
+    ): SpotifyDownloadService = SpotifyDownloadService(
+        metadata = SpotifyMetadataClients.default(extractorHttp),
+        matcher = AudioMatcher.default(YoutubeSearch(extractorHttp)),
         engine = engine,
     )
-
-    override val toolProbe: ToolProbe = WebToolProbe(browserJsRuntime)
-    override val previews: MediaPreviewSource = ExtractorMediaPreviewSource(extractorRegistry)
-    override val cookieStore: CookieStore = CookieStore.Unavailable
 }
+
+/** The one restored queue plus the startup warning. */
+internal class WebRestoredQueue(
+    val jobs: List<DownloadJob>,
+    val warning: String?,
+)
 
 /** Reports the page's own JavaScript runtime as the Settings row (T-072). */
 private class WebToolProbe(
-    private val jsRuntime: com.anydownlod.core.jsc.JsRuntime,
+    private val jsRuntime: JsRuntime,
 ) : ToolProbe {
     override suspend fun probe(): com.anydownlod.core.domain.ToolStatus =
         com.anydownlod.core.domain.ToolStatus(

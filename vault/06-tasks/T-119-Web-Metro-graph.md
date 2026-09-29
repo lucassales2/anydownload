@@ -34,12 +34,19 @@ tags: [task, metro]
 
 ## Acceptance criteria
 
-- [ ] `@DependencyGraph` is in `apps/web` `wasmJsMain`; one bridge, one runtime, one transfer, one engine.
-- [ ] `?solverHook=1` installs the hook on the same runtime the graph uses.
-- [ ] The page does not fetch arbitrary origins; the existing web behavior tests stay green.
-- [ ] `./gradlew :apps:web:wasmJsBrowserDistribution` succeeds, and `:apps:web:wasmJsBrowserTest` stays green when a browser is available.
-- [ ] No download behavior changed.
+- [x] `@DependencyGraph` is in `apps/web` `wasmJsMain`; one bridge, one runtime, one transfer, one engine.
+- [x] `?solverHook=1` installs the hook on the same runtime the graph uses.
+- [x] The page does not fetch arbitrary origins; the existing web behavior tests stay green.
+- [x] `./gradlew :apps:web:wasmJsBrowserDistribution` succeeds, and `:apps:web:wasmJsBrowserTest` stays green when a browser is available.
+- [x] No download behavior changed.
 
 ## Evidence / notes
 
-Not started.
+2026-09-29, macOS 26.5.2 (Darwin 25.5.0).
+
+- **Graph:** `apps/web/src/wasmJsMain/kotlin/com/anydownlod/web/WebAppGraph.kt` is now `@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])` (internal interface). `Main.kt` creates exactly one graph with `createGraph<WebAppGraph>()`, installs the `?solverHook=1` CDP hook on `graph.browserJsRuntime`, and passes that same graph to `App`. `WebToolProbe` moved with the graph.
+- **Singletons:** one `WindowExtensionBridge`, one `BrowserJsRuntime`, one `WebExtensionTransfer` (declared as the `HttpTransfer` binding), one `WebExtensionEngine`, one `PersistingDownloadEngine`, one `CoroutineScope`, and the one shared `ExtractorRegistry`/`ExtractorHttp` from `SharedEngineBindings` used by the classifier, previews, and Spotify helper.
+- **Metro findings:** (1) provider bindings key on the declared type, so `extensionTransfer` returns `HttpTransfer`, not `WebExtensionTransfer`; (2) the host needs the concrete `BrowserJsRuntime` for `installSolverHook` while the shared bindings need `JsRuntime`, so the graph declares both (`browserJsRuntime()` plus `jsRuntime(BrowserJsRuntime)` returning the same scoped instance). The defaulted core `AppGraph` properties again use host accessors plus concrete overrides. `jobStorageError` is backed by a `StateFlow<JobDocumentStorageError?>` binding from the persisting engine.
+- **No page fetches:** the transfer is the `WindowExtensionBridge` only; no page-origin fetch code was added. `WebM1GateTest` still completes the fixture through the bridge and keeps the media path extension-only.
+- **Verification:** `./gradlew --console=plain :apps:web:wasmJsBrowserDistribution` → BUILD SUCCESSFUL in 1m 56s (production bundle written under `apps/web/build/dist/wasmJs/productionExecutable`). Then `CHROME_BIN="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" ./gradlew --console=plain :apps:web:wasmJsBrowserTest` → BUILD SUCCESSFUL in 26s; 6 tests, 0 failures (`WebM1GateTest` 1, `WebJobDocumentStorageTest` 5).
+- No commit was made.

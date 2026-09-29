@@ -49,12 +49,20 @@ tags: [task, metro, viewmodel]
 
 ## Acceptance criteria
 
-- [ ] `shared/ui` commonMain has both ViewModel Compose dependencies at the Metro version; `androidx.lifecycle:lifecycle-viewmodel` is absent; desktop JVM has `kotlinx-coroutines-swing`.
-- [ ] Each host graph extends `ViewModelGraph`.
-- [ ] `AnyDownloadViewModelFactory` is `@Inject @ContributesBinding(AppScope::class) @SingleIn(AppScope::class)` and subclasses `MetroViewModelFactory`.
-- [ ] `App` keeps the core `AppGraph` first parameter and installs `LocalMetroViewModelFactory`; `ShellUiHarness` installs it too; the test factory map is empty.
-- [ ] `./gradlew :shared:ui:compileKotlinWasmJs :shared:ui:compileKotlinIosSimulatorArm64` succeeds.
+- [x] `shared/ui` commonMain has both ViewModel Compose dependencies at the Metro version; `androidx.lifecycle:lifecycle-viewmodel` is absent; desktop JVM has `kotlinx-coroutines-swing`.
+- [x] Each host graph extends `ViewModelGraph`.
+- [x] `AnyDownloadViewModelFactory` is `@Inject @ContributesBinding(AppScope::class) @SingleIn(AppScope::class)` and subclasses `MetroViewModelFactory`.
+- [x] `App` keeps the core `AppGraph` first parameter and installs `LocalMetroViewModelFactory`; `ShellUiHarness` installs it too; the test factory map is empty.
+- [x] `./gradlew :shared:ui:compileKotlinWasmJs :shared:ui:compileKotlinIosSimulatorArm64` succeeds.
 
 ## Evidence / notes
 
-Not started.
+2026-09-29, macOS 26.5.2 (Darwin 25.5.0).
+
+- **Dependencies:** `gradle/libs.versions.toml` adds `lifecycle = "2.10.0"`, `androidx-lifecycle-viewmodel-compose = org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose`, `metrox-viewmodel-compose = dev.zacsweers.metro:metrox-viewmodel-compose` (Metro `1.4.5`), and `kotlinx-coroutines-swing`. `shared/ui` commonMain declares the first two as `api` so every host module can see `ViewModelGraph`, `MetroViewModelFactory`, and `LocalMetroViewModelFactory`; `apps/desktop` adds `kotlinx-coroutines-swing`. The MetroX `1.4.5` module metadata depends on JetBrains lifecycle `2.10.0`, so that is the aligned version. No `androidx.lifecycle:lifecycle-viewmodel` was added directly.
+- **Factory:** `shared/ui/src/commonMain/kotlin/com/anydownlod/ui/viewmodel/AnyDownloadViewModelFactory.kt` — `@Inject @ContributesBinding(AppScope::class) @SingleIn(AppScope::class)` subclassing `MetroViewModelFactory` with the three multibinding maps as `override val` constructor parameters, exactly the MetroX shape.
+- **Host graphs:** `DesktopGraph`, `AndroidAppGraph`, `IosAppGraph`, and `WebAppGraph` now extend `ViewModelGraph` as well as the core `AppGraph`.
+- **Install:** `App(graph, viewModelFactory = null)` keeps the core `AppGraph` first parameter. It resolves the factory as the explicit parameter, else `(graph as? ViewModelGraph)?.metroViewModelFactory`, else a remembered empty-map `AnyDownloadViewModelFactory`, and wraps its content in `CompositionLocalProvider(LocalMetroViewModelFactory provides ...)`. `ShellUiHarness` does the same with an optional `viewModelFactory` parameter; its map is empty in this task, ready for T-122.
+- **Wasm contribution check:** passed. `:apps:web:compileKotlinWasmJs` compiled the `WebAppGraph` extending `ViewModelGraph` and resolved the shared/ui `AnyDownloadViewModelFactory` contribution. The loop's “if Wasm cannot see a shared/ui contribution, stop” condition did not trigger.
+- **Verification:** `./gradlew --console=plain :shared:ui:compileKotlinWasmJs :shared:ui:compileKotlinIosSimulatorArm64 :apps:desktop:compileKotlin :apps:android:compileDebugKotlin :apps:web:compileKotlinWasmJs` → BUILD SUCCESSFUL in 6m 38s. Then `./gradlew --console=plain :shared:ui:jvmTest` → BUILD SUCCESSFUL, 99 tests, 0 failures; `./gradlew --console=plain :apps:desktop:cleanTest :apps:desktop:test` → BUILD SUCCESSFUL, 132 tests, 0 failures, 15 skipped. A first combined run hit the known load-sensitive `DesktopSpotifyDownloadGateTest` once; the desktop suite passed alone, matching the T-112 evidence note.
+- No commit was made.

@@ -2,6 +2,8 @@ package com.anydownlod.desktop.engine
 
 import com.anydownlod.core.MediaPreviewResult
 import com.anydownlod.core.PreviewFailure
+import com.anydownlod.core.di.productionExtractorRegistry
+import com.anydownlod.core.jsc.NoJsRuntime
 import com.anydownlod.core.platform.ByteArrayHttpBody
 import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
@@ -82,10 +84,10 @@ class DesktopPreviewSourceTest {
         """{"id":"cli","title":"CLI Title","webpage_url":"https://example.org/article","extractor_key":"Generic"}"""
 
     private fun source(transfer: PreviewTransfer, runner: RecordingRunner) = DesktopPreviewSource.create(
+        registry = productionExtractorRegistry(transfer, NoJsRuntime),
         runner = runner,
         resolveExecutable = { "yt-dlp" },
         workingDirectory = { Path.of("/tmp") },
-        transfer = transfer,
     )
 
     @Test
@@ -129,10 +131,10 @@ class DesktopPreviewSourceTest {
         }
         val runner = RecordingRunner(FakeCliProcess(listOf(cliJson)))
         val source = DesktopPreviewSource.create(
+            registry = productionExtractorRegistry(transfer, NoJsRuntime),
             runner = runner,
             resolveExecutable = { "yt-dlp" },
             workingDirectory = { Path.of("/tmp") },
-            transfer = transfer,
         )
         val result = assertIs<MediaPreviewResult.Failed>(source.load(youtubeUrl))
         assertEquals(PreviewFailure.Failed, result.failure)
