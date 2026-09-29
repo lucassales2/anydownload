@@ -23,7 +23,7 @@ import com.anydownlod.ui.theme.AnyDownloadTheme
  * [AppShell] here instead of going through [App].
  */
 @Composable
-internal fun ShellUiHarness(graph: AppGraph) {
+internal fun ShellUiHarness(graph: AppGraph, onCopyUrls: ((String) -> Unit)? = null) {
     val addForm = remember(graph) {
         AddFormPresenter(
             engine = graph.engine,
@@ -45,6 +45,7 @@ internal fun ShellUiHarness(graph: AppGraph) {
                     onTabSelected = { selectedTab = it },
                     onOpenSettings = { settingsOpen = true },
                     onPreviewSingleUrl = {},
+                    onCopyUrls = onCopyUrls,
                 )
             }
         }

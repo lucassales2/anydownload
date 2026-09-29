@@ -60,10 +60,10 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -133,6 +133,9 @@ class HttpDownloadEngine(
          * hold fails typed instead of being silently saved as one stream.
          */
         const val MERGE_CONTAINER_EXT = "mp4"
+
+        /** ADR-012: playlist expansion hard-stops at 50 entries. */
+        const val PLAYLIST_ITEM_CAP = 50
     }
 
     private val lock = Any()
@@ -142,7 +145,14 @@ class HttpDownloadEngine(
     private val idempotency = mutableMapOf<String, String>()
     private val running = mutableMapOf<String, Job>()
     private val cancelRequested = mutableMapOf<String, Boolean>()
-    private val semaphore = Semaphore(settings.settings.value.maxConcurrentDownloads.coerceAtLeast(1))
+    private var activeWorkers = 0
+
+    /**
+     * Version counter used to wake workers waiting for a slot. Reading the
+     * Settings limit in [acquireWorkerSlot] instead of building a fixed
+     * semaphore lets a concurrency change apply to work that starts later.
+     */
+    private val workerSlotVersion = MutableStateFlow(0L)
 
     init {
         seedJobs.forEach { job ->
@@ -181,8 +191,18 @@ class HttpDownloadEngine(
             cancelRequested[jobId] = true
             running.remove(jobId)?.cancel()
         }
-        return update(jobId) {
-            it.copy(state = JobState.CANCELLED, error = cancelledError(), finishedAtEpochMillis = now())
+        return update(jobId) { current ->
+            // A completion that already published an artifact wins the race:
+            // a late cancel must not turn a finished row into CANCELLED.
+            if (current.state == JobState.COMPLETED || current.state == JobState.UNKNOWN) {
+                current
+            } else {
+                current.copy(
+                    state = JobState.CANCELLED,
+                    error = cancelledError(),
+                    finishedAtEpochMillis = now(),
+                )
+            }
         }
     }
 
@@ -298,15 +318,16 @@ class HttpDownloadEngine(
             return
         }
         val request = findJob(jobId)?.request ?: return
-        semaphore.withPermit {
+        acquireWorkerSlot()
+        try {
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
-                return@withPermit
+                return
             }
-            val url = findJob(jobId)?.request?.sourceUrl ?: return@withPermit
+            val url = findJob(jobId)?.request?.sourceUrl ?: return
             val options = findJob(jobId)?.request?.options ?: DownloadOptions()
             try {
-                if (handleExistingArtifact(jobId, request)) return@withPermit
+                if (handleExistingArtifact(jobId, request)) return
                 val extractor = registry?.suitableFor(url)
                 if (extractor != null) {
                     extractAndDownload(jobId, url, options, extractor)
@@ -325,7 +346,38 @@ class HttpDownloadEngine(
                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download failed. Check the network and retry.")
                 }
             }
+        } finally {
+            releaseWorkerSlot()
         }
+    }
+
+    /**
+     * Takes a worker slot using the concurrency limit in Settings at the
+     * moment the worker starts. Waiting workers wake when a slot is released
+     * and re-read the limit, so work that starts after a Settings change sees
+     * the new value and a lowered limit still never lets a new worker exceed
+     * it.
+     */
+    private suspend fun acquireWorkerSlot() {
+        while (true) {
+            val observed = workerSlotVersion.value
+            val limit = settings.settings.value.maxConcurrentDownloads.coerceAtLeast(1)
+            val acquired = engineCriticalSection(lock) {
+                if (activeWorkers < limit) {
+                    activeWorkers++
+                    true
+                } else {
+                    false
+                }
+            }
+            if (acquired) return
+            workerSlotVersion.first { it != observed }
+        }
+    }
+
+    private fun releaseWorkerSlot() {
+        engineCriticalSection(lock) { if (activeWorkers > 0) activeWorkers-- }
+        workerSlotVersion.value = workerSlotVersion.value + 1
     }
 
     /**
@@ -346,6 +398,10 @@ class HttpDownloadEngine(
         val info = try {
             withContext(ioDispatcher) { extractor.extract(url) }
         } catch (error: ExtractionError) {
+            if (error is ExtractionError.NotYetAvailable) {
+                schedule(jobId)
+                return
+            }
             val mapped = extractionJobError(error)
             fail(jobId, mapped.code, mapped.message, mapped.retryable)
             return
@@ -357,6 +413,10 @@ class HttpDownloadEngine(
                 sourceHost = UrlPolicy.hostOf(url),
                 formatsNeedingJs = info.formatsNeedingJs,
             )
+        }
+        if (info.entries.isNotEmpty()) {
+            expandEntries(jobId, info, options)
+            return
         }
         if (info.media.isNotEmpty()) {
             downloadSelectedMedia(jobId, url, info, options)
@@ -413,6 +473,79 @@ class HttpDownloadEngine(
                 format = resolution.format,
                 container = resolution.container,
             )
+        }
+    }
+
+    /**
+     * Expands a playlist/tab result into bounded child jobs (T-107).
+     *
+     * The parent job downloads no media; once expansion finishes it becomes
+     * `COMPLETED`. Each entry becomes a child job that shares the parent's
+     * batch id and options and carries an idempotency key derived from the
+     * parent key and the entry id, so a duplicate entry or a repeat submit
+     * returns the existing child. A typed entry failure becomes a `FAILED`
+     * child and does not abort the other entries. The cap is
+     * `min(playlistItemLimit, 50)` when the limit is positive and 50 when it
+     * is 0; no entry past the cap is submitted. A cancel between entries
+     * stops the loop and leaves the children already created untouched.
+     */
+    private suspend fun expandEntries(
+        parentJobId: String,
+        info: InfoDict,
+        options: DownloadOptions,
+    ) {
+        val parent = findJob(parentJobId) ?: return
+        val batchId = parent.request.parentBatchId ?: parent.id
+        val cap = if (options.playlistItemLimit > 0) {
+            minOf(options.playlistItemLimit, PLAYLIST_ITEM_CAP)
+        } else {
+            PLAYLIST_ITEM_CAP
+        }
+        val parentKey = parent.request.idempotencyKey.ifEmpty { parent.id }
+        val seen = mutableSetOf<String>()
+        var created = 0
+
+        for ((index, entry) in info.entries.withIndex()) {
+            if (created >= cap) break
+            if (isCancelRequested(parentJobId)) break
+            val entryId = entry.id?.takeIf { it.isNotBlank() } ?: "entry-$index"
+            if (!seen.add(entryId)) continue
+
+            val childRequest = DownloadRequest(
+                sourceUrl = entry.url?.takeIf { it.isNotBlank() } ?: parent.request.sourceUrl,
+                options = options,
+                idempotencyKey = "$parentKey:entry:$entryId",
+                parentBatchId = batchId,
+            )
+            if (entry.failure != null || entry.url.isNullOrBlank()) {
+                val child = acceptJob(childRequest)
+                val mapped = entry.failure?.let(::extractionJobError)
+                    ?: JobError(
+                        JobErrorCode.EXTRACTION_FAILURE,
+                        "This playlist entry has no download URL.",
+                        retryable = false,
+                    )
+                fail(child.id, mapped.code, mapped.message, mapped.retryable)
+            } else {
+                submit(childRequest)
+            }
+            created++
+            // Let a cancel land between entries; created children stay as-is.
+            yield()
+        }
+
+        if (isCancelRequested(parentJobId)) return
+        update(parentJobId) { job ->
+            if (isCancelRequested(parentJobId)) {
+                job
+            } else {
+                job.copy(
+                    state = JobState.COMPLETED,
+                    progress = JobProgress(phase = "completed", percent = 100.0),
+                    error = null,
+                    finishedAtEpochMillis = now(),
+                )
+            }
         }
     }
 
@@ -1404,7 +1537,7 @@ class HttpDownloadEngine(
                 initSegment = initSegment,
                 key = key,
                 onChunk = { chunk ->
-                    handle.write(chunk, chunk.size)
+                    if (!writeChunk(jobId, handle, chunk, chunk.size)) throw DiskWriteFailure()
                     written += chunk.size
                 },
                 onProgress = { completed, total, bytes ->
@@ -1451,12 +1584,18 @@ class HttpDownloadEngine(
                 suggestedTitle = manifestTitle,
                 suggestedExt = artifactExt,
             )
+        } catch (failure: DiskWriteFailure) {
+            // writeChunk already stored DISK_EXHAUSTED; the finally discards the temp.
+            return null
         } finally {
             if (!finished) {
                 runCatching { handle.discard() }
             }
         }
     }
+
+    /** A host write failure; [writeChunk] records the typed job error. */
+    private class DiskWriteFailure : Exception()
 
     private fun selectBestManifestFormat(formats: List<MediaFormat>): MediaFormat? =
         formats.filter { it.fragments?.isNotEmpty() == true || it.protocol != "http_dash_segments" }
@@ -1530,7 +1669,7 @@ class HttpDownloadEngine(
                 val count = withContext(ioDispatcher) { body.readNext(buffer) }
                 if (count == -1) break
                 if (count == 0) continue
-                handle.write(buffer, count)
+                if (!writeChunk(jobId, handle, buffer, count)) return null
                 downloaded += count
                 reportProgress(jobId, downloaded, totalBytes)
                 currentCoroutineContext().ensureActive()
@@ -1594,7 +1733,7 @@ class HttpDownloadEngine(
                     val count = withContext(ioDispatcher) { currentBody.readNext(buffer) }
                     if (count == -1) break
                     if (count == 0) continue
-                    handle.write(buffer, count)
+                    if (!writeChunk(jobId, handle, buffer, count)) return null
                     chunkRead += count
                     downloaded += count
                     reportProgress(jobId, downloaded, total)
@@ -1690,14 +1829,40 @@ class HttpDownloadEngine(
         requestedPath: String? = null,
     ): String? = try {
         if (!requestedPath.isNullOrBlank()) {
+            // A requested path is exact: handleExistingArtifact already applied
+            // the skip/metadata policy before this point, and only force
+            // reaches publish with this name.
             requestedPath
-        } else if (artifactTitle != null) {
-            ArtifactName.build(artifactTitle, artifactExt, options)
         } else {
-            ArtifactName.build(sourceUrl, options)
+            val desired = if (artifactTitle != null) {
+                ArtifactName.build(artifactTitle, artifactExt, options)
+            } else {
+                ArtifactName.build(sourceUrl, options)
+            }
+            uniqueArtifactPath(desired, options.overwrite)
         }
     } catch (failure: IllegalArgumentException) {
         null
+    }
+
+    /**
+     * A free path for the artifact. `FORCE` keeps [desired] (the file store
+     * replaces it); every other mode appends ` (2)`, ` (3)`, ... until the
+     * path is free, so a collision never overwrites an existing file.
+     */
+    private fun uniqueArtifactPath(desired: String, overwrite: OverwriteMode): String {
+        if (overwrite == OverwriteMode.FORCE) return desired
+        if (runCatching { fileStore.size(desired) }.getOrNull() == null) return desired
+        val slash = desired.lastIndexOf('/')
+        val dot = desired.lastIndexOf('.')
+        val stem = if (dot > slash) desired.substring(0, dot) else desired
+        val extension = if (dot > slash) desired.substring(dot) else ""
+        var index = 2
+        while (true) {
+            val candidate = "$stem ($index)$extension"
+            if (runCatching { fileStore.size(candidate) }.getOrNull() == null) return candidate
+            index++
+        }
     }
 
     /** Closes, publishes, and completes; false when the path was refused. */
@@ -1815,12 +1980,45 @@ class HttpDownloadEngine(
             )
         }
 
+    /**
+     * Writes one chunk to the temp. A host write failure is a typed disk
+     * error, never a network one, and the message never carries an absolute
+     * path. Returns false after [fail] so the caller stops and its `finally`
+     * discards the temp.
+     */
+    private fun writeChunk(jobId: String, handle: FileHandle, bytes: ByteArray, length: Int): Boolean = try {
+        handle.write(bytes, length)
+        true
+    } catch (failure: Throwable) {
+        fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be written.")
+        false
+    }
+
     private fun confirmCancelled(jobId: String): DownloadJob? =
+        update(jobId) { job ->
+            if (job.state == JobState.COMPLETED) {
+                job
+            } else {
+                job.copy(
+                    state = JobState.CANCELLED,
+                    error = cancelledError(),
+                    finishedAtEpochMillis = now(),
+                )
+            }
+        }
+
+    /**
+     * A source extraction says is not published yet. The row waits in
+     * SCHEDULED and the user starts it again; there is no timer, countdown,
+     * or live stream, and no media request runs.
+     */
+    private fun schedule(jobId: String): DownloadJob? =
         update(jobId) {
             it.copy(
-                state = JobState.CANCELLED,
-                error = cancelledError(),
-                finishedAtEpochMillis = now(),
+                state = JobState.SCHEDULED,
+                progress = null,
+                error = null,
+                finishedAtEpochMillis = null,
             )
         }
 
@@ -2034,6 +2232,12 @@ internal fun extractionJobError(error: ExtractionError): JobError = when (error)
             JobErrorCode.UNAVAILABLE_OR_PRIVATE,
             error.message ?: "This source is unavailable.",
             retryable = false,
+        )
+
+        is ExtractionError.NotYetAvailable -> JobError(
+            JobErrorCode.UNAVAILABLE_OR_PRIVATE,
+            error.message ?: "This source is not available yet.",
+            retryable = true,
         )
 
         is ExtractionError.NoFormats -> JobError(

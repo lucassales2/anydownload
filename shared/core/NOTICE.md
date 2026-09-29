@@ -134,3 +134,23 @@ Not translated: the GraphQL and legacy API selections (including their
 hard-coded bearer values), cookies, any guest-token storage, photos, quoted
 tweets, cards, Spaces, broadcasts, Amplify, the `t.co` shortener, and the
 other classes in `twitter.py`. `twitter.py` is not vendored.
+
+
+## NOTICE — YouTube playlist tab extractor (T-108)
+
+`com.anydownlod.core.extract.youtube.YoutubeTabIE` translates a subset of
+`yt_dlp/extractor/youtube/_tab.py` at tag `2026.08.19`, commit
+`3a08beaf031ab68f966401ead017ac81fe8486cf`, read 2026-09-29, Unlicense:
+
+- the `/playlist?list=` URL subset of `YoutubeTabIE._VALID_URL`
+  (`youtube.com`, `www`, `m`, `music` hosts; mixes with `list=RD...` excluded);
+- the playlist `browse` request shape (`browseId = VL<listId>`) with the
+  upstream `web` client context and headers, shared with the translated
+  `YoutubeSearch` request code;
+- flat `playlistVideoRenderer` video id and title pairs, in document order,
+  first page only, capped at 50 entries; every entry becomes a watch URL, so
+  the existing `YoutubeIE` single-video path downloads it.
+
+Not translated: channels, mixes, watch-page `list` parameters, continuation
+pages, the other `_tab.py` classes, cookies, visitor ids, PO tokens, live,
+and download. `_tab.py` is not vendored.

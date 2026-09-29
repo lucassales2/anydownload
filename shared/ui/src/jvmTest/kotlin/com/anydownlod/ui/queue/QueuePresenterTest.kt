@@ -3,6 +3,7 @@ package com.anydownlod.ui.queue
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryDownloadEngine
+import com.anydownlod.ui.export.JobSourceUrls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -82,5 +83,72 @@ class QueuePresenterTest {
 
         assertEquals(JobState.CANCELLED, engine.jobs.value.byId("seed-downloading").state)
         assertEquals(JobState.COMPLETED, engine.jobs.value.byId("seed-completed").state)
+    }
+
+    @Test
+    fun bulkActionsOperateOnKnownIdsOnlyAndDoNotRollBack() {
+        val engine = engine()
+        val presenter = QueuePresenter(engine)
+
+        presenter.startSelected(setOf("seed-pending", "missing-id"))
+
+        assertEquals(JobState.QUEUED, engine.jobs.value.byId("seed-pending").state)
+        assertEquals(JobState.SCHEDULED, engine.jobs.value.byId("seed-scheduled").state)
+
+        presenter.cancelSelected(setOf("seed-downloading", "missing-id", "seed-completed"))
+
+        assertEquals(JobState.CANCELLED, engine.jobs.value.byId("seed-downloading").state)
+        assertEquals(JobState.COMPLETED, engine.jobs.value.byId("seed-completed").state)
+    }
+
+    private fun batchEngine(): InMemoryDownloadEngine {
+        val base = InMemoryDownloadEngine.sampleJobs().first { it.id == "seed-completed" }
+        fun child(id: String, state: JobState = JobState.COMPLETED, batch: String? = "batch-a") = base.copy(
+            id = id,
+            state = state,
+            parentBatchId = batch,
+            request = base.request.copy(sourceUrl = "https://example.com/watch?v=$id"),
+        )
+        return InMemoryDownloadEngine(
+            seedJobs = listOf(
+                child("batch-1"),
+                child("batch-2"),
+                child("batch-3", state = JobState.FAILED),
+                child("other-1", batch = null),
+            ),
+        )
+    }
+
+    @Test
+    fun selectedUrlsReturnOnePerSelectedJobAndIncludeFailures() {
+        val presenter = QueuePresenter(batchEngine())
+
+        assertEquals(
+            listOf("https://example.com/watch?v=batch-1", "https://example.com/watch?v=batch-3"),
+            presenter.selectedUrls(setOf("batch-1", "batch-3", "missing")),
+        )
+        assertTrue(presenter.selectedUrls(emptySet()).isEmpty())
+        assertEquals("", JobSourceUrls.text(presenter.selectedUrls(emptySet())))
+    }
+
+    @Test
+    fun batchUrlsIncludeEveryChildAndExcludeJobsOutsideTheParent() {
+        val presenter = QueuePresenter(batchEngine())
+
+        assertEquals(
+            listOf(
+                "https://example.com/watch?v=batch-1",
+                "https://example.com/watch?v=batch-2",
+                "https://example.com/watch?v=batch-3",
+            ),
+            presenter.batchUrls(setOf("batch-2")),
+        )
+        assertTrue(presenter.batchUrls(setOf("other-1")).isEmpty())
+        assertTrue("other-1" !in JobSourceUrls.text(presenter.batchUrls(setOf("batch-1"))))
+        val text = JobSourceUrls.text(presenter.batchUrls(setOf("batch-1")))
+        assertTrue(text.none { it == '\r' || it == '\u0000' })
+        for (forbidden in listOf("cookie", "signature", "googlevideo", "token=")) {
+            assertTrue(forbidden !in text, "copied text must not carry '$forbidden'")
+        }
     }
 }

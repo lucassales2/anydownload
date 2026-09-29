@@ -179,4 +179,32 @@ class AndroidRouteClassifier(
             connection.disconnect()
         }
     }
+
+    companion object {
+        /**
+         * Extension allowlist used only to split persisted jobs across engines
+         * at startup, without any network. New submits use [route]. A direct
+         * file without an extension resumes on Chaquopy, which handles direct
+         * files too, so this never invents a download.
+         */
+        private val DIRECT_EXTENSIONS = setOf(
+            "mp4", "mkv", "webm", "mov", "m4v", "avi",
+            "mp3", "m4a", "aac", "flac", "wav", "opus", "ogg",
+            "zip", "gz", "tgz", "tar", "pdf", "bin", "epub",
+            "jpg", "jpeg", "png", "gif", "webp",
+            "srt", "vtt", "ttml", "txt", "json",
+        )
+
+        fun resumeRoute(url: String, registry: ExtractorRegistry? = null): AndroidRoute {
+            if (registry?.suitableFor(url) != null) return AndroidRoute.KOTLIN
+            val path = url.substringAfter("://").substringBefore('?').substringBefore('#')
+            val last = path.substringAfterLast('/')
+            val extension = last.substringAfterLast('.', missingDelimiterValue = "")
+            return if (last != extension && extension.lowercase() in DIRECT_EXTENSIONS) {
+                AndroidRoute.DIRECT_FILE
+            } else {
+                AndroidRoute.CHAQUOPY
+            }
+        }
+    }
 }

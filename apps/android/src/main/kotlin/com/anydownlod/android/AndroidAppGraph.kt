@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.anydownlod.android.engine.AndroidExtractors
+import com.anydownlod.android.engine.AndroidJobDocumentStorage
+import com.anydownlod.android.engine.AndroidRoute
 import com.anydownlod.android.engine.AndroidRouteClassifier
 import com.anydownlod.android.engine.AndroidRoutingEngine
 import com.anydownlod.android.engine.ChaquopyEngine
@@ -32,9 +34,13 @@ import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.persist.JobDocumentRestore
+import com.anydownlod.core.persist.JobDocumentStore
+import com.anydownlod.core.persist.PersistingDownloadEngine
 import com.anydownlod.core.platform.JavaNetFileStore
 import com.anydownlod.core.platform.JavaNetHttpTransfer
 import com.anydownlod.core.postprocess.ToolkitCapabilities
+import java.io.File
 import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,25 +77,85 @@ class AndroidAppGraph(
     // D5: MediaMuxer/MediaExtractor remux. Capabilities stay M4A/Opus copy-only.
     private val toolkit = AndroidMediaToolkit(AndroidPlatformMuxer())
 
-    override val engine: DownloadEngine = AndroidRoutingEngine(
-        http = HttpDownloadEngine(
-            transfer = transfer,
-            fileStore = JavaNetFileStore(Path.of(downloadRoot)),
-            settings = settingsRepository,
-            scope = scope,
-            ioDispatcher = Dispatchers.Default,
-            registry = extractorRegistry,
-            toolkit = toolkit,
-        ),
-        chaquopy = ChaquopyEngine(
-            port = port,
-            downloadRoot = { downloadRoot },
-            scope = scope,
-            ioDispatcher = Dispatchers.Default,
-        ),
+    // D8: the shared jobs document in an app state directory, separate from
+    // the download root (`filesDir`). A restart marks active rows failed and
+    // retryable; nothing resumes by itself.
+    private val jobStorage = AndroidJobDocumentStorage(
+        File(context.getDir("state", Context.MODE_PRIVATE), "jobs.json"),
+    )
+    private val jobDocumentStore = JobDocumentStore()
+    private val restoreResult: JobDocumentRestore? = try {
+        jobDocumentStore.restore(jobStorage, settingsRepository.settings.value.clearCompletedAfterSeconds)
+    } catch (failure: Exception) {
+        null
+    }
+    private val restoredHttpJobs = (restoreResult?.jobs ?: emptyList()).filter {
+        AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) != AndroidRoute.CHAQUOPY
+    }
+    private val restoredChaquopyJobs = (restoreResult?.jobs ?: emptyList()).filter {
+        AndroidRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) == AndroidRoute.CHAQUOPY
+    }
+
+    /** Assigned in init; the engines' synchronous persist callbacks need it. */
+    private lateinit var persistingEngine: PersistingDownloadEngine
+
+    private fun saveJobs() {
+        if (::persistingEngine.isInitialized) persistingEngine.persistNow()
+    }
+
+    private val httpEngine = HttpDownloadEngine(
+        transfer = transfer,
+        fileStore = JavaNetFileStore(Path.of(downloadRoot)),
+        settings = settingsRepository,
+        scope = scope,
+        ioDispatcher = Dispatchers.Default,
+        registry = extractorRegistry,
+        toolkit = toolkit,
+        persist = { saveJobs() },
+        seedJobs = restoredHttpJobs,
+    )
+
+    private val chaquopyEngine = ChaquopyEngine(
+        port = port,
+        downloadRoot = { downloadRoot },
+        scope = scope,
+        ioDispatcher = Dispatchers.Default,
+        persist = { saveJobs() },
+        seedJobs = restoredChaquopyJobs,
+    )
+
+    private val routingEngine = AndroidRoutingEngine(
+        http = httpEngine,
+        chaquopy = chaquopyEngine,
         classify = { url -> classifier.route(url) },
         scope = scope,
     )
+
+    override val engine: DownloadEngine get() = persistingEngine
+
+    override val startupWarning: String? = when {
+        restoreResult == null ->
+            "The saved queue could not be read. It will be replaced when the queue changes."
+
+        restoreResult.interruptedActive > 0 ->
+            "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+
+        else -> null
+    }
+
+    init {
+        persistingEngine = PersistingDownloadEngine(
+            delegate = routingEngine,
+            documentStore = jobDocumentStore,
+            writeDocument = jobStorage::write,
+            clearAfterSeconds = { settingsRepository.settings.value.clearCompletedAfterSeconds },
+            // The routing flow merges asynchronously; the child engines' values
+            // are synchronous after a mutation.
+            jobsSnapshot = { chaquopyEngine.jobs.value + httpEngine.jobs.value },
+        )
+        // Persist the normalized rows (interrupted jobs) right away, like desktop.
+        persistingEngine.persistNow()
+    }
 
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = settingsRepository

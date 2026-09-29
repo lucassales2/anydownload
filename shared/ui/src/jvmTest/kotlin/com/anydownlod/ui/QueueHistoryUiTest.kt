@@ -1,6 +1,7 @@
 package com.anydownlod.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -12,6 +13,7 @@ import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryAppGraph
+import com.anydownlod.core.fake.InMemoryDownloadEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -109,5 +111,47 @@ class QueueHistoryUiTest {
         onNodeWithTag("queue-open-seed-downloading").performClick()
 
         assertEquals("https://example.com/watch?v=seed-downloading", opened)
+    }
+
+    @Test
+    fun copyIsExplicitAndBatchCopyIncludesFailedChildren() = runComposeUiTest {
+        val base = InMemoryDownloadEngine.sampleJobs().first { it.id == "seed-completed" }
+        fun child(id: String, state: JobState, batch: String? = "batch-a") = base.copy(
+            id = id,
+            state = state,
+            parentBatchId = batch,
+            request = base.request.copy(sourceUrl = "https://example.com/watch?v=$id"),
+        )
+        val graph = InMemoryAppGraph.seeded(
+            listOf(
+                child("batch-1", JobState.COMPLETED),
+                child("batch-2", JobState.FAILED),
+                child("other-1", JobState.COMPLETED, batch = null),
+            ),
+        )
+        var copied = ""
+        setContent { ShellUiHarness(graph, onCopyUrls = { copied = it }) }
+
+        onNodeWithText("Completed").performClick()
+
+        // Nothing selected: both copy actions are disabled and nothing copies.
+        onNodeWithTag("history-copy-selected").assertIsNotEnabled()
+        onNodeWithTag("history-copy-batch").assertIsNotEnabled()
+        assertEquals("", copied)
+
+        // Selecting one child copies exactly that source URL.
+        onNodeWithTag("history-list").performScrollToNode(hasTestTag("history-select-batch-1"))
+        onNodeWithTag("history-select-batch-1").performClick()
+        onNodeWithTag("history-copy-selected").performClick()
+        assertEquals("https://example.com/watch?v=batch-1", copied)
+        onNodeWithText("Copied 1 URL(s)").assertExists()
+
+        // The batch copy includes the failed sibling and excludes the other job.
+        onNodeWithTag("history-copy-batch").performClick()
+        assertEquals(
+            "https://example.com/watch?v=batch-1\nhttps://example.com/watch?v=batch-2",
+            copied,
+        )
+        onNodeWithText("Copied 2 URL(s)").assertExists()
     }
 }

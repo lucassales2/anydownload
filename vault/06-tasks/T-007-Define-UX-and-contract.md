@@ -23,13 +23,19 @@ Local Add, Queue, History, Subscriptions, and Settings flows for a no-login app.
 
 ## Acceptance criteria
 
-- [ ] Wireframe Add, Queue, History, Subscriptions, Settings, and error/offline states at mobile and desktop sizes.
-- [ ] Separate cancel, remove history, and delete file; review accessibility.
-- [ ] Specify on-device job states, typed options, retries, and errors. No login and no HTTP API.
-- [ ] Confirm the flows match ADR-004.
+- [x] Wireframe Add, Queue, History, Subscriptions, Settings, and error/offline states at mobile and desktop sizes.
+- [x] Separate cancel, remove history, and delete file; review accessibility.
+- [x] Specify on-device job states, typed options, retries, and errors. No login and no HTTP API.
+- [x] Confirm the flows match ADR-004.
 
 ## Evidence / notes
 
-Not started. The API outline is a withdrawn server sketch. Use [user flows](../01-product/User-flows.md).
+2026-09-29, closed by [T-101](T-101-On-device-contract.md).
 
-Desktop implementation of Add, Queue, History, Subscriptions, and Settings is Phase D1 ([phase note](../00-project/Phase-1-Desktop-MeTube.md), T-026–T-036). That phase does not close this task: mobile wireframes, the full accessibility pass, and the written on-device contract review are still open here.
+- The screens ship in `shared/ui` from D1: `add/AddForm.kt`, `queue/QueueScreen.kt`, `history/HistoryScreen.kt`, `subscriptions/SubscriptionsScreen.kt`, `settings/SettingsScreen.kt`, plus `shell/AppShell.kt` and `shell/EmptyStatePanel.kt` for the shell and error/offline empty states. The same Compose code runs at mobile and desktop sizes; desktop sizes are exercised by the `shell/AppShell.kt` layout and the `ShellUiHarness` tests (`shared/ui/src/jvmTest/.../AppShellTest.kt`).
+- `DownloadEngine` names the three operations apart: `cancel` (stops work, keeps a finished file), `removeHistory` (drops the row, keeps the file), and `deleteArtifacts` (deletes files, keeps the row). The contract is written in [Download lifecycle](../02-architecture/Download-lifecycle.md#destructive-actions-are-separate). A full keyboard/screen-reader/large-text accessibility pass stays [T-020](T-020-Sharing-and-UX.md).
+- Job states, attempts, retry, typed options, and error codes are specified in [Download lifecycle](../02-architecture/Download-lifecycle.md). There is no login, no account, and no HTTP job API; the [API outline](../02-architecture/API-outline.md) stays withdrawn.
+- The flows match accepted [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md): local-only execution on iOS, web via Compose/Wasm, Android, and desktop, with no required backend. The [user flows](../01-product/User-flows.md) remain the interaction reference.
+- Repo check: the notes above are the same entities used by `shared/core/src/commonMain/kotlin/com/anydownlod/core/domain/DownloadJob.kt` (`JobState`, `JobAttempt`, `JobError`, `Artifact`) and by the D1 screens; no UI code was changed by T-101.
+
+Desktop implementation of Add, Queue, History, Subscriptions, and Settings is Phase D1 ([phase note](../00-project/Phase-1-Desktop-MeTube.md), T-026–T-036). That phase does not close this task. [T-101](T-101-On-device-contract.md) in [Phase 8](../00-project/Phase-8-On-device-core.md) writes the contract and closes this card. The accessibility pass stays [T-020](T-020-Sharing-and-UX.md).

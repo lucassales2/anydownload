@@ -101,9 +101,10 @@ enum class CaptionPreference(val wireName: String) {
 
 /**
  * What a download does when the destination file already exists. [SKIP] is
- * the default: the existing file is kept and the job completes as skipped.
- * [METADATA] keeps the audio and rewrites its tags when the request carries
- * them. [FORCE] replaces the file.
+ * the default: an extractor-derived name gets a numeric suffix (` (2)`,
+ * ` (3)`, ...) instead of overwriting, while a requested/template path keeps
+ * the existing file and completes as skipped. [METADATA] keeps the audio and
+ * rewrites its tags when the request carries them. [FORCE] replaces the file.
  */
 enum class OverwriteMode(val wireName: String) {
     SKIP("skip"),

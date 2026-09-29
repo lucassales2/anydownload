@@ -17,6 +17,7 @@ import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeIE
 import com.anydownlod.core.extract.twitter.TwitterIE
 import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.extract.youtube.YoutubeTabIE
 import com.anydownlod.core.music.AudioMatcher
 import com.anydownlod.core.music.AudioProviders
 import com.anydownlod.core.music.LyricsFetcher
@@ -132,7 +133,7 @@ internal class DesktopApp(
             val extractorHttp = ExtractorHttp(transfer)
             val jsRuntime = com.anydownlod.core.jsc.QuickJsRuntime()
             val extractorRegistry = ExtractorRegistry(
-                listOf(YoutubeIE(extractorHttp, jsRuntime), TwitterIE(extractorHttp)),
+                listOf(YoutubeIE(extractorHttp, jsRuntime), YoutubeTabIE(extractorHttp), TwitterIE(extractorHttp)),
             )
             val classifier = DesktopRouteClassifier(registry = extractorRegistry)
             val toolkit = DesktopFfmpegToolkit(runner = processRunner, resolveExecutable = resolveExecutable)

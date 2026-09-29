@@ -60,4 +60,11 @@ class ArtifactNameTest {
         assertEquals("hidden.bin", build("https://fixtures.example.com/files/..hidden.bin"))
         assertEquals("%2f", build("https://fixtures.example.com/files/..%2f"))
     }
+
+    @Test
+    fun keepsUnicodeLettersInTitles() {
+        assertEquals("Café 日本語.mp4", ArtifactName.build("Café 日本語", "mp4", DownloadOptions()))
+        assertEquals("naïve - résumé.mp3", ArtifactName.build("naïve - résumé", "mp3", DownloadOptions()))
+        assertEquals("música/Canción.mp4", ArtifactName.build("Canción", "mp4", DownloadOptions(destinationFolder = "música")))
+    }
 }

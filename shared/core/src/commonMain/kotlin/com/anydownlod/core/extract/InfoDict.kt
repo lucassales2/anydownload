@@ -18,6 +18,7 @@
 package com.anydownlod.core.extract
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /** One downloadable stream, mirroring the upstream format dict. */
 @Serializable
@@ -115,6 +116,21 @@ data class InfoMedia(
 )
 
 /**
+ * Port-only (not an upstream field): one entry of a playlist or tab page.
+ * [failure] is set when the extractor already knows the entry is unavailable;
+ * [url] then still identifies the entry when the extractor has one. Empty
+ * [InfoDict.entries] means the result is not a playlist.
+ */
+@Serializable
+data class InfoEntry(
+    val id: String? = null,
+    val title: String? = null,
+    val url: String? = null,
+    /** In-process only; a failure is not a wire field. */
+    @Transient val failure: ExtractionError? = null,
+)
+
+/**
  * Upstream info dict. Fields not filled stay null or empty; the extractor key
  * and display name come from the owning [InfoExtractor].
  */
@@ -131,6 +147,11 @@ data class InfoDict(
      * then stays empty and a download names the media it wants.
      */
     val media: List<InfoMedia> = emptyList(),
+    /**
+     * Port-only: playlist/tab entries. Non-empty means the engine expands one
+     * bounded child job per entry instead of downloading media for this job.
+     */
+    val entries: List<InfoEntry> = emptyList(),
     val thumbnails: List<Thumbnail> = emptyList(),
     val duration: Double? = null,
     val uploader: String? = null,

@@ -52,6 +52,20 @@
       "portedAt": "2026-09-25"
     },
     {
+      "id": "YoutubeTabIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_tab.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeTabIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Playlist URL subset: youtube.com/playlist?list= and music.youtube.com/playlist?list= (www/m forms) only; one innertube `browse` request with the web client context; flat playlistVideoRenderer video id and title pairs in document order, first page only, hard cap 50. No channels, mixes (list=RD...), watch-page list parameters, continuations, cookies, live, other clients, or download.",
+      "tasks": [
+        "T-108"
+      ],
+      "portedAt": "2026-09-29"
+    },
+    {
       "id": "TwitterIE",
       "kind": "extractor",
       "upstreamPath": "yt_dlp/extractor/twitter.py",

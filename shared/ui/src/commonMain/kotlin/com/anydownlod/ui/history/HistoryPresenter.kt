@@ -4,6 +4,7 @@ import com.anydownlod.core.ArtifactDeletionResult
 import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.export.JobSourceUrls
 
 /**
  * Actions for the Completed list. Removing history, deleting a file, and
@@ -28,6 +29,12 @@ class HistoryPresenter(private val engine: DownloadEngine) {
 
     /** Deletes the artifacts under the download root; the row stays. */
     fun deleteArtifacts(jobId: String): ArtifactDeletionResult = engine.deleteArtifacts(jobId)
+
+    /** Source URLs of the selected rows, in row order (T-109). */
+    fun selectedUrls(ids: Set<String>): List<String> = JobSourceUrls.forSelected(engine.jobs.value, ids)
+
+    /** Source URLs of every child of the batches the selection names (T-109). */
+    fun batchUrls(ids: Set<String>): List<String> = JobSourceUrls.forBatches(engine.jobs.value, ids)
 
     companion object {
         /**

@@ -34,7 +34,10 @@ import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.copy_batch
 import com.anydownlod.ui.generated.resources.copy_error
+import com.anydownlod.ui.generated.resources.copy_urls
+import com.anydownlod.ui.generated.resources.copied_urls
 import com.anydownlod.ui.generated.resources.delete
 import com.anydownlod.ui.generated.resources.delete_failures
 import com.anydownlod.ui.generated.resources.delete_file
@@ -80,6 +83,7 @@ import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
 import com.anydownlod.ui.theme.colors
 import com.anydownlod.ui.theme.statusTone
+import com.anydownlod.ui.export.JobSourceUrls
 
 /**
  * Completed list: successes, failures, cancellations, and unknown future
@@ -87,16 +91,28 @@ import com.anydownlod.ui.theme.statusTone
  * differently-named actions with their own confirms.
  */
 @Composable
-fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
+fun HistoryScreen(
+    graph: AppGraph,
+    modifier: Modifier = Modifier,
+    onCopyUrls: ((String) -> Unit)? = null,
+) {
     val jobs by graph.engine.jobs.collectAsState()
     val rows = remember(jobs) { HistoryPresenter.rows(jobs) }
     val presenter = remember(graph.engine) { HistoryPresenter(graph.engine) }
     val clipboard = LocalClipboardManager.current
+    val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingRemoveIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf<UiText?>(null) }
     var statusTone by remember { mutableStateOf(StatusTone.Information) }
+
+    fun copy(urls: List<String>) {
+        if (urls.isEmpty()) return
+        copyUrls(JobSourceUrls.text(urls))
+        statusMessage = UiText.of(Res.string.copied_urls, urls.size)
+        statusTone = StatusTone.Information
+    }
 
     LaunchedEffect(rows) {
         selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
@@ -168,6 +184,20 @@ fun HistoryScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-remove-selected"),
                     )
+                    TextButton(
+                        onClick = { copy(presenter.selectedUrls(selectedIds)) },
+                        enabled = selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("history-copy-selected"),
+                    ) {
+                        Text(stringResource(Res.string.copy_urls))
+                    }
+                    TextButton(
+                        onClick = { copy(presenter.batchUrls(selectedIds)) },
+                        enabled = presenter.batchUrls(selectedIds).isNotEmpty(),
+                        modifier = Modifier.testTag("history-copy-batch"),
+                    ) {
+                        Text(stringResource(Res.string.copy_batch))
+                    }
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth().testTag("history-list"),

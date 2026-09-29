@@ -19,5 +19,9 @@ kotlin {
             implementation(libs.kotlinx.browser)
             implementation(libs.kotlinx.serialization.json)
         }
+        wasmJsTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }

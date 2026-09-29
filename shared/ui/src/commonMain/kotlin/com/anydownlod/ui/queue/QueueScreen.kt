@@ -25,11 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
+import com.anydownlod.ui.export.JobSourceUrls
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.cancel
 import com.anydownlod.ui.generated.resources.cancel_body
@@ -37,6 +40,9 @@ import com.anydownlod.ui.generated.resources.cancel_download
 import com.anydownlod.ui.generated.resources.cancel_many_title
 import com.anydownlod.ui.generated.resources.cancel_one_title
 import com.anydownlod.ui.generated.resources.cancel_selected
+import com.anydownlod.ui.generated.resources.copied_urls
+import com.anydownlod.ui.generated.resources.copy_batch
+import com.anydownlod.ui.generated.resources.copy_urls
 import com.anydownlod.ui.generated.resources.empty_queue_body
 import com.anydownlod.ui.generated.resources.empty_queue_title
 import com.anydownlod.ui.generated.resources.eta
@@ -50,6 +56,7 @@ import com.anydownlod.ui.generated.resources.queue_title
 import com.anydownlod.ui.generated.resources.start
 import com.anydownlod.ui.generated.resources.start_selected
 import com.anydownlod.ui.generated.resources.waiting_until
+import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.shell.EmptyStatePanel
 import org.jetbrains.compose.resources.stringResource
@@ -61,6 +68,7 @@ import com.anydownlod.ui.theme.ActionRow
 import com.anydownlod.ui.theme.DestructiveOutlinedButton
 import com.anydownlod.ui.theme.DestructiveTextButton
 import com.anydownlod.ui.theme.KpiTile
+import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.ObjectCard
 import com.anydownlod.ui.theme.PageHeading
 import com.anydownlod.ui.theme.PageInset
@@ -76,12 +84,25 @@ import com.anydownlod.ui.theme.statusTone
  * resolving, downloading, and post-processing rows.
  */
 @Composable
-fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
+fun QueueScreen(
+    graph: AppGraph,
+    modifier: Modifier = Modifier,
+    onCopyUrls: ((String) -> Unit)? = null,
+) {
     val jobs by graph.engine.jobs.collectAsState()
     val rows = remember(jobs) { QueuePresenter.rows(jobs) }
     val presenter = remember(graph.engine) { QueuePresenter(graph.engine) }
+    val clipboard = LocalClipboardManager.current
+    val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingCancelIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var statusMessage by remember { mutableStateOf<UiText?>(null) }
+
+    fun copy(urls: List<String>) {
+        if (urls.isEmpty()) return
+        copyUrls(JobSourceUrls.text(urls))
+        statusMessage = UiText.of(Res.string.copied_urls, urls.size)
+    }
 
     LaunchedEffect(rows) {
         selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
@@ -117,6 +138,13 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         tone = StatusTone.Critical,
                     )
                 }
+                statusMessage?.let { message ->
+                    MessageStrip(
+                        text = message.resolve(),
+                        tone = StatusTone.Information,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 SelectionBar(
                     selection = selectionState(selectedIds.size, rows.size),
                     onToggleAll = {
@@ -145,6 +173,20 @@ fun QueueScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("queue-cancel-selected"),
                     )
+                    TextButton(
+                        onClick = { copy(presenter.selectedUrls(selectedIds)) },
+                        enabled = selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("queue-copy-selected"),
+                    ) {
+                        Text(stringResource(Res.string.copy_urls))
+                    }
+                    TextButton(
+                        onClick = { copy(presenter.batchUrls(selectedIds)) },
+                        enabled = presenter.batchUrls(selectedIds).isNotEmpty(),
+                        modifier = Modifier.testTag("queue-copy-batch"),
+                    ) {
+                        Text(stringResource(Res.string.copy_batch))
+                    }
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth().testTag("queue-list"),

@@ -61,6 +61,9 @@
     <string name="file_removed">%1$s (file removed)</string>
     <string name="retry">Retry</string>
     <string name="copy_error">Copy error</string>
+    <string name="copy_urls">Copy URLs</string>
+    <string name="copy_batch">Copy batch</string>
+    <string name="copied_urls">Copied %1$d URL(s)</string>
     <string name="open_file">Open file</string>
     <string name="reveal_in_folder">Reveal in folder</string>
     <string name="delete_file">Delete file</string>

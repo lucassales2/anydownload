@@ -384,6 +384,50 @@ class WebExtensionEngineTest {
     }
 
     @Test
+    fun aNotYetAvailableExtractionSchedulesWithoutDownloading() = runTest {
+        val bridge = FakeBridge(available = true)
+        var available = false
+        val extractor = object : com.anydownlod.core.extract.InfoExtractor(
+            ieKey = com.anydownlod.core.extract.ExtractorRegistry.GENERIC_KEY,
+            http = com.anydownlod.core.extract.ExtractorHttp(UnusedTransfer),
+            validUrl = Regex("""https?://youtube\.example/watch.*"""),
+        ) {
+            override suspend fun extract(url: String): com.anydownlod.core.extract.InfoDict {
+                if (!available) throw com.anydownlod.core.extract.ExtractionError.NotYetAvailable()
+                return com.anydownlod.core.extract.InfoDict(
+                    id = "fixture",
+                    title = "Fixture Clip",
+                    formats = listOf(
+                        com.anydownlod.core.extract.MediaFormat(
+                            formatId = "18",
+                            url = "https://cdn.fixtures.example.net/clip.mp4",
+                            ext = "mp4",
+                            vcodec = "avc1",
+                            acodec = "mp4a",
+                        ),
+                    ),
+                )
+            }
+        }
+        val registry = com.anydownlod.core.extract.ExtractorRegistry(listOf(extractor))
+        val engine = engine(bridge, this, registry)
+
+        val job = engine.submit(request(url = "https://youtube.example/watch?v=fixture", key = "web-scheduled"))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.SCHEDULED, engine.jobs.value.first { it.id == job.id }.state)
+        assertTrue(bridge.downloadCalls.isEmpty(), "a not-yet-available source must not download")
+
+        available = true
+        engine.start(job.id)
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        assertEquals(1, bridge.downloadCalls.size)
+    }
+
+    @Test
     fun aStatusSelectionSavesOneFilePerSelectedVideo() = runTest {
         val bridge = FakeBridge(
             available = true,
@@ -475,6 +519,27 @@ class WebExtensionEngineTest {
                     ),
                 ),
             )
+    }
+
+    @Test
+    fun deleteArtifactsReportsTheBrowserLimitationAndKeepsTheRow() = runTest {
+        val bridge = FakeBridge(available = true)
+        val engine = engine(bridge, this)
+
+        val job = engine.submit(request(key = "web-delete"))
+        testScheduler.advanceUntilIdle()
+        val before = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, before.state)
+        assertEquals(1, before.artifacts.size)
+
+        val result = engine.deleteArtifacts(job.id)
+
+        assertEquals(0, result.deletedCount)
+        assertEquals(listOf("tiny.bin"), result.failures)
+        assertFalse(result.allDeleted)
+        val after = engine.jobs.value.first { it.id == job.id }
+        assertEquals(before.artifacts, after.artifacts, "web delete must not mark the artifact removed")
+        assertEquals(JobState.COMPLETED, after.state)
     }
 
     private object UnusedTransfer : com.anydownlod.core.platform.HttpTransfer {

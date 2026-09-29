@@ -1,0 +1,68 @@
+{
+  "metadata": {
+    "playlistMetadataRenderer": {
+      "title": "Fixture Playlist",
+      "description": "Synthetic fixture. No real playlist data."
+    }
+  },
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "title": "Videos",
+            "selected": true,
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "itemSectionRenderer": {
+                      "contents": [
+                        {
+                          "playlistVideoListRenderer": {
+                            "contents": [
+                              {
+                                "playlistVideoRenderer": {
+                                  "videoId": "AAAAAAAAAAA",
+                                  "title": {
+                                    "runs": [
+                                      { "text": "Fixture One" }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "playlistVideoRenderer": {
+                                  "videoId": "BBBBBBBBBBB",
+                                  "title": {
+                                    "runs": [
+                                      { "text": "Fixture Two" }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "playlistVideoRenderer": {
+                                  "videoId": "CCCCCCCCCCC",
+                                  "title": {
+                                    "runs": [
+                                      { "text": "Fixture Three" }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

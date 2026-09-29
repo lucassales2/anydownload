@@ -14,9 +14,14 @@ import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeIE
 import com.anydownlod.core.extract.twitter.TwitterIE
 import com.anydownlod.core.extract.youtube.YoutubeSearch
+import com.anydownlod.core.extract.youtube.YoutubeTabIE
 import com.anydownlod.core.music.AudioMatcher
 import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
+import com.anydownlod.core.persist.JobDocumentRestore
+import com.anydownlod.core.persist.JobDocumentStorageError
+import com.anydownlod.core.persist.JobDocumentStore
+import com.anydownlod.core.persist.PersistingDownloadEngine
 import com.anydownlod.core.platform.WebExtensionTransfer
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
@@ -24,6 +29,7 @@ import com.anydownlod.core.fake.InMemoryToolProbe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The web graph: the shared UI plus [WebExtensionEngine] over the
@@ -42,14 +48,60 @@ class WebAppGraph : AppGraph {
     internal val browserJsRuntime = com.anydownlod.core.jsc.BrowserJsRuntime()
     private val extensionHttp = ExtractorHttp(WebExtensionTransfer(bridge))
     private val extractorRegistry = ExtractorRegistry(
-        listOf(YoutubeIE(extensionHttp, browserJsRuntime), TwitterIE(extensionHttp)),
+        listOf(YoutubeIE(extensionHttp, browserJsRuntime), YoutubeTabIE(extensionHttp), TwitterIE(extensionHttp)),
     )
 
-    override val engine: DownloadEngine = WebExtensionEngine(
+    // D8: the jobs document lives in localStorage (metadata only). The page
+    // keeps the live queue in memory; a refused write surfaces a typed error
+    // and never drops a row already on screen.
+    private val jobStorage = WebJobDocumentStorage()
+    private val jobDocumentStore = JobDocumentStore()
+    private val restoreResult: JobDocumentRestore? = try {
+        jobDocumentStore.restore(jobStorage, clearAfterSeconds = 0)
+    } catch (failure: Exception) {
+        null
+    }
+
+    /** Assigned in init; the engine's synchronous persist callback needs it. */
+    private lateinit var persistingEngine: PersistingDownloadEngine
+
+    private fun saveJobs() {
+        if (::persistingEngine.isInitialized) persistingEngine.persistNow()
+    }
+
+    private val delegateEngine = WebExtensionEngine(
         bridge = bridge,
         scope = scope,
         registry = extractorRegistry,
+        persist = { saveJobs() },
+        seedJobs = restoreResult?.jobs ?: emptyList(),
     )
+
+    override val engine: DownloadEngine get() = persistingEngine
+
+    /** The typed web persistence state, exposed for the host and its tests. */
+    val jobStorageError: StateFlow<JobDocumentStorageError?> get() = persistingEngine.storageError
+
+    override val startupWarning: String? = when {
+        restoreResult == null ->
+            "The saved queue could not be read. It will be replaced when the queue changes."
+
+        restoreResult.interruptedActive > 0 ->
+            "Marked ${restoreResult.interruptedActive} interrupted job(s) for retry."
+
+        else -> null
+    }
+
+    init {
+        persistingEngine = PersistingDownloadEngine(
+            delegate = delegateEngine,
+            documentStore = jobDocumentStore,
+            writeDocument = jobStorage::write,
+            clearAfterSeconds = { 0L },
+        )
+        // Persist the normalized rows (interrupted jobs) right away, like desktop.
+        persistingEngine.persistNow()
+    }
 
     override val subscriptions: SubscriptionRepository = InMemorySubscriptionRepository()
     override val settings: SettingsRepository = InMemorySettingsRepository()

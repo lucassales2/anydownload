@@ -11,16 +11,20 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
+import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.ui.App
+import com.anydownlod.ui.ShellUiHarness
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -201,6 +205,60 @@ class AddFormUiTest {
         onNodeWithTag("add-paste-button").performClick()
         onNodeWithText("Clipboard is empty.").assertExists()
         onNodeWithTag("add-download-button").assertIsNotEnabled()
+    }
+
+    @Test
+    fun advancedAudioContainersFollowDesktopCapabilities() = runComposeUiTest {
+        val base = InMemoryAppGraph()
+        val desktop = object : AppGraph by base {
+            override val toolkitCapabilities: ToolkitCapabilities = ToolkitCapabilities(
+                canMerge = true,
+                audioContainers = setOf(
+                    AudioContainer.M4A,
+                    AudioContainer.OPUS,
+                    AudioContainer.MP3,
+                    AudioContainer.WAV,
+                    AudioContainer.FLAC,
+                ),
+            )
+        }
+        setContent { ShellUiHarness(desktop) }
+
+        onNodeWithText("Audio").performScrollTo().performClick()
+        onNodeWithTag("add-audio-mp3").assertIsEnabled()
+        onNodeWithTag("add-audio-wav").assertIsEnabled()
+        onNodeWithTag("add-audio-flac").assertIsEnabled()
+    }
+
+    @Test
+    fun advancedAudioContainersFollowMobileCapabilities() = runComposeUiTest {
+        val base = InMemoryAppGraph()
+        val mobile = object : AppGraph by base {
+            override val toolkitCapabilities: ToolkitCapabilities = ToolkitCapabilities(
+                canMerge = true,
+                audioContainers = setOf(AudioContainer.M4A, AudioContainer.OPUS),
+            )
+        }
+        setContent { ShellUiHarness(mobile) }
+
+        onNodeWithText("Audio").performScrollTo().performClick()
+        onNodeWithTag("add-audio-m4a").assertIsEnabled()
+        onNodeWithTag("add-audio-opus").assertIsEnabled()
+        onNodeWithTag("add-audio-mp3").assertIsNotEnabled()
+        onNodeWithTag("add-audio-wav").assertIsNotEnabled()
+        onNodeWithTag("add-audio-flac").assertIsNotEnabled()
+        onNodeWithText("This host cannot write MP3", substring = true).assertExists()
+    }
+
+    @Test
+    fun advancedAudioContainersAreAllDisabledOnWeb() = runComposeUiTest {
+        setContent { ShellUiHarness(InMemoryAppGraph()) }
+
+        onNodeWithText("Audio").performScrollTo().performClick()
+        AudioContainer.entries.forEach { container ->
+            onNodeWithTag("add-audio-${container.wireName}").assertIsNotEnabled()
+        }
+        onNodeWithText("This host cannot write FLAC", substring = true).assertExists()
     }
 }
 

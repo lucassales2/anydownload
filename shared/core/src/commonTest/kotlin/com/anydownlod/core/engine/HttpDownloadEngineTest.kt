@@ -17,6 +17,7 @@ import com.anydownlod.core.platform.HttpFailureReason
 import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.channels.Channel
@@ -119,7 +120,37 @@ class HttpDownloadEngineTest {
         override suspend fun close() = Unit
     }
 
-    private class FakeFileStore : FileStore {
+    /** Suspends on the gate before the first read only. */
+    private class OneShotGatedBody(
+        private val chunks: List<ByteArray>,
+        private val gate: CompletableDeferred<Unit>,
+    ) : HttpBody {
+        private var chunkIndex = 0
+        private var position = 0
+        private var released = false
+
+        override suspend fun readNext(buffer: ByteArray): Int {
+            if (!released) {
+                gate.await()
+                released = true
+            }
+            currentCoroutineContext().ensureActive()
+            while (chunkIndex < chunks.size && position >= chunks[chunkIndex].size) {
+                chunkIndex++
+                position = 0
+            }
+            if (chunkIndex >= chunks.size) return -1
+            val chunk = chunks[chunkIndex]
+            val count = minOf(chunk.size - position, buffer.size)
+            chunk.copyInto(buffer, 0, position, position + count)
+            position += count
+            return count
+        }
+
+        override suspend fun close() = Unit
+    }
+
+    private open class FakeFileStore : FileStore {
         val created = mutableListOf<FakeFile>()
         val publishTargets = mutableListOf<String>()
         val deleted = mutableListOf<String>()
@@ -132,6 +163,9 @@ class HttpDownloadEngineTest {
         }
 
         override fun publish(temp: FileHandle, relativePath: String): String {
+            check(!relativePath.startsWith("/") && relativePath.split('/').none { it == ".." }) {
+                "The artifact path escapes the download root."
+            }
             val file = temp as FakeFile
             check(!file.published) { "A temp file may only be published once." }
             file.published = true
@@ -148,7 +182,7 @@ class HttpDownloadEngineTest {
         override fun size(relativePath: String): Long? = live[relativePath]?.bytes?.size?.toLong()
     }
 
-    private class FakeFile : FileHandle {
+    private open class FakeFile : FileHandle {
         val bytes = GrowingBytes()
         var closed = false
         var published = false
@@ -164,6 +198,38 @@ class HttpDownloadEngineTest {
 
         override fun discard() {
             discarded = true
+        }
+    }
+
+    private class FailingWriteFile : FakeFile() {
+        override fun write(data: ByteArray, length: Int) {
+            throw IllegalStateException("disk full")
+        }
+    }
+
+    /** A store whose handle cannot write, so the engine must type the failure. */
+    private class FailingWriteFileStore : FileStore {
+        val created = mutableListOf<FakeFile>()
+        val publishTargets = mutableListOf<String>()
+
+        override fun createTempFile(): FileHandle = FailingWriteFile().also { created += it }
+
+        override fun publish(temp: FileHandle, relativePath: String): String {
+            publishTargets += relativePath
+            return relativePath
+        }
+
+        override fun delete(relativePath: String): Boolean = false
+
+        override fun size(relativePath: String): Long? = null
+    }
+
+    /** Runs [onPublish] inside publish, so a test can race cancel with commit. */
+    private class CallbackFileStore(private val onPublish: () -> Unit) : FakeFileStore() {
+        override fun publish(temp: FileHandle, relativePath: String): String {
+            val published = super.publish(temp, relativePath)
+            onPublish()
+            return published
         }
     }
 
@@ -799,6 +865,220 @@ class HttpDownloadEngineTest {
         // The capped read never saw the late media element, so nothing was fetched.
         assertEquals(1, transfer.requested.size)
         assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun concurrencyLimitOneQueuesTheSecondJobUntilTheFirstFinishes() = runTest {
+        val payload = ByteArray(64) { (it % 251).toByte() }
+        val gate = CompletableDeferred<Unit>()
+        val transfer = FakeTransfer { url ->
+            val body: HttpBody = if (url.endsWith("first.bin")) {
+                OneShotGatedBody(listOf(payload), gate)
+            } else {
+                FakeBody(listOf(payload))
+            }
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                totalBytes = payload.size.toLong(),
+                body = body,
+            )
+        }
+        val settings = settings().apply { update { it.copy(maxConcurrentDownloads = 1) } }
+        val engine = engine(transfer, settings = settings, scope = this)
+
+        val first = engine.submit(request(url = "https://fixtures.example.com/files/first.bin", key = "limit-1"))
+        val second = engine.submit(request(url = "https://fixtures.example.com/files/second.bin", key = "limit-2"))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.DOWNLOADING, engine.jobs.value.first { it.id == first.id }.state)
+        assertEquals(JobState.QUEUED, engine.jobs.value.first { it.id == second.id }.state)
+
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == first.id }.state)
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == second.id }.state)
+    }
+
+    @Test
+    fun concurrencyLimitIsReadWhenAWorkerStarts() = runTest {
+        val payload = ByteArray(32) { (it % 251).toByte() }
+        val gate = CompletableDeferred<Unit>()
+        val transfer = FakeTransfer { url ->
+            val body: HttpBody = if (url.endsWith("first.bin")) {
+                OneShotGatedBody(listOf(payload), gate)
+            } else {
+                FakeBody(listOf(payload))
+            }
+            HttpResponse.Final(statusCode = 200, contentType = "application/octet-stream", body = body)
+        }
+        val settings = settings().apply { update { it.copy(maxConcurrentDownloads = 1) } }
+        val engine = engine(transfer, settings = settings, scope = this)
+
+        val first = engine.submit(request(url = "https://fixtures.example.com/files/first.bin", key = "raise-1"))
+        testScheduler.advanceUntilIdle()
+        assertEquals(JobState.DOWNLOADING, engine.jobs.value.first { it.id == first.id }.state)
+
+        // The limit is raised before the second job starts; the new worker
+        // reads it at start instead of using a value captured at build time.
+        settings.update { it.copy(maxConcurrentDownloads = 2) }
+        val second = engine.submit(request(url = "https://fixtures.example.com/files/second.bin", key = "raise-2"))
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == second.id }.state)
+        assertEquals(JobState.DOWNLOADING, engine.jobs.value.first { it.id == first.id }.state)
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun retryOfCompletedJobDoesNotDownloadAgain() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(24))),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "retry-completed-key"))
+        testScheduler.advanceUntilIdle()
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == job.id }.state)
+        assertEquals(1, transfer.requested.size)
+
+        val retried = engine.retry(job.id)
+        assertNotNull(retried)
+        assertEquals(JobState.COMPLETED, retried.state)
+        testScheduler.advanceUntilIdle()
+
+        val after = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, after.state)
+        assertEquals(1, after.attempts.size)
+        assertEquals(1, transfer.requested.size)
+        assertEquals(1, store.publishTargets.size)
+    }
+
+    @Test
+    fun lateCancelAfterCompletionKeepsTheCompletedFile() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(24))),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "late-cancel-key"))
+        testScheduler.advanceUntilIdle()
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == job.id }.state)
+
+        val cancelled = engine.cancel(job.id)
+        assertNotNull(cancelled)
+        assertEquals(JobState.COMPLETED, cancelled.state)
+        assertEquals(1, engine.jobs.value.first { it.id == job.id }.artifacts.size)
+        assertTrue(store.live.containsKey("tiny.bin"))
+    }
+
+    @Test
+    fun aCollisionGetsANumericSuffixAndDoesNotOverwrite() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(16))),
+            )
+        }
+        val store = FakeFileStore()
+        store.live["tiny.bin"] = FakeFile()
+        store.live["tiny (2).bin"] = FakeFile()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "collision-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state)
+        assertEquals("tiny (3).bin", finished.artifacts.single().relativePath)
+        assertEquals(listOf("tiny (3).bin"), store.publishTargets)
+        assertTrue(store.live.containsKey("tiny.bin"))
+        assertTrue(store.live.containsKey("tiny (2).bin"))
+    }
+
+    @Test
+    fun aTraversalRequestedPathFailsTypedWithoutWriting() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(8))),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(
+            DownloadRequest(
+                sourceUrl = "https://fixtures.example.com/files/tiny.bin",
+                relativePath = "../escape.mp4",
+            ),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, finished.error?.code)
+        assertTrue(finished.artifacts.isEmpty())
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun aHostWriteFailureIsDiskExhaustedAndDiscardsTheTemp() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(64))),
+            )
+        }
+        val store = FailingWriteFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "disk-key"))
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.FAILED, finished.state)
+        assertEquals(JobErrorCode.DISK_EXHAUSTED, finished.error?.code)
+        assertFalse(finished.error?.message.orEmpty().contains("/"))
+        assertTrue(store.created.single().discarded)
+        assertTrue(store.publishTargets.isEmpty())
+    }
+
+    @Test
+    fun removeHistoryDropsTheRowButKeepsTheFile() = runTest {
+        val transfer = FakeTransfer {
+            HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/octet-stream",
+                body = FakeBody(listOf(ByteArray(24))),
+            )
+        }
+        val store = FakeFileStore()
+        val engine = engine(transfer, store, scope = this)
+
+        val job = engine.submit(request(key = "remove-keeps-file"))
+        testScheduler.advanceUntilIdle()
+        val path = engine.jobs.value.first { it.id == job.id }.artifacts.single().relativePath
+        assertTrue(store.live.containsKey(path))
+
+        assertTrue(engine.removeHistory(job.id))
+
+        assertTrue(store.live.containsKey(path), "removing history must not delete the file")
+        assertTrue(engine.jobs.value.isEmpty())
     }
 }
 

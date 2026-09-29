@@ -6,14 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-007 — Define UX and review the contract](06-tasks/T-007-Define-UX-and-contract.md) #M0 #P1
-
-- [ ] [T-009 — Local engine vertical slice](06-tasks/T-009-Backend-vertical-slice.md) #M1 #P0
-- [ ] [T-010 — Local flow on all four targets](06-tasks/T-010-Remote-vertical-slice.md) #M1 #P0
-- [ ] [T-011 — Durable queue, recovery and live events](06-tasks/T-011-Durable-queue.md) #M2 #P0
-- [ ] [T-012 — Playlists, channels and batch links](06-tasks/T-012-Playlists-and-batches.md) #M2 #P1
-- [ ] [T-013 — Video profiles and audio extraction](06-tasks/T-013-Media-formats.md) #M2 #P1
-- [ ] [T-014 — History, storage and artifact delivery](06-tasks/T-014-Storage-and-delivery.md) #M2 #P1
 - [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #M3 #P1
 - [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #M3 #P1
 - [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #M3 #P1
@@ -28,7 +20,6 @@ tags: [project, board]
 
 ## In progress
 
-- [ ] [T-008 — Scaffold shared Kotlin clients](06-tasks/T-008-Scaffold-KMP-clients.md) #M1 #P0
 
 ## Blocked
 
@@ -39,8 +30,29 @@ tags: [project, board]
 
 
 
+
 ## Done
 
+- [x] [T-112 — Phase 8 verification](06-tasks/T-112-Phase-8-verification.md) #D8 #P0
+- [x] [T-011 — Durable queue, recovery and live events](06-tasks/T-011-Durable-queue.md) #M2 #P0
+- [x] [T-012 — Playlists, channels and batch links](06-tasks/T-012-Playlists-and-batches.md) #M2 #P1
+- [x] [T-014 — History, storage and artifact delivery](06-tasks/T-014-Storage-and-delivery.md) #M2 #P1
+- [x] [T-111 — Profile controls follow the host toolkit](06-tasks/T-111-Profile-honesty.md) #D8 #P1
+- [x] [T-013 — Video profiles and audio extraction](06-tasks/T-013-Media-formats.md) #M2 #P1
+- [x] [T-110 — Names, folders, and history actions](06-tasks/T-110-History-names-folders.md) #D8 #P1
+- [x] [T-109 — Copy or export batch and playlist URLs](06-tasks/T-109-Batch-export.md) #D8 #P1
+- [x] [T-108 — YouTube playlist subset](06-tasks/T-108-Youtube-playlist-subset.md) #D8 #P0
+- [x] [T-107 — Playlist entries become child jobs](06-tasks/T-107-Playlist-expansion.md) #D8 #P0
+- [x] [T-106 — Gate: the same journey on four hosts](06-tasks/T-106-Four-host-m1.md) #D8 #P0
+- [x] [T-008 — Scaffold shared Kotlin clients](06-tasks/T-008-Scaffold-KMP-clients.md) #M1 #P0
+- [x] [T-009 — Local engine vertical slice](06-tasks/T-009-Backend-vertical-slice.md) #M1 #P0
+- [x] [T-010 — Local flow on all four targets](06-tasks/T-010-Remote-vertical-slice.md) #M1 #P0
+- [x] [T-105 — Gate: desktop download, failure, and restart](06-tasks/T-105-Gate-desktop-restart.md) #D8 #P0
+- [x] [T-104 — Concurrency, cancel, and retry](06-tasks/T-104-Worker-cancel-retry.md) #D8 #P0
+- [x] [T-103 — Android, iOS, and web restore the queue](06-tasks/T-103-Hosts-restore-queue.md) #D8 #P0
+- [x] [T-102 — Shared job document](06-tasks/T-102-Shared-job-document.md) #D8 #P0
+- [x] [T-101 — Write the on-device contract](06-tasks/T-101-On-device-contract.md) #D8 #P0
+- [x] [T-007 — Define UX and review the contract](06-tasks/T-007-Define-UX-and-contract.md) #M0 #P1
 - [x] [T-100 — Phase 7 verification](06-tasks/T-100-Phase-7-verification.md) #D7 #P0
 - [x] [T-099 — Web: the extension carries the X lookup and the media GET](06-tasks/T-099-Web-extension-x-requests.md) #D7 #P0
 - [x] [T-098 — iOS downloads a selected status video fixture](06-tasks/T-098-Ios-x-status-download.md) #D7 #P0

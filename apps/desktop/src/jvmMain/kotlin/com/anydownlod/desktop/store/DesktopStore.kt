@@ -2,12 +2,8 @@ package com.anydownlod.desktop.store
 
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
-import com.anydownlod.core.domain.JobError
-import com.anydownlod.core.domain.JobErrorCode
-import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.Subscription
-import com.anydownlod.core.validation.RelativePathValidation
-import com.anydownlod.core.validation.RelativePathValidator
+import com.anydownlod.core.persist.JobDocumentStore
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -58,7 +54,7 @@ class DesktopStore(
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
-    private val lastWrittenJobs = mutableMapOf<String, DownloadJob>()
+    private val jobsStore = JobDocumentStore(now = now)
     private var currentSettings: AppSettings? = null
     private var cookieFilePath: String? = null
 
@@ -72,11 +68,8 @@ class DesktopStore(
 
     fun load(): PersistedState = synchronized(lock) {
         loadWarning = null
-        lastWrittenJobs.clear()
         val warnings = mutableListOf<String>()
 
-        val loadedJobs = readJson(jobsFile, JobsDocument(), warnings)
-            ?.jobs?.map { it.toDomain() } ?: emptyList()
         val loadedSubscriptions = readJson(subscriptionsFile, SubscriptionsDocument(), warnings)
             ?.subscriptions?.map { it.toDomain() } ?: emptyList()
         val settingsDocument = readJson(settingsFile, SettingsDocument(), warnings) ?: SettingsDocument()
@@ -87,28 +80,27 @@ class DesktopStore(
         }
         currentSettings = settings
 
-        var sanitized = 0
-        var interrupted = 0
-        val normalized = loadedJobs.map { job ->
-            val cleaned = sanitizeDestination(job)
-            if (cleaned !== job) sanitized++
-            if (cleaned.state.isInterruptedOnStartup()) {
-                interrupted++
-                interrupt(cleaned, now())
-            } else {
-                cleaned
-            }
+        val jobsText = readTextFile(jobsFile, warnings)
+        val restored = try {
+            jobsStore.restore(jobsText, settings.clearCompletedAfterSeconds)
+        } catch (failure: Exception) {
+            moveCorruptAside(jobsFile)
+            warnings += "The previous ${jobsFile.fileName} could not be read."
+            jobsStore.restore(null, settings.clearCompletedAfterSeconds)
         }
-        if (sanitized > 0) warnings += "Reset $sanitized invalid destination folder(s)."
-        if (interrupted > 0) warnings += "Marked $interrupted interrupted job(s) for retry."
+        if (restored.sanitizedDestinations > 0) {
+            warnings += "Reset ${restored.sanitizedDestinations} invalid destination folder(s)."
+        }
+        if (restored.interruptedActive > 0) {
+            warnings += "Marked ${restored.interruptedActive} interrupted job(s) for retry."
+        }
+        if (restored.clearedExpired > 0) {
+            warnings += "Cleared ${restored.clearedExpired} expired row(s)."
+        }
 
-        val (jobs, cleared) = dropExpired(normalized, settings.clearCompletedAfterSeconds, now())
-        if (cleared > 0) warnings += "Cleared $cleared expired row(s)."
-
-        jobs.forEach { lastWrittenJobs[it.id] = it }
         loadWarning = warnings.takeIf { it.isNotEmpty() }?.joinToString(" ")
 
-        PersistedState(jobs = jobs, subscriptions = loadedSubscriptions, settings = settings)
+        PersistedState(jobs = restored.jobs, subscriptions = loadedSubscriptions, settings = settings)
     }
 
     /**
@@ -117,26 +109,16 @@ class DesktopStore(
      * written version instead of regressing the file.
      */
     fun saveJobs(jobs: List<DownloadJob>): JobsSaveResult = synchronized(lock) {
-        val (kept, cleared) = dropExpired(
+        val saved = jobsStore.save(
             jobs = jobs,
             clearAfterSeconds = currentSettings?.clearCompletedAfterSeconds ?: 0L,
-            at = now(),
         )
-        val accepted = mutableListOf<DownloadJob>()
-        var skipped = 0
-        kept.forEach { job ->
-            val last = lastWrittenJobs[job.id]
-            if (last != null && job.revision < last.revision) {
-                skipped++
-                accepted += last
-            } else {
-                accepted += job
-                lastWrittenJobs[job.id] = job
-            }
-        }
-        lastWrittenJobs.keys.retainAll { id -> accepted.any { it.id == id } }
-        writeDocument(jobsFile, JobsDocument(accepted.map { it.toDto() }))
-        JobsSaveResult(written = accepted.size, skippedStale = skipped, clearedExpired = cleared)
+        writeAtomically(jobsFile, saved.document)
+        JobsSaveResult(
+            written = saved.written,
+            skippedStale = saved.skippedStale,
+            clearedExpired = saved.clearedExpired,
+        )
     }
 
     fun saveSubscriptions(subscriptions: List<Subscription>) = synchronized(lock) {
@@ -164,6 +146,19 @@ class DesktopStore(
     fun setCookieFilePath(path: String?) = synchronized(lock) {
         cookieFilePath = path
         currentSettings?.let { settings -> writeDocument(settingsFile, settings.toDocument(path)) }
+    }
+
+    /** Reads a state file as text, moving an unreadable file aside. Blank is empty. */
+    private fun readTextFile(path: Path, warnings: MutableList<String>): String? {
+        if (!Files.exists(path)) return null
+        val text = try {
+            Files.readString(path)
+        } catch (failure: Exception) {
+            moveCorruptAside(path)
+            warnings += "The previous ${path.fileName} could not be read."
+            return null
+        }
+        return text.takeIf { it.isNotBlank() }
     }
 
     private inline fun <reified T> readJson(path: Path, fallback: T, warnings: MutableList<String>): T? {
@@ -210,71 +205,6 @@ class DesktopStore(
         }
     }
 
-    private fun sanitizeDestination(job: DownloadJob): DownloadJob {
-        val folder = job.request.options.destinationFolder ?: return job
-        return when (val result = RelativePathValidator.validate(folder)) {
-            is RelativePathValidation.Valid -> {
-                val normalized = result.path.ifEmpty { null }
-                if (normalized == folder) {
-                    job
-                } else {
-                    job.copy(
-                        request = job.request.copy(
-                            options = job.request.options.copy(destinationFolder = normalized),
-                        ),
-                    )
-                }
-            }
-
-            is RelativePathValidation.Invalid -> job.copy(
-                request = job.request.copy(
-                    options = job.request.options.copy(destinationFolder = null),
-                ),
-            )
-        }
-    }
-}
-
-private fun JobState.isInterruptedOnStartup(): Boolean =
-    this == JobState.RESOLVING || this == JobState.QUEUED ||
-        this == JobState.DOWNLOADING || this == JobState.POSTPROCESSING
-
-private fun interrupt(job: DownloadJob, at: Long): DownloadJob {
-    val error = JobError(
-        code = JobErrorCode.ENGINE_UNAVAILABLE,
-        message = "The app closed before the download finished. Retry to start it again.",
-        retryable = true,
-    )
-    val attempts = if (job.attempts.isEmpty()) {
-        job.attempts
-    } else {
-        job.attempts.dropLast(1) + job.attempts.last().copy(
-            state = JobState.FAILED,
-            error = error,
-            finishedAtEpochMillis = at,
-        )
-    }
-    return job.copy(
-        state = JobState.FAILED,
-        error = error,
-        attempts = attempts,
-        finishedAtEpochMillis = at,
-        updatedAtEpochMillis = at,
-        revision = job.revision + 1,
-    )
-}
-
-private fun dropExpired(
-    jobs: List<DownloadJob>,
-    clearAfterSeconds: Long,
-    at: Long,
-): Pair<List<DownloadJob>, Int> {
-    if (clearAfterSeconds <= 0) return jobs to 0
-    val cutoff = at - clearAfterSeconds * 1000
-    val retained = jobs.filterNot { job ->
-        job.state.isTerminal && (job.finishedAtEpochMillis ?: job.updatedAtEpochMillis) < cutoff
-    }
-    return retained to (jobs.size - retained.size)
 }
 
 /** `<user home>/Downloads/AnyDownload`, used when Settings has no folder yet. */

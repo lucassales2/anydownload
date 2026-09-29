@@ -77,6 +77,7 @@ fun AppShell(
     onTabSelected: (ShellTab) -> Unit,
     onOpenSettings: () -> Unit,
     onPreviewSingleUrl: (String) -> Unit,
+    onCopyUrls: ((String) -> Unit)? = null,
 ) {
     val settings by graph.settings.settings.collectAsState()
     val jobs by graph.engine.jobs.collectAsState()
@@ -105,6 +106,7 @@ fun AppShell(
                         cookiesConfigured = settings.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
+                        onCopyUrls = onCopyUrls,
                     )
                 }
             } else {
@@ -121,6 +123,7 @@ fun AppShell(
                         cookiesConfigured = settings.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
+                        onCopyUrls = onCopyUrls,
                     )
                 }
             }
@@ -269,6 +272,7 @@ private fun Workspace(
     cookiesConfigured: Boolean,
     selectedTab: ShellTab,
     onPreviewSingleUrl: (String) -> Unit,
+    onCopyUrls: ((String) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
         graph.startupWarning?.let { warning ->
@@ -283,11 +287,12 @@ private fun Workspace(
             presets = presets,
             cookiesConfigured = cookiesConfigured,
             onPreviewSingleUrl = onPreviewSingleUrl,
+            capabilities = graph.toolkitCapabilities,
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
-                ShellTab.DOWNLOADING -> QueueScreen(graph = graph)
-                ShellTab.COMPLETED -> HistoryScreen(graph = graph)
+                ShellTab.DOWNLOADING -> QueueScreen(graph = graph, onCopyUrls = onCopyUrls)
+                ShellTab.COMPLETED -> HistoryScreen(graph = graph, onCopyUrls = onCopyUrls)
                 ShellTab.SUBSCRIPTIONS -> SubscriptionsScreen(graph = graph)
             }
         }

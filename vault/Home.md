@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D7 verified 2026-09-25 (X/Twitter status video) · D6 verified 2026-09-25 (spotDL parity) · D5 verified 2026-09-25 (media toolkit) · D4 verified 2026-09-24 · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
+**Phase:** D8 verified 2026-09-29 (M1–M2 on-device queue) · D7 verified 2026-09-25 (X/Twitter status video) · D6 verified 2026-09-25 (spotDL parity) · D5 verified 2026-09-25 (media toolkit) · D4 verified 2026-09-24 · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -14,9 +14,9 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 
 ## Start here
 
-1. Read [Phase 7 — X/Twitter status video](00-project/Phase-7-X-Twitter.md), [ADR-011](03-decisions/ADR-011-X-twitter-phase.md), and the [yt-dlp equivalence matrix](01-product/Ytdlp-equivalence.md). D7 is verified: the public X/Twitter status video on all four hosts, with the four-host result and the opt-in-live/web-end-to-end gaps in [T-100](06-tasks/T-100-Phase-7-verification.md).
-2. The next site is chosen when a phase is planned; the [Kanban](Kanban.md) is the source of truth.
-3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. Do not start another M2/M3 card or another site without a scheduled phase.
+1. D8 is verified: the remaining M1 and M2 work is done. A queue that survives restart on all four hosts, bounded YouTube playlists (cap 50), safe names and history actions, and profile controls that follow the D5 toolkit. Spec: [Phase 8 — On-device queue, playlists, and history](00-project/Phase-8-On-device-core.md). Decision: [ADR-012](03-decisions/ADR-012-On-device-core-phase.md), accepted. Tasks [T-101](06-tasks/T-101-On-device-contract.md) through [T-112](06-tasks/T-112-Phase-8-verification.md) are done; T-011, T-012, T-013, and T-014 are closed with the M3 gaps noted.
+2. D7 stays verified: the public X/Twitter status video, with the opt-in-live and web end-to-end gaps in [T-100](06-tasks/T-100-Phase-7-verification.md). The next extractor site is chosen when a later phase is planned. The [Kanban](Kanban.md) is the source of truth.
+3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. Do not start an M3 card or another site inside the D8 loop.
 
 ## Accepted direction — 2026-09-21
 
@@ -40,6 +40,7 @@ License notes for translated extractor code are in T-006. D2 proved a direct-fil
 - [Phase 5 — Media toolkit](00-project/Phase-5-Media-Toolkit.md) — verified 2026-09-25: merge and audio extract on desktop, Android, and iOS. Web stays a gap.
 - [Phase 6 — spotDL parity](00-project/Phase-6-SpotDL-Parity.md) — verified 2026-09-25: spotDL v4.5.2 operations on the existing engine, with the four-host gaps recorded.
 - [Phase 7 — X/Twitter status video](00-project/Phase-7-X-Twitter.md) — verified 2026-09-25: `TwitterIE`, the selectable preview, one file per selected video on all four hosts, with the opt-in live status and web end-to-end gaps recorded.
+- [Phase 8 — On-device queue, playlists, and history](00-project/Phase-8-On-device-core.md) — verified 2026-09-29: the remaining M1 and M2 work. Shared job document, four-host restore, bounded YouTube playlist, names, and history. [Loop prompt](00-project/Phase-8-Loop-prompt.md).
 - [Open questions](00-project/Open-questions.md) — approval queue.
 - [Glossary](00-project/Glossary.md) — shared terminology.
 

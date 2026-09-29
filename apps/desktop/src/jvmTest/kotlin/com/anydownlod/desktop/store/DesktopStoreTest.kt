@@ -20,6 +20,7 @@ import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.fake.InMemoryDownloadEngine
+import com.anydownlod.core.persist.JobDocumentCodec
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -46,7 +47,8 @@ class DesktopStoreTest {
             base.first { it.id == "seed-failed" }.copy(id = "seed-unknown", state = JobState.UNKNOWN),
         )
         (base + extras).forEach { job ->
-            assertEquals(job, job.toDto().toDomain(), "state ${job.state} did not round-trip")
+            val restored = JobDocumentCodec.decode(JobDocumentCodec.encode(listOf(job))).single()
+            assertEquals(job, restored, "state ${job.state} did not round-trip")
         }
 
         val richOptions = DownloadOptions(
@@ -76,7 +78,7 @@ class DesktopStoreTest {
         val rich = base.first().copy(
             request = DownloadRequest("https://example.com/watch?v=fixture", richOptions, "key-1"),
         )
-        val restored = rich.toDto().toDomain()
+        val restored = JobDocumentCodec.decode(JobDocumentCodec.encode(listOf(rich))).single()
         assertEquals(rich, restored)
         assertEquals("", restored.request.options.customYtDlpJson)
     }

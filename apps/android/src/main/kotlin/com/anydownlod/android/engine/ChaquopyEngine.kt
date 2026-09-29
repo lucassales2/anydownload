@@ -45,6 +45,8 @@ class ChaquopyEngine(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val idGenerator: () -> String = { "ad-${Random.nextLong().toULong().toString(16)}" },
+    /** Called with the full row list after each mutation (T-106 host wiring). */
+    private val persist: (List<DownloadJob>) -> Unit = {},
     seedJobs: List<DownloadJob> = emptyList(),
 ) : DownloadEngine {
 
@@ -128,6 +130,7 @@ class ChaquopyEngine(
             running.remove(jobId)?.cancel()
             _jobs.value = _jobs.value.filterNot { it.id == job.id }
             idempotency.filterValues { it == job.id }.keys.toList().forEach { idempotency.remove(it) }
+            persist(_jobs.value)
         }
         return true
     }
@@ -172,6 +175,7 @@ class ChaquopyEngine(
         engineCriticalSection(lock) {
             _jobs.value = _jobs.value + accepted
             if (request.idempotencyKey.isNotEmpty()) idempotency[request.idempotencyKey] = id
+            persist(_jobs.value)
         }
         return accepted
     }
@@ -344,6 +348,7 @@ class ChaquopyEngine(
         }
         val updated = transformed.copy(attempts = attempts)
         _jobs.value = _jobs.value.map { if (it.id == jobId) updated else it }
+        if (persistNow) persist(_jobs.value)
         updated
     }
 }

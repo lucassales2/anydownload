@@ -11,18 +11,21 @@ import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.twitter.TwitterIE
 import com.anydownlod.core.extract.youtube.YoutubeIE
+import com.anydownlod.core.extract.youtube.YoutubeTabIE
 import com.anydownlod.core.jsc.JsRuntime
 import com.anydownlod.core.platform.HttpTransfer
 
 object IosExtractors {
 
     /**
-     * The ordered registry: YouTube, then X/Twitter. iOS has no Python or CLI
-     * fallback, so an unmatched URL keeps the engine's typed unsupported error.
+     * The ordered registry: YouTube single video, YouTube playlist tab, then
+     * X/Twitter. iOS has no Python or CLI fallback, so an unmatched URL keeps
+     * the engine's typed unsupported error.
      */
     fun registry(transfer: HttpTransfer, jsRuntime: JsRuntime): ExtractorRegistry = ExtractorRegistry(
         listOf(
             YoutubeIE(ExtractorHttp(transfer), jsRuntime),
+            YoutubeTabIE(ExtractorHttp(transfer)),
             TwitterIE(ExtractorHttp(transfer)),
         ),
     )

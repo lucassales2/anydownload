@@ -59,6 +59,8 @@ class WebExtensionEngine(
      * it. Unmatched URLs keep the D2/D3 probe path.
      */
     private val registry: ExtractorRegistry? = null,
+    /** Called with the full row list after each mutation (T-106 host wiring). */
+    private val persist: (List<DownloadJob>) -> Unit = {},
     seedJobs: List<DownloadJob> = emptyList(),
 ) : DownloadEngine {
 
@@ -137,17 +139,18 @@ class WebExtensionEngine(
         scope.launch { bridge.cancelDownload(jobId) }
         _jobs.value = _jobs.value.filterNot { it.id == job.id }
         idempotency.filterValues { it == job.id }.keys.toList().forEach { idempotency.remove(it) }
+        persist(_jobs.value)
         return true
     }
 
     override fun deleteArtifacts(jobId: String): ArtifactDeletionResult {
         val job = findJob(jobId) ?: return ArtifactDeletionResult(deletedCount = 0)
-        // Identifiers only; nothing is removed from the browser. The history
-        // row stays, with the artifact marked removed.
-        update(jobId) {
-            it.copy(artifacts = it.artifacts.map { artifact -> artifact.copy(removed = true) })
-        }
-        return ArtifactDeletionResult(deletedCount = job.artifacts.count { !it.removed })
+        // The page cannot delete a file the browser already saved. Report the
+        // names so the UI can say so, and leave both the artifact rows and the
+        // history row untouched: nothing here pretends the file is gone.
+        val pending = job.artifacts.filterNot { it.removed }
+        if (pending.isEmpty()) return ArtifactDeletionResult(deletedCount = 0)
+        return ArtifactDeletionResult(deletedCount = 0, failures = pending.map { it.fileName })
     }
 
     private fun acceptJob(request: DownloadRequest): DownloadJob {
@@ -173,6 +176,7 @@ class WebExtensionEngine(
         )
         _jobs.value = _jobs.value + accepted
         if (request.idempotencyKey.isNotEmpty()) idempotency[request.idempotencyKey] = id
+        persist(_jobs.value)
         return accepted
     }
 
@@ -329,6 +333,10 @@ class WebExtensionEngine(
         val info = try {
             withContext(ioDispatcher) { extractor.extract(url) }
         } catch (error: com.anydownlod.core.extract.ExtractionError) {
+            if (error is com.anydownlod.core.extract.ExtractionError.NotYetAvailable) {
+                schedule(jobId)
+                return
+            }
             val mapped = extractionJobError(error)
             fail(jobId, mapped.code, mapped.message, mapped.retryable)
             return
@@ -724,6 +732,7 @@ class WebExtensionEngine(
         }
         val updated = transformed.copy(attempts = attempts)
         _jobs.value = _jobs.value.map { if (it.id == jobId) updated else it }
+        if (persistNow) persist(_jobs.value)
         return updated
     }
 
@@ -733,6 +742,21 @@ class WebExtensionEngine(
                 state = JobState.FAILED,
                 error = JobError(code, message, retryable),
                 finishedAtEpochMillis = now(),
+            )
+        }
+
+    /**
+     * A source extraction says is not published yet. The web row waits in
+     * SCHEDULED and the user starts it again; nothing is downloaded and there
+     * is no timer or countdown.
+     */
+    private fun schedule(jobId: String): DownloadJob? =
+        update(jobId) {
+            it.copy(
+                state = JobState.SCHEDULED,
+                progress = null,
+                error = null,
+                finishedAtEpochMillis = null,
             )
         }
 

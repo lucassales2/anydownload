@@ -43,6 +43,7 @@ import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.add_batch_hint
 import com.anydownlod.ui.generated.resources.add_source
@@ -86,6 +87,7 @@ import com.anydownlod.ui.generated.resources.playlist_limit
 import com.anydownlod.ui.generated.resources.playlist_limit_hint
 import com.anydownlod.ui.generated.resources.preference
 import com.anydownlod.ui.generated.resources.presets_order
+import com.anydownlod.ui.generated.resources.preview_cannot_write
 import com.anydownlod.ui.generated.resources.profile_ios
 import com.anydownlod.ui.generated.resources.quality_best
 import com.anydownlod.ui.generated.resources.quality_hint
@@ -136,6 +138,7 @@ fun AddForm(
     presets: List<Preset>,
     cookiesConfigured: Boolean,
     onPreviewSingleUrl: (String) -> Unit,
+    capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
     modifier: Modifier = Modifier,
 ) {
     val state by presenter.state.collectAsState()
@@ -207,7 +210,7 @@ fun AddForm(
 
             when (state.mediaType) {
                 MediaType.VIDEO -> VideoFields(state, presenter)
-                MediaType.AUDIO -> AudioFields(state, presenter)
+                MediaType.AUDIO -> AudioFields(state, presenter, capabilities)
                 MediaType.CAPTIONS -> CaptionsFields(state, presenter)
                 MediaType.THUMBNAIL -> Text(
                     text = text(Res.string.thumbnail_only),
@@ -419,13 +422,25 @@ private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
 }
 
 @Composable
-private fun AudioFields(state: AddFormState, presenter: AddFormPresenter) {
+private fun AudioFields(
+    state: AddFormState,
+    presenter: AddFormPresenter,
+    capabilities: ToolkitCapabilities,
+) {
+    val cannotWrite = buildMap {
+        for (container in listOf(AudioContainer.MP3, AudioContainer.WAV, AudioContainer.FLAC)) {
+            put(container, stringResource(Res.string.preview_cannot_write, container.wireName.uppercase()))
+        }
+    }
     ChoiceRow(
         label = text(Res.string.container),
         options = AudioContainer.entries,
         selected = state.audioContainer,
         optionLabel = { it.displayName() },
         onSelect = presenter::setAudioContainer,
+        optionTag = { "add-audio-${it.wireName}" },
+        optionEnabled = { it in capabilities.audioContainers },
+        optionReason = { cannotWrite[it] },
     )
     if (state.audioContainer.isLossy) {
         ChoiceRow(

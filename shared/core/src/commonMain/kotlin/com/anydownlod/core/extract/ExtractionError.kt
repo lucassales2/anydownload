@@ -33,6 +33,14 @@ sealed class ExtractionError(message: String) : Exception(message) {
         val countries: List<String> = emptyList(),
     ) : ExtractionError("This source is not available in your region.")
 
+    /**
+     * The media is scheduled, premiering, or otherwise not published yet.
+     * The engine keeps the job in SCHEDULED and downloads nothing.
+     */
+    class NotYetAvailable(
+        message: String = "This source is not available yet.",
+    ) : ExtractionError(message)
+
     class NoFormats(
         message: String = "No downloadable format was found.",
     ) : ExtractionError(message)

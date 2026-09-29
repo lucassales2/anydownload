@@ -13,6 +13,7 @@ package com.anydownlod.core.extract.harness
 import com.anydownlod.core.extract.ExtractionError
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.InfoDict
+import com.anydownlod.core.extract.InfoEntry
 import com.anydownlod.core.extract.InfoExtractor
 import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.extract.Thumbnail
@@ -225,6 +226,7 @@ internal object CaseFieldValues {
         "url" to info.url,
         "formats" to info.formats.map(::formatMap),
         "thumbnails" to info.thumbnails.map(::thumbnailMap),
+        "entries" to info.entries.map(::entryMap),
         "duration" to info.duration,
         "uploader" to info.uploader,
         "channel" to info.channel,
@@ -266,6 +268,12 @@ internal object CaseFieldValues {
         "has_drm" to format.hasDrm,
         "manifest_url" to format.manifestUrl,
         "fragment_base_url" to format.fragmentBaseUrl,
+    )
+
+    fun entryMap(entry: InfoEntry): Map<String, Any?> = mapOf(
+        "id" to entry.id,
+        "title" to entry.title,
+        "url" to entry.url,
     )
 
     fun thumbnailMap(thumbnail: Thumbnail): Map<String, Any?> = mapOf(

@@ -40,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -149,6 +150,31 @@ class EngineExtractionTest {
             assertFalse(finished.error?.retryable ?: true)
             assertTrue(finished.artifacts.isEmpty())
         }
+    }
+
+    @Test
+    fun notYetAvailableSchedulesAndWaitsForStartWithoutAMediaGet() = runTest {
+        val extractor = ToggleExtractor(singleFormatInfo())
+        val transfer = ScriptedTransfer(payload)
+        val engine = engine(this, extractor, transfer)
+
+        val job = engine.submit(request(key = "scheduled-key"))
+        testScheduler.advanceUntilIdle()
+
+        val scheduled = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.SCHEDULED, scheduled.state)
+        assertNull(scheduled.error)
+        assertTrue(scheduled.artifacts.isEmpty())
+        assertEquals(JobState.SCHEDULED, scheduled.latestAttempt?.state)
+        assertTrue(transfer.requests.isEmpty(), "a not-yet-available source must not fetch media")
+
+        extractor.available = true
+        engine.start(job.id)
+        testScheduler.advanceUntilIdle()
+
+        val finished = engine.jobs.value.first { it.id == job.id }
+        assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+        assertEquals(listOf(formatUrl), transfer.requests.map { it.url })
     }
 
     @Test
@@ -475,6 +501,22 @@ class EngineExtractionTest {
         validUrl = Regex("""https?://youtube\.example/.+"""),
     ) {
         override suspend fun extract(url: String): InfoDict = throw error
+    }
+
+    /** Not yet available until a test flips [available]. */
+    private class ToggleExtractor(
+        private val info: InfoDict,
+    ) : InfoExtractor(
+        ieKey = ExtractorRegistry.GENERIC_KEY,
+        http = ExtractorHttp(NoopTransfer),
+        validUrl = Regex("""https?://youtube\.example/.+"""),
+    ) {
+        var available = false
+
+        override suspend fun extract(url: String): InfoDict {
+            if (!available) throw ExtractionError.NotYetAvailable()
+            return info
+        }
     }
 
     /** Matches nothing the tests submit, so the probe path is chosen. */
