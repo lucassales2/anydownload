@@ -123,6 +123,146 @@ object ExtractorUtils {
         return null
     }
 
+    private val newDateCall = Regex("""new\s+Date\s*\(\s*(['"])(.*?)\1\s*\)""", RegexOption.DOT_MATCHES_ALL)
+    private val newCall = Regex("""new\s+\w+\s*\(.*?\)""", RegexOption.DOT_MATCHES_ALL)
+    private val parseIntegerCall = Regex("""parseInt\s*\(\s*['"]?(\d+)['"]?[^)]*\)""")
+    private val unquotedKey = Regex("""([{,]\s*)([A-Za-z_$][A-Za-z0-9_$]*)(\s*:)""")
+    private val undefinedValue = Regex("""\bundefined\b""")
+    private val voidZero = Regex("""\bvoid\s+0\b""")
+    private val hexInteger = Regex("""\b0[xX]([0-9a-fA-F]+)\b""")
+    private val octalInteger = Regex("""\b0([0-7]+)\b""")
+    private val trailingComma = Regex(""",\s*([\]}])""")
+
+    /**
+     * Upstream `js_to_json` subset (`_utils.py` at the pin). Normalizes a JS
+     * literal into strict JSON for [parseJson]: comments are dropped,
+     * single-quoted and backtick strings become double-quoted, unquoted
+     * object keys are quoted, `undefined`/`void 0` become `null`, hex and
+     * octal integers become decimal, `new Date("...")`/`new X(...)` wrappers
+     * and `parseInt(...)` become values, and trailing commas are removed.
+     * `vars` substitution, template interpolation, and `new Map(...)` stay
+     * unported.
+     */
+    fun jsToJson(code: String): String {
+        var text = newDateCall.replace(code) { match -> jsonString(match.groupValues[2]) }
+        text = newCall.replace(text) { match -> jsonString(match.value) }
+        text = parseIntegerCall.replace(text) { match -> match.groupValues[1] }
+
+        val out = StringBuilder(text.length)
+        val segment = StringBuilder()
+
+        fun flushSegment() {
+            if (segment.isEmpty()) return
+            var piece = segment.toString()
+            piece = unquotedKey.replace(piece) { match ->
+                "${match.groupValues[1]}\"${match.groupValues[2]}\"${match.groupValues[3]}"
+            }
+            piece = undefinedValue.replace(piece, "null")
+            piece = voidZero.replace(piece, "null")
+            piece = hexInteger.replace(piece) { match ->
+                match.groupValues[1].toLongOrNull(16)?.toString() ?: match.value
+            }
+            piece = octalInteger.replace(piece) { match ->
+                match.groupValues[1].toLongOrNull(8)?.toString() ?: match.value
+            }
+            piece = trailingComma.replace(piece) { match -> match.groupValues[1] }
+            out.append(piece)
+            segment.setLength(0)
+        }
+
+        var index = 0
+        while (index < text.length) {
+            val char = text[index]
+            when (char) {
+                '\'', '`' -> {
+                    flushSegment()
+                    index++
+                    val content = StringBuilder()
+                    while (index < text.length && text[index] != char) {
+                        if (text[index] == '\\' && index + 1 < text.length) {
+                            val next = text[index + 1]
+                            if (next == char) {
+                                content.append(char)
+                            } else {
+                                content.append('\\').append(next)
+                            }
+                            index += 2
+                        } else {
+                            content.append(text[index])
+                            index++
+                        }
+                    }
+                    index++ // closing quote
+                    out.append('"').append(escapeUnescapedQuotes(content.toString())).append('"')
+                }
+
+                '"' -> {
+                    flushSegment()
+                    out.append('"')
+                    index++
+                    while (index < text.length && text[index] != '"') {
+                        if (text[index] == '\\' && index + 1 < text.length) {
+                            out.append(text[index]).append(text[index + 1])
+                            index += 2
+                        } else {
+                            out.append(text[index])
+                            index++
+                        }
+                    }
+                    if (index < text.length) {
+                        out.append('"')
+                        index++
+                    }
+                }
+
+                else -> {
+                    when {
+                        char == '/' && index + 1 < text.length && text[index + 1] == '*' -> {
+                            index += 2
+                            while (index + 1 < text.length && !(text[index] == '*' && text[index + 1] == '/')) index++
+                            index = (index + 2).coerceAtMost(text.length)
+                        }
+
+                        char == '/' && index + 1 < text.length && text[index + 1] == '/' -> {
+                            index += 2
+                            while (index < text.length && text[index] != '\n') index++
+                            segment.append(' ')
+                        }
+
+                        else -> {
+                            segment.append(char)
+                            index++
+                        }
+                    }
+                }
+            }
+        }
+        flushSegment()
+        return out.toString()
+    }
+
+    /** One JS value as a strict JSON string literal. */
+    private fun jsonString(value: String): String =
+        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+
+    private fun escapeUnescapedQuotes(content: String): String {
+        val out = StringBuilder(content.length)
+        for (index in content.indices) {
+            val char = content[index]
+            if (char == '"') {
+                var backslashes = 0
+                var probe = index - 1
+                while (probe >= 0 && content[probe] == '\\') {
+                    backslashes++
+                    probe--
+                }
+                if (backslashes % 2 == 0) out.append('\\')
+            }
+            out.append(char)
+        }
+        return out.toString()
+    }
+
     /**
      * Upstream `traverse_obj` subset. Every surviving value is returned in
      * document order; a step that does not apply drops that branch instead of
@@ -275,6 +415,33 @@ object ExtractorUtils {
                 val subtype = mime.substringAfter('/', "")
                 if (subtype.isEmpty()) null else subtype.removePrefix("x-").removePrefix("vnd.")
             }
+        }
+    }
+
+    /**
+     * The `KNOWN_EXTENSIONS` subset `determine_ext` needs for the generic
+     * HLS/DASH slice; upstream's full set stays out (T-136).
+     */
+    private val knownExtensions = setOf(
+        "mp4", "m4v", "mov", "webm", "mkv", "flv", "3gp", "3g2", "avi",
+        "m4a", "mp3", "opus", "ogg", "oga", "flac", "wav", "aac",
+        "ts", "m3u8", "m3u", "mpd", "f4m", "ism",
+    )
+
+    /**
+     * Upstream `determine_ext`: the tail after the last dot before the query,
+     * when it is an alphanumeric token or a known extension followed by a
+     * slash; [defaultExt] otherwise.
+     */
+    fun determineExt(url: String?, defaultExt: String = "unknown_video"): String {
+        if (url == null || '.' !in url) return defaultExt
+        val beforeQuery = url.substringBefore('?')
+        val dot = beforeQuery.lastIndexOf('.')
+        val guess = if (dot >= 0) beforeQuery.substring(dot + 1) else beforeQuery
+        return when {
+            guess.isNotEmpty() && guess.all { it.isLetterOrDigit() } -> guess
+            guess.trimEnd('/') in knownExtensions -> guess.trimEnd('/')
+            else -> defaultExt
         }
     }
 

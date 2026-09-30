@@ -6,7 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-123 — Finish the shared downloader](06-tasks/T-123-Shared-downloader.md) #D10 #P0
 - [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #D11 #P0
 - [ ] [T-124 — YouTube done at the pin](06-tasks/T-124-Youtube-done.md) #D12 #P0
 - [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #D13 #P1
@@ -43,6 +42,14 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-139 — Phase 10 verification](06-tasks/T-139-Phase-10-verification.md) #D10 #P0
+- [x] [T-123 — Finish the shared downloader](06-tasks/T-123-Shared-downloader.md) #D10 #P0
+- [x] [T-138 — Generic HLS and DASH discovery](06-tasks/T-138-Generic-hls-dash.md) #D10 #P0
+- [x] [T-137 — Generic HTML discovery](06-tasks/T-137-Generic-html-discovery.md) #D10 #P0
+- [x] [T-136 — Helpers the generic slices call](06-tasks/T-136-Generic-helpers.md) #D10 #P0
+- [x] [T-135 — Fragment concurrency](06-tasks/T-135-Fragment-concurrency.md) #D10 #P0
+- [x] [T-134 — Resume inside one attempt](06-tasks/T-134-Resume-attempt.md) #D10 #P0
+- [x] [T-133 — Format lists and multi-stream](06-tasks/T-133-Format-lists.md) #D10 #P0
 - [x] [T-120 — Metro verification](06-tasks/T-120-Metro-verification.md) #metro #D9
 - [x] [T-122 — QueueViewModel and QueueScreen](06-tasks/T-122-Queue-view-model.md) #metro #D9
 - [x] [T-121 — ViewModel factory and LocalMetroViewModelFactory](06-tasks/T-121-ViewModel-factory.md) #metro #D9

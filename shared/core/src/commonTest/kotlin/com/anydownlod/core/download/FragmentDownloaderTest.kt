@@ -1,8 +1,9 @@
 /*
  * Fragment downloader tests — AnyDownload (T-073)
  *
- * Sequential fetch, byte-exact assembly, AES-128 decryption, bounded retries,
- * and cancellation. Unlicense; see shared/core/NOTICE.md. All bytes synthetic.
+ * Fetch, byte-exact ordered assembly, bounded concurrency, skip-unavailable,
+ * AES-128 decryption, bounded retries, and cancellation. Unlicense; see
+ * shared/core/NOTICE.md. All bytes synthetic.
  */
 package com.anydownlod.core.download
 
@@ -16,6 +17,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 
 class FragmentDownloaderTest {
@@ -55,6 +57,29 @@ class FragmentDownloaderTest {
                 bytes
             }
             return HttpResponse.Final(200, body = ArrayBody(ranged))
+        }
+    }
+
+    /** Starts requests until [expectedStarters] are parked, then releases all. */
+    private class OverlapTransfer(
+        private val bodies: Map<String, ByteArray>,
+        private val expectedStarters: Int,
+    ) : HttpTransfer {
+        var maxInFlight = 0
+            private set
+        private var inFlight = 0
+        private var started = 0
+        private val release = CompletableDeferred<Unit>()
+
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            inFlight++
+            maxInFlight = maxOf(maxInFlight, inFlight)
+            started++
+            if (started >= expectedStarters) release.complete(Unit)
+            release.await()
+            inFlight--
+            val bytes = bodies[request.url] ?: return HttpResponse.Final(404)
+            return HttpResponse.Final(200, body = ArrayBody(bytes))
         }
     }
 
@@ -174,7 +199,8 @@ class FragmentDownloaderTest {
             ),
         )
         var completed = 0
-        val outcome = FragmentDownloader(transfer).download(
+        // `1` keeps the strictly sequential order the cancel point needs.
+        val outcome = FragmentDownloader(transfer, concurrency = 1).download(
             fragments = listOf(
                 MediaFragment("https://media.example/a.ts"),
                 MediaFragment("https://media.example/b.ts"),
@@ -188,9 +214,59 @@ class FragmentDownloaderTest {
     }
 
     @Test
-    fun exhaustedRetriesFailTyped() = runTest {
+    fun boundedConcurrencyOverlapsRequestsAndStaysInOrder() = runTest {
+        val transfer = OverlapTransfer(
+            bodies = mapOf(
+                "https://media.example/a.ts" to "AAA".encodeToByteArray(),
+                "https://media.example/b.ts" to "BBB".encodeToByteArray(),
+                "https://media.example/c.ts" to "CCC".encodeToByteArray(),
+            ),
+            expectedStarters = 3,
+        )
+        val written = mutableListOf<Byte>()
+        val progress = mutableListOf<Pair<Int, Int>>()
+        val outcome = FragmentDownloader(transfer, concurrency = 3).download(
+            fragments = listOf(
+                MediaFragment("https://media.example/a.ts"),
+                MediaFragment("https://media.example/b.ts"),
+                MediaFragment("https://media.example/c.ts"),
+            ),
+            onChunk = { written += it.toList() },
+            onProgress = { completed, total, _ -> progress += completed to total },
+        )
+        assertIs<FragmentOutcome.Completed>(outcome)
+        assertEquals(3, transfer.maxInFlight, "the window must overlap requests")
+        assertContentEquals("AAABBBCCC".encodeToByteArray(), written.toByteArray())
+        assertEquals(listOf(1 to 3, 2 to 3, 3 to 3), progress)
+    }
+
+    @Test
+    fun unavailableFragmentIsSkippedWhenTheOptionIsOn() = runTest {
+        val transfer = FakeTransfer(
+            mapOf(
+                "https://media.example/a.ts" to "AAA".encodeToByteArray(),
+                "https://media.example/c.ts" to "CCC".encodeToByteArray(),
+            ),
+        )
+        val written = mutableListOf<Byte>()
+        val outcome = FragmentDownloader(transfer, skipUnavailableFragments = true).download(
+            fragments = listOf(
+                MediaFragment("https://media.example/a.ts"),
+                MediaFragment("https://media.example/missing.ts"),
+                MediaFragment("https://media.example/c.ts"),
+            ),
+            onChunk = { written += it.toList() },
+            onProgress = { _, _, _ -> },
+        )
+        val completed = assertIs<FragmentOutcome.Completed>(outcome)
+        assertEquals(listOf(1), completed.skipped)
+        assertContentEquals("AAACCC".encodeToByteArray(), written.toByteArray())
+    }
+
+    @Test
+    fun unavailableFragmentFailsWhenTheOptionIsOff() = runTest {
         val transfer = FakeTransfer(bodies = emptyMap())
-        val outcome = FragmentDownloader(transfer, maxRetries = 1).download(
+        val outcome = FragmentDownloader(transfer, maxRetries = 1, skipUnavailableFragments = false).download(
             fragments = listOf(MediaFragment("https://media.example/missing.ts")),
             onChunk = { },
             onProgress = { _, _, _ -> },

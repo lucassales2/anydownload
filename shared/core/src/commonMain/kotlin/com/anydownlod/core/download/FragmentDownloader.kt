@@ -1,12 +1,14 @@
 /*
  * Fragment downloader — AnyDownload (T-073)
  *
- * Translation of the sequential, non-FFmpeg paths of
- * `yt_dlp/downloader/fragment.py` and `yt_dlp/downloader/hls.py` at upstream
- * tag `2026.08.19` (commit 3a08beaf031ab68f966401ead017ac81fe8486cf), read
- * 2026-09-24. Unlicense; see shared/core/NOTICE.md. Fragments are fetched
- * through the request port, AES-128-CBC fragments are decrypted in Kotlin,
- * and retries are bounded; there is no merge, mux, or FFmpeg step.
+ * Translation of the non-FFmpeg paths of `yt_dlp/downloader/fragment.py`
+ * and `yt_dlp/downloader/hls.py` at upstream tag `2026.08.19` (commit
+ * 3a08beaf031ab68f966401ead017ac81fe8486cf), read 2026-09-24; the T-135
+ * bounded-concurrency and skip-unavailable slice was re-read 2026-09-29.
+ * Unlicense; see shared/core/NOTICE.md. Fragments are fetched through the
+ * request port with at most a small window in flight, consumed in playlist
+ * order, AES-128-CBC fragments are decrypted in Kotlin, and retries are
+ * bounded; there is no merge, mux, or FFmpeg step.
  */
 package com.anydownlod.core.download
 
@@ -15,9 +17,13 @@ import com.anydownlod.core.platform.HttpMethods
 import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 sealed interface FragmentOutcome {
-    data object Completed : FragmentOutcome
+    /** [skipped] lists the 0-based media-fragment indexes that were unavailable. */
+    data class Completed(val skipped: List<Int> = emptyList()) : FragmentOutcome
     data object Cancelled : FragmentOutcome
     data class Failed(val reason: String) : FragmentOutcome
 }
@@ -25,8 +31,34 @@ sealed interface FragmentOutcome {
 class FragmentDownloader(
     private val transfer: HttpTransfer,
     private val maxRetries: Int = 2,
+    /**
+     * At most this many fragment requests are in flight. `1` restores the
+     * strictly sequential request order; results are consumed in fragment
+     * order regardless.
+     */
+    private val concurrency: Int = DEFAULT_CONCURRENCY,
+    /**
+     * Upstream `skip_unavailable_fragments` (`fragment.py` defaults it to
+     * true for VOD). Engine callers pass the upstream default explicitly.
+     */
+    private val skipUnavailableFragments: Boolean = true,
 ) {
 
+    companion object {
+        /** A small in-flight window for the shared downloader (T-135). */
+        const val DEFAULT_CONCURRENCY = 4
+    }
+
+    /**
+     * Fetches the init segment first, then the media fragments with at most
+     * [concurrency] requests in flight. Results are consumed in playlist
+     * order, so `onChunk` sees the same byte stream the sequential reader
+     * produced. When [skipUnavailableFragments] is on, a fragment whose
+     * retries are exhausted is recorded in [FragmentOutcome.Completed.skipped]
+     * and the download continues; when it is off the outcome is
+     * [FragmentOutcome.Failed]. Cancellation stops new requests and returns
+     * [FragmentOutcome.Cancelled]; the caller still discards its temp.
+     */
     suspend fun download(
         fragments: List<MediaFragment>,
         initSegment: MediaFragment? = null,
@@ -59,30 +91,62 @@ class FragmentDownloader(
                 is FetchResult.Failed -> return FragmentOutcome.Failed(result.reason)
             }
         }
-        for (fragment in fragments) {
-            if (isCancelled()) return FragmentOutcome.Cancelled
-            when (val result = fetchFragment(fragment)) {
-                is FetchResult.Bytes -> {
-                    val data = if (keyBytes != null) {
-                        val iv = key?.iv ?: sequenceIv(fragment.sequence ?: (completed.toLong() - 1))
-                        try {
-                            Aes128Cbc.decrypt(keyBytes, iv, result.data)
-                        } catch (error: IllegalArgumentException) {
-                            return FragmentOutcome.Failed("The encrypted fragment is not block-aligned.")
+        if (fragments.isEmpty()) return FragmentOutcome.Completed()
+        if (isCancelled()) return FragmentOutcome.Cancelled
+
+        val windowSize = concurrency.coerceAtLeast(1)
+        val skipped = mutableListOf<Int>()
+        val early: FragmentOutcome? = try {
+            coroutineScope {
+                val window = ArrayDeque<Pair<Int, Deferred<FetchResult>>>()
+                var nextToLaunch = 0
+                while (nextToLaunch < fragments.size && window.size < windowSize) {
+                    val index = nextToLaunch
+                    window += index to async { fetchFragment(fragments[index]) }
+                    nextToLaunch++
+                }
+                while (window.isNotEmpty()) {
+                    if (isCancelled()) throw Stop(FragmentOutcome.Cancelled)
+                    val (index, deferred) = window.removeFirst()
+                    when (val result = deferred.await()) {
+                        is FetchResult.Bytes -> {
+                            val fragment = fragments[index]
+                            val data = if (keyBytes != null) {
+                                val iv = key?.iv ?: sequenceIv(fragment.sequence ?: (completed.toLong() - 1))
+                                try {
+                                    Aes128Cbc.decrypt(keyBytes, iv, result.data)
+                                } catch (error: IllegalArgumentException) {
+                                    throw Stop(FragmentOutcome.Failed("The encrypted fragment is not block-aligned."))
+                                }
+                            } else {
+                                result.data
+                            }
+                            onChunk(data)
+                            bytes += data.size
                         }
-                    } else {
-                        result.data
+
+                        is FetchResult.Failed -> {
+                            if (!skipUnavailableFragments) {
+                                throw Stop(FragmentOutcome.Failed(result.reason))
+                            }
+                            skipped += index
+                        }
                     }
-                    onChunk(data)
-                    bytes += data.size
                     completed++
                     onProgress(completed, total, bytes)
+                    if (isCancelled()) throw Stop(FragmentOutcome.Cancelled)
+                    if (nextToLaunch < fragments.size) {
+                        val next = nextToLaunch
+                        window += next to async { fetchFragment(fragments[next]) }
+                        nextToLaunch++
+                    }
                 }
-
-                is FetchResult.Failed -> return FragmentOutcome.Failed(result.reason)
             }
+            null
+        } catch (stop: Stop) {
+            stop.outcome
         }
-        return FragmentOutcome.Completed
+        return early ?: FragmentOutcome.Completed(skipped = skipped)
     }
 
     private suspend fun fetchKey(uri: String): FetchResult {
@@ -163,4 +227,7 @@ class FragmentDownloader(
         data class Bytes(val data: ByteArray) : FetchResult
         data class Failed(val reason: String) : FetchResult
     }
+
+    /** Internal early exit that unwinds the window without failing the caller. */
+    private class Stop(val outcome: FragmentOutcome) : Exception()
 }

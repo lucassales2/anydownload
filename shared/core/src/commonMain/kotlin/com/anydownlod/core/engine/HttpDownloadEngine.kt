@@ -40,6 +40,7 @@ import com.anydownlod.core.format.Selection
 import com.anydownlod.core.platform.ContentRange
 import com.anydownlod.core.platform.FileHandle
 import com.anydownlod.core.platform.FileStore
+import com.anydownlod.core.platform.HeaderNames
 import com.anydownlod.core.platform.HttpBody
 import com.anydownlod.core.platform.HttpFailureReason
 import com.anydownlod.core.platform.HttpRequest
@@ -136,6 +137,13 @@ class HttpDownloadEngine(
 
         /** ADR-012: playlist expansion hard-stops at 50 entries. */
         const val PLAYLIST_ITEM_CAP = 50
+
+        /**
+         * T-134: how many mid-body continuations one attempt may make before
+         * the download fails typed and the temp is discarded. Applies per
+         * streaming call, never across launches.
+         */
+        const val MAX_RESUME_ATTEMPTS = 3
     }
 
     private val lock = Any()
@@ -1320,8 +1328,7 @@ class HttpDownloadEngine(
                             }
 
                             UrlClassifier.Classification.DIRECT_FILE -> {
-                                val fileBody = body
-                                if (fileBody == null) {
+                                if (body == null) {
                                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty response body.")
                                     return null
                                 }
@@ -1330,8 +1337,7 @@ class HttpDownloadEngine(
                                 val temp = (if (chunked != null) {
                                     streamChunkedToTemp(
                                         jobId = jobId,
-                                        firstBody = fileBody,
-                                        firstRangeTotal = response.totalBytes ?: declaredSize,
+                                        firstResponse = response,
                                         declaredSize = declaredSize,
                                         sourceUrl = current.url,
                                         headers = headers,
@@ -1340,8 +1346,10 @@ class HttpDownloadEngine(
                                 } else {
                                     streamToTemp(
                                         jobId = jobId,
-                                        body = fileBody,
-                                        totalBytes = response.totalBytes ?: declaredSize,
+                                        firstResponse = response,
+                                        declaredSize = declaredSize,
+                                        sourceUrl = current.url,
+                                        headers = headers,
                                     )
                                 }) ?: return null
                                 return finishTemp(
@@ -1532,7 +1540,9 @@ class HttpDownloadEngine(
         var finished = false
         var written = 0L
         try {
-            val outcome = FragmentDownloader(transfer).download(
+            // Upstream VOD default (`fragment.py`): skip an unavailable
+            // fragment. Live playlists fail typed before this path (T-135).
+            val outcome = FragmentDownloader(transfer, skipUnavailableFragments = true).download(
                 fragments = fragments,
                 initSegment = initSegment,
                 key = key,
@@ -1645,80 +1655,35 @@ class HttpDownloadEngine(
     }
 
     /**
-     * Streams [body] into a temp file and returns it closed on success. On
-     * failure or cancel the temp is removed. The caller publishes the temp or
-     * merges it.
+     * Streams a first response into a temp file and returns it closed on
+     * success. On failure or cancel the temp is removed. T-134: when the body
+     * drops out mid-transfer — the transport throws, a known total is not
+     * reached, or a ranged response stops before its announced
+     * `Content-Range` end — the reader continues from the bytes already in
+     * the temp with a ranged request, bounded per attempt. A server that
+     * ignores the range or answers a mismatched `Content-Range` fails typed;
+     * its body is never appended. The caller publishes the temp or merges it.
      */
     private suspend fun streamToTemp(
         jobId: String,
-        body: HttpBody,
-        totalBytes: Long?,
-    ): TempDownload? {
-        val handle = runCatching { fileStore.createTempFile() }.getOrNull()
-        if (handle == null) {
-            runCatching { body.close() }
-            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
-            return null
-        }
-
-        var downloaded = 0L
-        var finished = false
-        try {
-            val buffer = ByteArray(chunkSize)
-            while (!isCancelRequested(jobId)) {
-                val count = withContext(ioDispatcher) { body.readNext(buffer) }
-                if (count == -1) break
-                if (count == 0) continue
-                if (!writeChunk(jobId, handle, buffer, count)) return null
-                downloaded += count
-                reportProgress(jobId, downloaded, totalBytes)
-                currentCoroutineContext().ensureActive()
-            }
-            currentCoroutineContext().ensureActive()
-
-            if (isCancelRequested(jobId)) {
-                confirmCancelled(jobId)
-                return null
-            }
-
-            handle.close()
-            finished = true
-            return TempDownload(handle, downloaded, totalBytes)
-        } finally {
-            runCatching { body.close() }
-            if (!finished) {
-                runCatching { handle.discard() }
-            }
-        }
-    }
-
-    /**
-     * Ranged chunk reader for formats that declare `http_chunk_size`. Each
-     * chunk is one `Range` request appended to the same temp file; the total
-     * comes from the first chunk's `Content-Range` (or the declared format
-     * size). A non-2xx chunk status maps through the shared HTTP table, so a
-     * mid-stream 403 is `UNAVAILABLE_OR_PRIVATE`, not `NETWORK_FAILURE`.
-     */
-    private suspend fun streamChunkedToTemp(
-        jobId: String,
-        firstBody: HttpBody,
-        firstRangeTotal: Long?,
+        firstResponse: HttpResponse.Final,
         declaredSize: Long?,
         sourceUrl: String,
         headers: Map<String, String>,
-        chunkSize: Long,
     ): TempDownload? {
         val handle = runCatching { fileStore.createTempFile() }.getOrNull()
         if (handle == null) {
-            runCatching { firstBody.close() }
+            runCatching { firstResponse.body?.close() }
             fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
             return null
         }
 
         var downloaded = 0L
         var finished = false
-        var body: HttpBody? = firstBody
-        var total = firstRangeTotal ?: declaredSize
+        var total = firstResponse.totalBytes ?: declaredSize
+        var expectedEnd = ContentRange.parse(firstResponse.contentRange)?.end
+        var body: HttpBody? = firstResponse.body
+        var resumeAttempts = 0
         try {
             while (true) {
                 if (isCancelRequested(jobId)) {
@@ -1727,77 +1692,40 @@ class HttpDownloadEngine(
                 }
                 val currentBody = body ?: break
                 body = null
-                val buffer = ByteArray(chunkSize.toInt().coerceIn(4096, 64 * 1024))
-                var chunkRead = 0L
-                while (true) {
-                    val count = withContext(ioDispatcher) { currentBody.readNext(buffer) }
-                    if (count == -1) break
-                    if (count == 0) continue
-                    if (!writeChunk(jobId, handle, buffer, count)) return null
-                    chunkRead += count
-                    downloaded += count
-                    reportProgress(jobId, downloaded, total)
-                    currentCoroutineContext().ensureActive()
-                }
-                runCatching { currentBody.close() }
-
+                val bodyStart = downloaded
+                val read = readBodyToTemp(jobId, handle, currentBody, downloaded, total) ?: return null
+                downloaded = read.downloaded
+                currentCoroutineContext().ensureActive()
                 if (isCancelRequested(jobId)) {
                     confirmCancelled(jobId)
                     return null
                 }
                 if (total != null && downloaded >= total) break
-                if (chunkRead <= 0L) {
+                // A known total that was not reached, a dropped transport, or a
+                // stopped ranged body are all premature ends.
+                val truncated = read.failed ||
+                    downloaded == bodyStart ||
+                    total != null ||
+                    (expectedEnd != null && downloaded - 1 < expectedEnd)
+                if (!truncated) break
+                if (resumeAttempts >= MAX_RESUME_ATTEMPTS) {
                     fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
                     return null
                 }
-
-                val start = downloaded
-                val end = if (total != null) {
-                    minOf(start + chunkSize - 1, total - 1)
-                } else {
-                    start + chunkSize - 1
+                resumeAttempts++
+                val response = resumeFromOffset(jobId, sourceUrl, headers, downloaded, total?.minus(1))
+                    ?: return null
+                if (response.statusCode == 416) break
+                if (total == null) {
+                    total = ContentRange.totalBytes(response.contentRange) ?: declaredSize
                 }
-                val request = HttpRequest(url = sourceUrl, headers = headers, range = start..end)
-                when (val response = withContext(ioDispatcher) { transfer.execute(request) }) {
-                    is HttpResponse.Final -> {
-                        if (response.statusCode == 416) break // nothing left to fetch
-                        if (response.statusCode !in 200..299) {
-                            runCatching { response.body?.close() }
-                            val error = mapHttpStatus(response.statusCode)
-                            fail(jobId, error.code, error.message, error.retryable)
-                            return null
-                        }
-                        if (total == null) {
-                            total = response.contentRange?.let { ContentRange.totalBytes(it) } ?: declaredSize
-                        }
-                        val nextBody = response.body
-                        if (nextBody == null) {
-                            fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
-                            return null
-                        }
-                        body = nextBody
-                    }
-
-                    is HttpResponse.Redirect -> {
-                        fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected between chunks.")
-                        return null
-                    }
-
-                    is HttpResponse.Failed -> {
-                        fail(jobId, JobErrorCode.NETWORK_FAILURE, response.message)
-                        return null
-                    }
-
-                    is HttpResponse.Unavailable -> {
-                        fail(
-                            jobId,
-                            JobErrorCode.ENGINE_UNAVAILABLE,
-                            "A required download tool is missing on this device.",
-                            retryable = false,
-                        )
-                        return null
-                    }
+                expectedEnd = ContentRange.parse(response.contentRange)?.end
+                val nextBody = response.body
+                if (nextBody == null) {
+                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
+                    return null
                 }
+                body = nextBody
             }
 
             currentCoroutineContext().ensureActive()
@@ -1817,6 +1745,239 @@ class HttpDownloadEngine(
             runCatching { body?.close() }
             if (!finished) {
                 runCatching { handle.discard() }
+            }
+        }
+    }
+
+    /**
+     * Ranged chunk reader for formats that declare `http_chunk_size`. Each
+     * chunk is one `Range` request appended to the same temp file; the total
+     * comes from the first chunk's `Content-Range` (or the declared format
+     * size). A non-2xx chunk status maps through the shared HTTP table, so a
+     * mid-stream 403 is `UNAVAILABLE_OR_PRIVATE`, not `NETWORK_FAILURE`.
+     * T-134: a chunk that dies mid-body continues from the temp size with
+     * `Range: bytes=<size>-` while the server answers 206 with a matching
+     * `Content-Range`; the continuation budget is bounded per attempt, and a
+     * server that ignores the range fails typed instead of corrupting the
+     * temp.
+     */
+    private suspend fun streamChunkedToTemp(
+        jobId: String,
+        firstResponse: HttpResponse.Final,
+        declaredSize: Long?,
+        sourceUrl: String,
+        headers: Map<String, String>,
+        chunkSize: Long,
+    ): TempDownload? {
+        val firstBody = firstResponse.body
+        if (firstBody == null) {
+            fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
+            return null
+        }
+        val handle = runCatching { fileStore.createTempFile() }.getOrNull()
+        if (handle == null) {
+            runCatching { firstBody.close() }
+            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+            return null
+        }
+
+        var downloaded = 0L
+        var finished = false
+        var body: HttpBody? = firstBody
+        var total = firstResponse.totalBytes ?: ContentRange.totalBytes(firstResponse.contentRange) ?: declaredSize
+        var expectedEnd = ContentRange.parse(firstResponse.contentRange)?.end
+        var resumeAttempts = 0
+        try {
+            while (true) {
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return null
+                }
+                val currentBody = body ?: break
+                body = null
+                val bodyStart = downloaded
+                val read = readBodyToTemp(jobId, handle, currentBody, downloaded, total) ?: return null
+                downloaded = read.downloaded
+                currentCoroutineContext().ensureActive()
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return null
+                }
+                if (total != null && downloaded >= total) break
+                val truncated = read.failed ||
+                    downloaded == bodyStart ||
+                    (expectedEnd != null && downloaded - 1 < expectedEnd)
+                if (truncated) {
+                    if (resumeAttempts >= MAX_RESUME_ATTEMPTS) {
+                        fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
+                        return null
+                    }
+                    resumeAttempts++
+                }
+
+                val start = downloaded
+                val end = if (total != null) {
+                    minOf(start + chunkSize - 1, total - 1)
+                } else {
+                    start + chunkSize - 1
+                }
+                val response = resumeFromOffset(jobId, sourceUrl, headers, start, end) ?: return null
+                if (response.statusCode == 416) break // nothing left to fetch
+                if (total == null) {
+                    total = ContentRange.totalBytes(response.contentRange) ?: declaredSize
+                }
+                expectedEnd = ContentRange.parse(response.contentRange)?.end
+                val nextBody = response.body
+                if (nextBody == null) {
+                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source returned an empty chunk.")
+                    return null
+                }
+                body = nextBody
+            }
+
+            currentCoroutineContext().ensureActive()
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return null
+            }
+            if (total != null && downloaded < total) {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source stopped before the file was complete.")
+                return null
+            }
+
+            handle.close()
+            finished = true
+            return TempDownload(handle, downloaded, total)
+        } finally {
+            runCatching { body?.close() }
+            if (!finished) {
+                runCatching { handle.discard() }
+            }
+        }
+    }
+
+    /** One body's outcome: the temp size after it and whether the transport dropped. */
+    private class BodyRead(val downloaded: Long, val failed: Boolean)
+
+    /**
+     * Reads [body] into [handle] until the body ends or the transport drops.
+     * Returns null only when the job was already failed by a disk write, so
+     * the caller can stop with its `finally` discarding the temp. [start] is
+     * the temp size before this body; progress keeps reporting from the job
+     * start. Cancellation and disk failures keep their typed paths.
+     */
+    private suspend fun readBodyToTemp(
+        jobId: String,
+        handle: FileHandle,
+        body: HttpBody,
+        start: Long,
+        total: Long?,
+    ): BodyRead? {
+        var read = 0L
+        var failed = false
+        try {
+            val buffer = ByteArray(chunkSize)
+            while (!isCancelRequested(jobId)) {
+                val count = withContext(ioDispatcher) { body.readNext(buffer) }
+                if (count == -1) break
+                if (count == 0) continue
+                if (!writeChunk(jobId, handle, buffer, count)) return null
+                read += count
+                reportProgress(jobId, start + read, total)
+                currentCoroutineContext().ensureActive()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            failed = true
+        } finally {
+            runCatching { body.close() }
+        }
+        return BodyRead(start + read, failed)
+    }
+
+    /**
+     * T-134: asks for `bytes=<start>-<end>` (or an open-ended `bytes=<start>-`
+     * when [end] is null) and returns the response only when it is a `206`
+     * whose `Content-Range` starts exactly at [start]. A `200` (range ignored)
+     * or a mismatched range fails typed, because appending that body would
+     * corrupt the temp the engine already wrote. `416` is returned for the
+     * caller to treat as done. Redirects and transport failures keep the
+     * existing typed mapping.
+     */
+    private suspend fun resumeFromOffset(
+        jobId: String,
+        sourceUrl: String,
+        headers: Map<String, String>,
+        start: Long,
+        end: Long?,
+    ): HttpResponse.Final? {
+        val request = if (end != null && end >= start) {
+            HttpRequest(url = sourceUrl, headers = headers, range = start..end)
+        } else {
+            HttpRequest(url = sourceUrl, headers = headers + (HeaderNames.RANGE to "bytes=$start-"))
+        }
+        val response = try {
+            withContext(ioDispatcher) { transfer.execute(request) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            fail(jobId, JobErrorCode.NETWORK_FAILURE, "The download failed. Check the network and retry.")
+            return null
+        }
+        return when (response) {
+            is HttpResponse.Final -> when {
+                response.statusCode == 416 -> {
+                    runCatching { response.body?.close() }
+                    response
+                }
+
+                response.statusCode != 206 -> {
+                    runCatching { response.body?.close() }
+                    if (response.statusCode in 200..299) {
+                        fail(
+                            jobId,
+                            JobErrorCode.NETWORK_FAILURE,
+                            "The server ignored the resume request, so the file cannot be continued safely.",
+                        )
+                    } else {
+                        val error = mapHttpStatus(response.statusCode)
+                        fail(jobId, error.code, error.message, error.retryable)
+                    }
+                    null
+                }
+
+                ContentRange.startByte(response.contentRange) != start -> {
+                    runCatching { response.body?.close() }
+                    fail(
+                        jobId,
+                        JobErrorCode.NETWORK_FAILURE,
+                        "The server answered the resume request with a different byte range.",
+                    )
+                    null
+                }
+
+                else -> response
+            }
+
+            is HttpResponse.Redirect -> {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The source redirected between chunks.")
+                null
+            }
+
+            is HttpResponse.Failed -> {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, response.message)
+                null
+            }
+
+            is HttpResponse.Unavailable -> {
+                fail(
+                    jobId,
+                    JobErrorCode.ENGINE_UNAVAILABLE,
+                    "A required download tool is missing on this device.",
+                    retryable = false,
+                )
+                null
             }
         }
     }
@@ -2177,6 +2338,10 @@ internal fun resolveSelection(
                 "Choose M4A or Opus audio, or a single-file video.",
         )
     }
+
+    is Selection.MergeAll -> FormatResolution.Unsupported(
+        "This choice needs more than two streams merged at once, which this host does not support yet.",
+    )
 
     Selection.None -> FormatResolution.Unsupported(
         buildString {

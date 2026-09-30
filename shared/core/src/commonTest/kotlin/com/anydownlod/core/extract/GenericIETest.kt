@@ -120,7 +120,93 @@ class GenericIETest {
         assertFailsWith<ExtractionError.Malformed> { bad.downloadJson("https://example.org/api") }
     }
 
+    @Test
+    fun aMetaRefreshToAnotherPageIsFollowedOnce() = runTest {
+        val transfer = RoutingTransfer(
+            mapOf(
+                "https://example.org/watch" to
+                    """<html><body><meta http-equiv="refresh" content="0; url=/next"></body></html>""",
+                "https://example.org/next" to
+                    """<html><head><title>Next</title></head><body><video src="clip.mp4"></video></body></html>""",
+            ),
+        )
+        val registry = ExtractorRegistry(listOf(GenericIE(ExtractorHttp(transfer))))
+
+        val info = registry.extract("https://example.org/watch")
+
+        assertEquals("https://example.org/clip.mp4", info.formats.single().url)
+        assertEquals("https://example.org/watch", info.webpageUrl)
+        assertEquals("Next", info.title)
+        assertEquals(listOf("https://example.org/watch", "https://example.org/next"), transfer.requests)
+    }
+
+    @Test
+    fun aMetaRefreshDirectlyToMediaSkipsTheSecondFetch() = runTest {
+        val transfer = RoutingTransfer(
+            mapOf(
+                "https://example.org/watch" to
+                    """<meta http-equiv="refresh" content="0; url=/media/clip.mp4">""",
+            ),
+        )
+        val registry = ExtractorRegistry(listOf(GenericIE(ExtractorHttp(transfer))))
+
+        val info = registry.extract("https://example.org/watch")
+
+        assertEquals("https://example.org/media/clip.mp4", info.formats.single().url)
+        assertEquals(listOf("https://example.org/watch"), transfer.requests)
+    }
+
+    @Test
+    fun aSecondMetaRefreshIsNotFollowed() = runTest {
+        val transfer = RoutingTransfer(
+            mapOf(
+                "https://example.org/watch" to
+                    """<meta http-equiv="refresh" content="0; url=/next">""",
+                "https://example.org/next" to
+                    """<meta http-equiv="refresh" content="0; url=/third.mp4">""",
+            ),
+        )
+        val registry = ExtractorRegistry(listOf(GenericIE(ExtractorHttp(transfer))))
+
+        assertFailsWith<ExtractionError.NoFormats> {
+            registry.extract("https://example.org/watch")
+        }
+        assertEquals(2, transfer.requests.size)
+    }
+
+    @Test
+    fun aPolicyRejectedMetaRefreshTargetIsNotFollowed() = runTest {
+        val transfer = RoutingTransfer(
+            mapOf(
+                "https://example.org/watch" to
+                    """<meta http-equiv="refresh" content="0; url=ftp://example.org/clip.mp4">""",
+            ),
+        )
+        val registry = ExtractorRegistry(listOf(GenericIE(ExtractorHttp(transfer))))
+
+        assertFailsWith<ExtractionError.NoFormats> {
+            registry.extract("https://example.org/watch")
+        }
+        assertEquals(1, transfer.requests.size)
+    }
+
     // ------------------------------------------------------------------ fakes
+
+    private class RoutingTransfer(private val pages: Map<String, String>) : HttpTransfer {
+        val requests = mutableListOf<String>()
+
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            requests += request.url
+            val body = pages[request.url] ?: return HttpResponse.Final(statusCode = 404)
+            val bytes = body.encodeToByteArray()
+            return HttpResponse.Final(
+                statusCode = 200,
+                contentType = "text/html; charset=utf-8",
+                totalBytes = bytes.size.toLong(),
+                body = ByteArrayHttpBody(bytes),
+            )
+        }
+    }
 
     private class FixedTransfer(private val body: String) : HttpTransfer {
         override suspend fun execute(request: HttpRequest): HttpResponse {

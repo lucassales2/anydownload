@@ -57,6 +57,37 @@ class FormatSpecTest {
     }
 
     @Test
+    fun allAndMergeAllParseAsKeywordAtoms() {
+        assertEquals(FormatSpec.Single(FormatSpec.ALL), FormatSpec.parse("all"))
+        assertEquals(FormatSpec.Single(FormatSpec.MERGEALL), FormatSpec.parse("mergeall"))
+        assertEquals(FormatSpec.Single(FormatSpec.ALL), FormatSpec.parse(" all "))
+
+        val choices = assertIs<FormatSpec.Choices>(FormatSpec.parse("all,mergeall"))
+        assertEquals(
+            listOf(FormatSpec.Single(FormatSpec.ALL), FormatSpec.Single(FormatSpec.MERGEALL)),
+            choices.children,
+        )
+
+        val fallback = assertIs<FormatSpec.Fallback>(FormatSpec.parse("all/mergeall"))
+        assertEquals(FormatSpec.Single(FormatSpec.ALL), fallback.first)
+        assertEquals(FormatSpec.Single(FormatSpec.MERGEALL), fallback.second)
+
+        val merged = assertIs<FormatSpec.Merge>(FormatSpec.parse("best+mergeall"))
+        assertEquals(FormatSpec.Single("best"), merged.first)
+        assertEquals(FormatSpec.Single(FormatSpec.MERGEALL), merged.second)
+
+        val reversed = assertIs<FormatSpec.Merge>(FormatSpec.parse("all+best"))
+        assertEquals(FormatSpec.Single(FormatSpec.ALL), reversed.first)
+        assertEquals(FormatSpec.Single("best"), reversed.second)
+
+        val group = assertIs<FormatSpec.Group>(FormatSpec.parse("(all,mergeall)"))
+        assertEquals(
+            listOf(FormatSpec.Single(FormatSpec.ALL), FormatSpec.Single(FormatSpec.MERGEALL)),
+            group.children,
+        )
+    }
+
+    @Test
     fun implicitBestBacksALeadingFilter() {
         val single = assertIs<FormatSpec.Single>(FormatSpec.parse("[height<=720]"))
         assertEquals("best", single.name)

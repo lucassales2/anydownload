@@ -15,10 +15,12 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/GenericIE.kt"
       ],
       "status": "partial",
-      "scope": "HTML5 media subset: <video src>, <audio src>, and nested <source src>; relative URL resolution; UrlPolicy on every candidate; now reached through the `GenericIE` base and the registry. No playlists, embeds, iframes, JSON-LD, meta refresh, HLS, or DASH.",
+      "scope": "HTML5 media subset: <video src>, <audio src>, nested <source src>, plus T-137 `<embed src>` and `<iframe src>` when the target is a direct media file, JSON-LD `contentUrl`/`embedUrl`/`url` through the T-136 helpers, and one bounded meta-refresh hop through UrlPolicy in `GenericIE`; T-138 adds `.m3u8`/`.mpd` discovery in `src`/`data-*` attributes and raw page text, feeding the existing `M3u8`/`Mpd` parsers. Relative URL resolution; UrlPolicy on every candidate; reached through the `GenericIE` base and the registry. A non-media iframe is never crawled, the `Refresh` response header is not read, and there is still no playlist expansion, live/DRM handling beyond the typed parser failures, or JSON-LD metadata mapping.",
       "tasks": [
         "T-045",
-        "T-057"
+        "T-057",
+        "T-137",
+        "T-138"
       ],
       "portedAt": "2026-09-24"
     },
@@ -87,12 +89,14 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/InfoExtractor.kt",
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/InfoDict.kt",
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractionError.kt",
-        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractorHttp.kt"
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractorHttp.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/JsonLd.kt"
       ],
       "status": "partial",
-      "scope": "InfoExtractor base (`_VALID_URL`, `suitable`, `_match_id`, `_real_extract`), info dict and format model, typed errors, HTTP helper (`_download_webpage`, `_download_json`), and the helper subset D4's extractors call. No extractor decorators, geo bypass, player JS handling, subtitles, or postprocessing.",
+      "scope": "InfoExtractor base (`_VALID_URL`, `suitable`, `_match_id`, `_real_extract`), info dict and format model, typed errors, HTTP helper (`_download_webpage`, `_download_json`), and the helper subset D4's extractors call. T-136 adds JSON-LD object discovery (`_yield_json_ld` plus the `traverse_json_ld` `@graph` walk of `_json_ld`); the VideoObject/interaction/chapter mapping of `_json_ld` stays out. No extractor decorators, geo bypass, player JS handling, subtitles, or postprocessing.",
       "tasks": [
-        "T-057"
+        "T-057",
+        "T-136"
       ],
       "portedAt": "2026-09-24"
     },
@@ -105,9 +109,10 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSelector.kt"
       ],
       "status": "partial",
-      "scope": "`build_format_selector` grammar (SINGLE, GROUP, PICKFIRST, MERGE) and `_build_format_filter`; best/worst/type/`*`/`.N` selection, filters, `/` fallback, and the incomplete-format fallback. No `all`/`mergeall`, no multiple simultaneous streams, no extractor sort fields, no option surface.",
+      "scope": "`build_format_selector` grammar (SINGLE, GROUP, PICKFIRST, MERGE) and `_build_format_filter`; best/worst/type/`*`/`.N` selection, filters, `/` fallback, `,` lists that keep every child selection, `all` (every format, best first), `mergeall` (one merged selection over every usable stream), `+` merge products, and the incomplete-format fallback. No extractor sort fields and no option surface.",
       "tasks": [
-        "T-058"
+        "T-058",
+        "T-133"
       ],
       "portedAt": "2026-09-24"
     },
@@ -120,10 +125,11 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSorter.kt"
       ],
       "status": "partial",
-      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, parseIso8601, unifiedStrdate, parseFilesize, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
+      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), jsToJson (`js_to_json` subset: comments, single/backtick quotes, unquoted keys, trailing commas, undefined/void 0, hex/octal, new Date/new X, parseInt; no vars, templates, or new Map), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, determineExt (`determine_ext` with the `KNOWN_EXTENSIONS` subset the HLS/DASH slice needs), parseIso8601, unifiedStrdate, parseFilesize, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
       "tasks": [
         "T-057",
-        "T-058"
+        "T-058",
+        "T-136"
       ],
       "portedAt": "2026-09-24"
     },

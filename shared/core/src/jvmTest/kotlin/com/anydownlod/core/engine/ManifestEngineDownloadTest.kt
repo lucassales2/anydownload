@@ -22,6 +22,9 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -39,6 +42,8 @@ class ManifestEngineDownloadTest {
         "FRAGMENT-TWO".encodeToByteArray(),
     )
     private val keyBytes = ByteArray(16) { it.toByte() }
+    /** Parks the slow fragment until the cancel test releases it, so timing is deterministic. */
+    private val slowFragmentGate = CountDownLatch(1)
     private val ivHex = "101112131415161718191a1b1c1d1e1f"
     private val encFragments = listOf(
         "8997c6837d7190199fa790420922462e301bfa64f5465b96e68a47d365e8ace2",
@@ -55,6 +60,10 @@ class ManifestEngineDownloadTest {
 
     private fun server(): HttpServer {
         val server = HttpServer.create(InetSocketAddress(0), 0)
+        // A parked fragment must not block the other handlers on one dispatcher.
+        server.executor = Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "anydownlod-test-server").apply { isDaemon = true }
+        }
         server.createContext("/master.m3u8") { exchange ->
             respond(
                 exchange,
@@ -147,9 +156,98 @@ class ManifestEngineDownloadTest {
                 """.trimIndent().encodeToByteArray(),
             )
         }
+        server.createContext("/generic-hls.html") { exchange ->
+            respond(
+                exchange,
+                "text/html; charset=utf-8",
+                """<html><body><script>const stream = "/media.m3u8";</script></body></html>""".encodeToByteArray(),
+            )
+        }
+        server.createContext("/generic-mpd.html") { exchange ->
+            respond(
+                exchange,
+                "text/html; charset=utf-8",
+                """<html><body><div data-src="/dash/manifest.mpd"></div></body></html>""".encodeToByteArray(),
+            )
+        }
+        server.createContext("/generic-two.html") { exchange ->
+            respond(
+                exchange,
+                "text/html; charset=utf-8",
+                """<html><body><script>var a = "/media.m3u8", b = "/dash/manifest.mpd";</script></body></html>""".encodeToByteArray(),
+            )
+        }
+        server.createContext("/live.m3u8") { exchange ->
+            respond(
+                exchange,
+                "application/vnd.apple.mpegurl",
+                """
+                    #EXTM3U
+                    #EXT-X-TARGETDURATION:6
+                    #EXTINF:5.0,
+                    l0.ts
+                    #EXTINF:5.0,
+                    l1.ts
+                """.trimIndent().encodeToByteArray(),
+            )
+        }
+        server.createContext("/generic-live.html") { exchange ->
+            respond(
+                exchange,
+                "text/html; charset=utf-8",
+                """<html><body><div data-src="/live.m3u8"></div></body></html>""".encodeToByteArray(),
+            )
+        }
+        server.createContext("/dash/drm.mpd") { exchange ->
+            respond(
+                exchange,
+                "application/dash+xml",
+                """
+                    <?xml version="1.0"?>
+                    <MPD mediaPresentationDuration="PT20S">
+                      <Period>
+                        <AdaptationSet mimeType="video/mp4" codecs="avc1.4d401f">
+                          <ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc"/>
+                          <Representation id="v1" bandwidth="1500000">
+                            <SegmentTemplate timescale="1000" duration="10000" startNumber="1"
+                              initialization="init.m4s" media="seg-${'$'}Number${'$'}.m4s"/>
+                          </Representation>
+                        </AdaptationSet>
+                      </Period>
+                    </MPD>
+                """.trimIndent().encodeToByteArray(),
+            )
+        }
+        server.createContext("/generic-drm.html") { exchange ->
+            respond(
+                exchange,
+                "text/html; charset=utf-8",
+                """<html><body><div data-src="/dash/drm.mpd"></div></body></html>""".encodeToByteArray(),
+            )
+        }
+        server.createContext("/skip.m3u8") { exchange ->
+            respond(
+                exchange,
+                "application/vnd.apple.mpegurl",
+                """
+                    #EXTM3U
+                    #EXT-X-TARGETDURATION:6
+                    #EXT-X-MEDIA-SEQUENCE:0
+                    #EXTINF:5.0,
+                    g0.ts
+                    #EXTINF:5.0,
+                    missing-fragment.ts
+                    #EXTINF:5.0,
+                    g2.ts
+                    #EXT-X-ENDLIST
+                """.trimIndent().encodeToByteArray(),
+            )
+        }
+        server.createContext("/g0.ts") { exchange -> respond(exchange, "video/mp2t", "G0".encodeToByteArray()) }
+        server.createContext("/g2.ts") { exchange -> respond(exchange, "video/mp2t", "G2".encodeToByteArray()) }
         server.createContext("/s0.ts") { exchange -> respond(exchange, "video/mp2t", "S0".encodeToByteArray()) }
         server.createContext("/s1.ts") { exchange ->
-            Thread.sleep(4_000)
+            slowFragmentGate.await(30, TimeUnit.SECONDS)
             respond(exchange, "video/mp2t", "S1".encodeToByteArray())
         }
         server.createContext("/s2.ts") { exchange -> respond(exchange, "video/mp2t", "S2".encodeToByteArray()) }
@@ -237,6 +335,120 @@ class ManifestEngineDownloadTest {
     }
 
     @Test
+    fun aGenericPageWithOneM3u8AssemblesFragments() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-generic-hls")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/generic-hls.html", "generic-hls-key")
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("media.ts", finished.artifacts.single().relativePath)
+            assertEquals(
+                tsFragments.joinToString("") { it.decodeToString() },
+                Files.readAllBytes(root.resolve("media.ts")).decodeToString(),
+            )
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aGenericPageWithOneMpdAssemblesSegments() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-generic-dash")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/generic-mpd.html", "generic-mpd-key")
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("manifest.mp4", finished.artifacts.single().relativePath)
+            assertEquals("INITSEG-1SEG-2", Files.readAllBytes(root.resolve("manifest.mp4")).decodeToString())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aGenericPageWithTwoManifestsFailsTyped() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-generic-two")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/generic-two.html", "generic-two-key")
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(com.anydownlod.core.domain.JobErrorCode.EXTRACTION_FAILURE, finished.error?.code)
+            assertTrue(finished.error?.message?.contains("more than one") == true, finished.error?.message)
+            assertTrue(finished.artifacts.isEmpty())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aDiscoveredLiveHlsFailsTyped() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-generic-live")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/generic-live.html", "generic-live-key")
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(com.anydownlod.core.domain.JobErrorCode.UNSUPPORTED_FORMAT, finished.error?.code)
+            assertTrue(finished.error?.message?.contains("Live") == true, finished.error?.message)
+            assertTrue(finished.artifacts.isEmpty())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aDiscoveredDrmMpdFailsTyped() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-generic-drm")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/generic-drm.html", "generic-drm-key")
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(com.anydownlod.core.domain.JobErrorCode.UNSUPPORTED_FORMAT, finished.error?.code)
+            assertTrue(finished.error?.message?.contains("DRM") == true, finished.error?.message)
+            assertTrue(finished.artifacts.isEmpty())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun unavailableFragmentIsSkippedByTheEngineDefault() = runBlocking {
+        val server = server()
+        val root = Files.createTempDirectory("anydownlod-hls-skip")
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            val engine = engine(server, root)
+            val job = submit(engine, "$base/skip.m3u8", "hls-skip-key")
+            val finished = waitForTerminal(engine, job.id)
+            // Upstream VOD default: the 404 fragment is skipped, not fatal.
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("G0G2", Files.readAllBytes(root.resolve("skip.ts")).decodeToString())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun cancelMidPlaylistLeavesNoFile() = runBlocking {
         val server = server()
         val root = Files.createTempDirectory("anydownlod-hls-cancel")
@@ -250,6 +462,7 @@ class ManifestEngineDownloadTest {
                 }
             }
             engine.cancel(job.id)
+            slowFragmentGate.countDown()
             val finished = waitForTerminal(engine, job.id)
             assertEquals(JobState.CANCELLED, finished.state, finished.error?.message)
             assertTrue(finished.artifacts.isEmpty())
@@ -261,6 +474,7 @@ class ManifestEngineDownloadTest {
             }
             assertTrue(published.isEmpty(), "cancel published ${published.map { it.fileName }}")
         } finally {
+            slowFragmentGate.countDown()
             server.stop(0)
             root.toFile().deleteRecursively()
         }

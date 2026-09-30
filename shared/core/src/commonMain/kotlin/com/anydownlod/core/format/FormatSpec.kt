@@ -7,11 +7,11 @@
  *
  * yt-dlp is released under the Unlicense:
  *   https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/LICENSE
- * This translation keeps that license and covers the grammar D4 uses:
+ * This translation keeps that license and covers the grammar D4 and D10 use:
  * `best`/`worst`/`b`/`w` with video/audio types and `*`, explicit format ids,
- * `[key op value]` filters, `/` fallback, `,` lists, `()` groups, and `+`
- * merge nodes. `YoutubeDL.py` itself is not vendored; see shared/core/NOTICE.md
- * and port/manifest.json.
+ * the `all` and `mergeall` keyword atoms, `[key op value]` filters, `/`
+ * fallback, `,` lists, `()` groups, and `+` merge nodes. `YoutubeDL.py` itself
+ * is not vendored; see shared/core/NOTICE.md and port/manifest.json.
  */
 package com.anydownlod.core.format
 
@@ -141,7 +141,7 @@ internal object FormatFieldValue {
 sealed interface FormatSpec {
     val filters: List<FormatFilter>
 
-    /** An atom (`best`, `bv*`, `137`, or the implicit `best` from `[...]`). */
+    /** An atom (`best`, `bv*`, `137`, `all`, `mergeall`, or the implicit `best` from `[...]`). */
     data class Single(
         val name: String = "best",
         override val filters: List<FormatFilter> = emptyList(),
@@ -174,6 +174,12 @@ sealed interface FormatSpec {
     ) : FormatSpec
 
     companion object {
+        /** Upstream `all`: every format, best first. */
+        const val ALL = "all"
+
+        /** Upstream `mergeall`: one merged selection over every usable stream. */
+        const val MERGEALL = "mergeall"
+
         /** Parses one upstream format specification, or throws [FormatSpecException]. */
         fun parse(text: String): FormatSpec {
             val parser = Parser(tokenize(text))

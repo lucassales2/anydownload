@@ -1,5 +1,7 @@
 package com.anydownlod.core.extract
 
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -52,6 +54,43 @@ class ExtractorUtilsTest {
         assertNull(ExtractorUtils.parseJson("not json at all"))
         assertNull(ExtractorUtils.parseJson(null))
         assertFailsWith<ExtractionError.Malformed> { ExtractorUtils.parseJson("not json at all", fatal = true) }
+    }
+
+    @Test
+    fun jsToJsonNormalizesTheCommonLiteralForms() {
+        val normalized = ExtractorUtils.jsToJson(
+            """
+            {
+                /* block comment */ title: 'it\'s "quoted"', // line comment
+                count: 0x1A,
+                mask: 017,
+                missing: undefined,
+                other: void 0,
+                released: new Date("2020-01-01"),
+                trailing: true,
+            }
+            """.trimIndent(),
+        )
+        val json = assertIs<JsonObject>(ExtractorUtils.parseJson(normalized))
+        assertEquals("it's \"quoted\"", (json["title"] as JsonPrimitive).content)
+        assertEquals("26", (json["count"] as JsonPrimitive).content)
+        assertEquals("15", (json["mask"] as JsonPrimitive).content)
+        assertIs<JsonNull>(json["missing"])
+        assertIs<JsonNull>(json["other"])
+        assertEquals("2020-01-01", (json["released"] as JsonPrimitive).content)
+        assertEquals("true", (json["trailing"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun determineExtReadsTheTailBeforeTheQuery() {
+        assertEquals("mp4", ExtractorUtils.determineExt("https://cdn.example/video.mp4"))
+        assertEquals("mp4", ExtractorUtils.determineExt("https://cdn.example/video.mp4?token=1"))
+        assertEquals("m3u8", ExtractorUtils.determineExt("https://cdn.example/master.m3u8"))
+        assertEquals("mp4", ExtractorUtils.determineExt("https://cdn.example/clip.mp4/"))
+        assertEquals("xyz", ExtractorUtils.determineExt("https://cdn.example/a/b.xyz"))
+        assertEquals("unknown_video", ExtractorUtils.determineExt("https://cdn.example/watch"))
+        assertEquals("unknown_video", ExtractorUtils.determineExt("v2"))
+        assertEquals("fallback", ExtractorUtils.determineExt(null, defaultExt = "fallback"))
     }
 
     @Test

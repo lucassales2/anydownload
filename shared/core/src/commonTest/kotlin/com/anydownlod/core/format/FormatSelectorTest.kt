@@ -4,7 +4,6 @@ import com.anydownlod.core.extract.InfoDict
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 /**
  * Selection cases translated from `test/test_YoutubeDL.py` `TestFormatSelection`
@@ -133,12 +132,109 @@ class FormatSelectorTest {
     }
 
     @Test
-    fun commaListReturnsTheFirstNonEmptySelection() {
+    fun commaListReturnsEveryChildSelection() {
         val formats = listOf(format(id = "a"), format(id = "b"))
-        // D4 has one job per spec; upstream would return both.
-        assertTrue(select(formats, "a,b") is Selection.Single)
+        val info = InfoDict(formats = formats)
+        // Upstream `,` yields every child; `select` is the one-job view (T-133).
+        assertEquals(listOf("a", "b"), FormatSelector.selectAll(info, "a,b").map(::singleId))
+        assertEquals(listOf("b"), FormatSelector.selectAll(info, "missing,b").map(::singleId))
         assertEquals("a", singleId(select(formats, "a,b")))
         assertEquals("b", singleId(select(formats, "missing,b")))
+    }
+
+    @Test
+    fun allSelectsEveryFormatBestFirst() {
+        val formats = listOf(
+            format(id = "35", ext = "mp4", preference = 0),
+            format(id = "example-with-dashes", ext = "webm", preference = 1),
+            format(id = "45", ext = "webm", preference = 2),
+            format(id = "47", ext = "webm", preference = 3),
+            format(id = "2", ext = "flv", preference = 4),
+        )
+        // test_YoutubeDL.py: test('all', '2', '47', '45', 'example-with-dashes', '35')
+        assertEquals(
+            listOf("2", "47", "45", "example-with-dashes", "35"),
+            FormatSelector.selectAll(InfoDict(formats = formats), "all").map(::singleId),
+        )
+    }
+
+    @Test
+    fun mergeAllFoldsEveryUsableStreamBestFirst() {
+        val formats = listOf(
+            format(id = "35", ext = "mp4", preference = 0),
+            format(id = "example-with-dashes", ext = "webm", preference = 1),
+            format(id = "45", ext = "webm", preference = 2),
+            format(id = "47", ext = "webm", preference = 3),
+            format(id = "2", ext = "flv", preference = 4),
+        )
+        // test_YoutubeDL.py: test('mergeall', '2+47+45+example-with-dashes+35', multi=True)
+        val merged = assertIs<Selection.MergeAll>(
+            FormatSelector.selectAll(InfoDict(formats = formats), "mergeall").single(),
+        )
+        assertEquals(
+            listOf("2", "47", "45", "example-with-dashes", "35"),
+            merged.formats.map { it.formatId },
+        )
+    }
+
+    @Test
+    fun mergeProducesEveryVideoAudioPair() {
+        val formats = listOf(
+            format(id = "v-low", vcodec = "avc1", acodec = "none", preference = 0),
+            format(id = "v-high", vcodec = "avc1", acodec = "none", preference = 1),
+            format(id = "a-low", vcodec = "none", acodec = "opus", preference = 0),
+            format(id = "a-high", vcodec = "none", acodec = "opus", preference = 1),
+        )
+        // Upstream `+` is itertools.product; the left side is the outer loop.
+        // Both sides use `all` so each yields several formats, not just the best.
+        val spec = "all[vcodec!=none]+all[acodec!=none]"
+        val pairs = FormatSelector.selectAll(InfoDict(formats = formats), spec).map {
+            val merge = assertIs<Selection.Merge>(it)
+            "${merge.video.formatId}+${merge.audio.formatId}"
+        }
+        assertEquals(listOf("v-high+a-high", "v-high+a-low", "v-low+a-high", "v-low+a-low"), pairs)
+    }
+
+    @Test
+    fun d4SpecsStillYieldExactlyOneSelection() {
+        val formats = listOf(
+            format(id = "muxed", vcodec = "avc1", acodec = "opus"),
+            format(id = "v", vcodec = "avc1", acodec = "none"),
+            format(id = "a", vcodec = "none", acodec = "opus"),
+        )
+        val info = InfoDict(formats = formats)
+        // D4 specs keep the one-selection view the engine consumes.
+        assertEquals(1, FormatSelector.selectAll(info, "best").size)
+        assertEquals(1, FormatSelector.selectAll(info, "bv*+ba").size)
+        assertEquals(0, FormatSelector.selectAll(info, "71").size)
+        assertIs<Selection.Single>(select(formats, "best"))
+        assertIs<Selection.Merge>(select(formats, "bv*+ba"))
+        assertEquals(Selection.None, select(formats, "71"))
+    }
+
+    @Test
+    fun groupPassesThroughEveryChild() {
+        val formats = listOf(
+            format(id = "a", height = 480),
+            format(id = "b", height = 1080),
+        )
+        assertEquals(
+            listOf("b", "a"),
+            FormatSelector.selectAll(InfoDict(formats = formats), "(best,worst)").map(::singleId),
+        )
+    }
+
+    @Test
+    fun allAndMergeAllDropDrmFormats() {
+        val formats = listOf(
+            format(id = "drm", hasDrm = true, preference = 10),
+            format(id = "clear-low", preference = 0),
+            format(id = "clear-high", preference = 1),
+        )
+        val info = InfoDict(formats = formats)
+        assertEquals(listOf("clear-high", "clear-low"), FormatSelector.selectAll(info, "all").map(::singleId))
+        val merged = assertIs<Selection.MergeAll>(FormatSelector.selectAll(info, "mergeall").single())
+        assertEquals(listOf("clear-high", "clear-low"), merged.formats.map { it.formatId })
     }
 
     @Test

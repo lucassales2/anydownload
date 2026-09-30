@@ -142,6 +142,19 @@ class HttpRequestTest {
         assertEquals(null, ContentRange.totalBytes("bytes"))
     }
 
+    @Test
+    fun contentRangeParsesInclusiveRanges() {
+        assertEquals(ContentRange.Bytes(0, 9, 100), ContentRange.parse("bytes 0-9/100"))
+        assertEquals(ContentRange.Bytes(1000, 2047, 9000), ContentRange.parse("bytes 1000-2047/9000"))
+        assertEquals(ContentRange.Bytes(5, 5, null), ContentRange.parse("bytes 5-5/*"))
+        assertEquals(null, ContentRange.parse("bytes */100"))
+        assertEquals(null, ContentRange.parse("bytes 9-0/100"))
+        assertEquals(null, ContentRange.parse("bytes"))
+        assertEquals(null, ContentRange.parse(null))
+        assertEquals(1000L, ContentRange.startByte("bytes 1000-2047/9000"))
+        assertEquals(null, ContentRange.startByte("bytes */100"))
+    }
+
     // ------------------------------------------------------------ redirects
 
     @Test

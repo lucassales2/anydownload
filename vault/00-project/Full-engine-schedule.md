@@ -69,7 +69,7 @@ Do them in this order. D10 does not start before [T-120](../06-tasks/T-120-Metro
 
 | Phase | Days | Task | Delivers |
 | --- | ---: | --- | --- |
-| [D10](Phase-10-Shared-downloader.md) | 8 | [T-123](../06-tasks/T-123-Shared-downloader.md) | Format lists, HTTP resume, fragment concurrency, generic extractor, helper remainder |
+| [D10](Phase-10-Shared-downloader.md) | 8 | [T-133](../06-tasks/T-133-Format-lists.md)–[T-139](../06-tasks/T-139-Phase-10-verification.md) | Format lists, HTTP resume, fragment concurrency, generic extractor, helper remainder |
 | [D11](Phase-11-Cookies.md) | 6 | [T-018](../06-tasks/T-018-Cookie-lifecycle.md) | On-device Netscape cookie jar on extractor requests |
 | [D12](Phase-12-Youtube-done.md) | 15 | [T-124](../06-tasks/T-124-Youtube-done.md) | The 21 `Youtube*` classes at the pin |
 | [D13](Phase-13-Postprocessors.md) | 10 | [T-015](../06-tasks/T-015-Captions-thumbnails-metadata.md), [T-016](../06-tasks/T-016-Clips-chapters-SponsorBlock.md) | Subs, thumbnails, embeds, clips, chapters, SponsorBlock |

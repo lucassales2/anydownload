@@ -205,9 +205,27 @@ class ByteArrayHttpBody(private val bytes: ByteArray) : HttpBody {
 
 /** Shared parser for `Content-Range: bytes 0-1023/12345`. */
 object ContentRange {
+    /** An inclusive `bytes start-end/total` range; [total] is null for `*`. */
+    data class Bytes(val start: Long, val end: Long, val total: Long?)
+
     fun totalBytes(value: String?): Long? {
         if (value.isNullOrBlank()) return null
         val total = value.substringAfterLast('/', "").trim()
         return total.toLongOrNull()?.takeIf { it >= 0 }
     }
+
+    /** The announced inclusive range, or null when the header is malformed. */
+    fun parse(value: String?): Bytes? {
+        if (value.isNullOrBlank()) return null
+        val range = value.trim().removePrefix("bytes").removePrefix("=").trim().substringBefore('/').trim()
+        val parts = range.split('-', limit = 2)
+        if (parts.size != 2) return null
+        val start = parts[0].trim().toLongOrNull() ?: return null
+        val end = parts[1].trim().toLongOrNull() ?: return null
+        if (start < 0 || end < start) return null
+        return Bytes(start, end, totalBytes(value))
+    }
+
+    /** The first byte of the announced range, or null when it is absent or malformed. */
+    fun startByte(value: String?): Long? = parse(value)?.start
 }
