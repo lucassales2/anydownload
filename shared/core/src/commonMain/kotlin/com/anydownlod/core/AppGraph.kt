@@ -6,6 +6,39 @@ import com.anydownlod.core.music.SpotifyAuthService
 import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 
+/** Opens a source URL in the host browser. */
+fun interface UrlOpener {
+    operator fun invoke(url: String)
+}
+
+/** Opens a registered artifact. */
+fun interface FileOpener {
+    operator fun invoke(artifact: Artifact)
+}
+
+/** Reveals a registered artifact in the host file browser. */
+fun interface FileRevealer {
+    operator fun invoke(artifact: Artifact)
+}
+
+/** Opens the host directory chooser. Returns the chosen path, or null. */
+fun interface FolderPicker {
+    operator fun invoke(): String?
+}
+
+/** Opens the host file chooser for a cookie file. Returns the chosen path, or null. */
+fun interface CookieFilePicker {
+    operator fun invoke(): String?
+}
+
+/**
+ * Fetches a preview thumbnail. Returns null when the host cannot load images
+ * or the URL is not an http(s) image. Never throws.
+ */
+fun interface ThumbnailLoader {
+    suspend operator fun invoke(url: String): ByteArray?
+}
+
 /**
  * Everything the shared screens need, wired once by each host.
  *

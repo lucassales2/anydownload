@@ -11,13 +11,21 @@
 package com.anydownlod.web
 
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.CookieFilePicker
+import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.FileOpener
+import com.anydownlod.core.FileRevealer
+import com.anydownlod.core.FolderPicker
+import com.anydownlod.core.ThumbnailLoader
+import com.anydownlod.core.UrlOpener
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.WebExtensionEngine
 import com.anydownlod.core.extract.ExtractorHttp
@@ -36,6 +44,7 @@ import com.anydownlod.core.persist.JobDocumentStore
 import com.anydownlod.core.persist.PersistingDownloadEngine
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.WebExtensionTransfer
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provider
@@ -47,7 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 
-@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class, AddFormBindings::class])
 internal interface WebAppGraph : ViewModelGraph, AppGraph {
 
     override val engine: DownloadEngine
@@ -206,6 +215,42 @@ internal interface WebAppGraph : ViewModelGraph, AppGraph {
         matcher = AudioMatcher.default(YoutubeSearch(extractorHttp)),
         engine = engine,
     )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun urlOpener(): UrlOpener = UrlOpener { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileOpener(): FileOpener = FileOpener { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileRevealer(): FileRevealer = FileRevealer { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun folderPicker(): FolderPicker = FolderPicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun thumbnailLoader(): ThumbnailLoader = ThumbnailLoader { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStore(): CookieStore = CookieStore.Unavailable
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun toolkitCapabilities(): ToolkitCapabilities = ToolkitCapabilities.Unavailable
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotifyOptional(service: SpotifyDownloadService): SpotifyDownloadService? = service
 }
 
 /** The one restored queue plus the startup warning. */

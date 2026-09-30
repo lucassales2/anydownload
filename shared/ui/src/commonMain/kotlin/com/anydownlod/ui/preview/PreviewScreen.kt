@@ -24,10 +24,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,12 +35,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.MediaPreview
-import kotlinx.coroutines.CancellationException
-import com.anydownlod.core.MediaPreviewResult
-import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.PreviewFailure
-import com.anydownlod.core.postprocess.ToolkitCapabilities
-import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.add.AddFormViewModel
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.download
 import com.anydownlod.ui.generated.resources.preview_back
@@ -62,55 +57,31 @@ import com.anydownlod.ui.i18n.text
 import com.anydownlod.ui.theme.PageInset
 import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import org.jetbrains.compose.resources.stringResource
-
-private sealed interface PreviewPhase {
-    data object Loading : PreviewPhase
-    data class Ready(val preview: MediaPreview, val thumbnail: ByteArray?) : PreviewPhase
-    data class Failed(val failure: PreviewFailure) : PreviewPhase
-}
 
 /**
  * Loads title, thumbnail, and related metadata, then starts the download only
  * after the user confirms. A failed lookup still offers Download.
  *
- * [editor] is the same presenter the home field uses: the collapsible Edit
- * panel writes its choices, and Download submits them with the request.
+ * The edit panel writes the shared [AddFormViewModel]. Download submits that
+ * form, or queues a Spotify preview through [PreviewViewModel].
  */
 @Composable
 fun PreviewScreen(
     url: String,
-    source: MediaPreviewSource,
-    loadThumbnail: suspend (String) -> ByteArray?,
     onBack: () -> Unit,
-    onDownload: (MediaPreview?, List<String>) -> Unit,
-    editor: AddFormPresenter? = null,
-    capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
+    onDownload: ((MediaPreview?, List<String>) -> Unit)? = null,
+    form: AddFormViewModel = metroViewModel(),
+    viewModel: PreviewViewModel = metroViewModel(),
 ) {
-    var phase by remember(url) { mutableStateOf<PreviewPhase>(PreviewPhase.Loading) }
-    var editExpanded by remember(url) { mutableStateOf(false) }
-    var selectedMediaIds by remember(url) { mutableStateOf<Set<String>>(emptySet()) }
+    val uiState by viewModel.state.collectAsState()
+    val phase = uiState.phase
+    val selectedMediaIds = uiState.selectedMediaIds
+    val editExpanded = uiState.editExpanded
 
     LaunchedEffect(url) {
-        phase = PreviewPhase.Loading
-        selectedMediaIds = emptySet()
-        phase = try {
-            when (val result = source.load(url)) {
-                is MediaPreviewResult.Failed -> PreviewPhase.Failed(result.failure)
-                is MediaPreviewResult.Ready -> {
-                    val bytes = result.preview.thumbnailUrl?.let { thumbnailUrl ->
-                        runCatching { loadThumbnail(thumbnailUrl) }.getOrNull()
-                    }
-                    // A status with videos starts with its first video selected.
-                    selectedMediaIds = result.preview.videos.firstOrNull()?.let { setOf(it.mediaId) } ?: emptySet()
-                    PreviewPhase.Ready(result.preview, bytes)
-                }
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            PreviewPhase.Failed(PreviewFailure.Failed)
-        }
+        viewModel.open(url, this)
     }
 
     val readyPreview = (phase as? PreviewPhase.Ready)?.preview
@@ -152,13 +123,7 @@ fun PreviewScreen(
                 preview = current.preview,
                 thumbnail = current.thumbnail,
                 selectedMediaIds = selectedMediaIds,
-                onToggleVideo = { mediaId ->
-                    selectedMediaIds = if (mediaId in selectedMediaIds) {
-                        selectedMediaIds - mediaId
-                    } else {
-                        selectedMediaIds + mediaId
-                    }
-                },
+                onToggleVideo = viewModel::toggleVideo,
             )
         }
 
@@ -169,28 +134,37 @@ fun PreviewScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DownloadButton(enabled = selectionComplete) {
-                    onDownload(readyPreview, selectedMediaIds.toList())
-                }
-                if (editor != null) {
-                    OutlinedButton(
-                        onClick = { editExpanded = !editExpanded },
-                        modifier = Modifier.testTag("preview-edit-toggle"),
-                    ) {
-                        Text(
-                            if (editExpanded) {
-                                text(Res.string.preview_edit_hide)
-                            } else {
-                                text(Res.string.preview_edit)
-                            },
-                        )
+                    val ids = selectedMediaIds.toList()
+                    if (onDownload != null) {
+                        onDownload(readyPreview, ids)
+                    } else {
+                        val spotifyPreview = readyPreview?.spotify
+                        if (spotifyPreview != null) {
+                            viewModel.queueSpotify(spotifyPreview, form.currentOptions())
+                        } else {
+                            form.submit(ids)
+                        }
+                        onBack()
                     }
                 }
+                OutlinedButton(
+                    onClick = viewModel::toggleEdit,
+                    modifier = Modifier.testTag("preview-edit-toggle"),
+                ) {
+                    Text(
+                        if (editExpanded) {
+                            text(Res.string.preview_edit_hide)
+                        } else {
+                            text(Res.string.preview_edit)
+                        },
+                    )
+                }
             }
-            if (editExpanded && editor != null) {
+            if (editExpanded) {
                 PreviewEditPanel(
-                    editor = editor,
+                    editor = form,
                     availableFormats = (phase as? PreviewPhase.Ready)?.preview?.availableFormats,
-                    capabilities = capabilities,
+                    capabilities = uiState.capabilities,
                 )
             }
         }

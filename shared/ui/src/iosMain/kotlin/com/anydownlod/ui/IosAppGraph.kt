@@ -12,14 +12,21 @@
 package com.anydownlod.ui
 
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.FileOpener
+import com.anydownlod.core.FileRevealer
+import com.anydownlod.core.FolderPicker
+import com.anydownlod.core.ThumbnailLoader
+import com.anydownlod.core.UrlOpener
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.HttpDownloadEngine
@@ -57,7 +64,7 @@ import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUserDomainMask
 
-@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class, AddFormBindings::class])
 internal interface IosAppGraph : ViewModelGraph, AppGraph {
 
     override val engine: DownloadEngine
@@ -237,6 +244,38 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
         matcher = AudioMatcher.default(YoutubeSearch(extractorHttp)),
         engine = engine,
     )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun urlOpener(): UrlOpener = UrlOpener { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileOpener(): FileOpener = FileOpener { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileRevealer(): FileRevealer = FileRevealer { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun folderPicker(): FolderPicker = FolderPicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun thumbnailLoader(): ThumbnailLoader = ThumbnailLoader { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStore(): CookieStore = CookieStore.Unavailable
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotifyOptional(service: SpotifyDownloadService): SpotifyDownloadService? = service
 }
 
 /** Documents-rooted sandbox path, wrapped so it is one unique binding. */

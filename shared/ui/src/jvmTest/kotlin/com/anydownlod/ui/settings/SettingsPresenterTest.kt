@@ -11,24 +11,24 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class SettingsPresenterTest {
+class SettingsViewModelTest {
 
     private fun repository() = InMemorySettingsRepository()
 
     @Test
     fun templateValidationRejectsAbsoluteAndParentSegments() {
-        assertNotNull(SettingsPresenter.validateTemplate("/tmp/%(title)s.%(ext)s"))
-        assertNotNull(SettingsPresenter.validateTemplate("..\\video\\%(title)s.%(ext)s"))
-        assertNotNull(SettingsPresenter.validateTemplate("C:/videos/%(title)s.%(ext)s"))
-        assertNotNull(SettingsPresenter.validateTemplate("%(title)s//%(ext)s"))
-        assertNull(SettingsPresenter.validateTemplate("%(title)s.%(ext)s"))
-        assertNull(SettingsPresenter.validateTemplate("%(playlist_title)s/%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("/tmp/%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("..\\video\\%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("C:/videos/%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("%(title)s//%(ext)s"))
+        assertNull(SettingsViewModel.validateTemplate("%(title)s.%(ext)s"))
+        assertNull(SettingsViewModel.validateTemplate("%(playlist_title)s/%(title)s.%(ext)s"))
     }
 
     @Test
     fun templateSetterRejectsWithoutWriting() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
 
         assertNotNull(presenter.setOutputTemplate("../%(title)s.%(ext)s"))
         assertEquals(AppSettingsDefaults.OUTPUT_TEMPLATE, repository.settings.value.outputTemplate)
@@ -40,7 +40,7 @@ class SettingsPresenterTest {
     @Test
     fun concurrencyBelowOneIsRejected() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
 
         assertNotNull(presenter.setMaxConcurrentDownloads("0"))
         assertNotNull(presenter.setMaxConcurrentDownloads("abc"))
@@ -53,7 +53,7 @@ class SettingsPresenterTest {
     @Test
     fun clearCompletedUsesMinutesInTheUiAndSecondsOnTheModel() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
 
         assertNull(presenter.setClearCompletedMinutes("5"))
         assertEquals(300L, repository.settings.value.clearCompletedAfterSeconds)
@@ -65,7 +65,7 @@ class SettingsPresenterTest {
     @Test
     fun cookieStateNeverTakesAFileBody() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
 
         presenter.setCookiesConfigured(true)
 
@@ -80,7 +80,7 @@ class SettingsPresenterTest {
     @Test
     fun restoreDefaultsKeepsRootCookieStateAndPresets() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
         presenter.setDownloadRoot("/tmp/downloads")
         presenter.setCookiesConfigured(true)
         presenter.addPreset("Keep me")
@@ -104,7 +104,7 @@ class SettingsPresenterTest {
     @Test
     fun presetsAddMoveAndRemove() {
         val repository = repository()
-        val presenter = SettingsPresenter(repository)
+        val presenter = SettingsViewModel(repository)
         val first = presenter.addPreset("First", mapOf("writeMetadata" to "true"))!!
         val second = presenter.addPreset("Second")!!
 

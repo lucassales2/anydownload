@@ -31,7 +31,6 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.copy_batch
@@ -83,6 +82,7 @@ import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
 import com.anydownlod.ui.theme.colors
 import com.anydownlod.ui.theme.statusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import com.anydownlod.ui.export.JobSourceUrls
 
 /**
@@ -92,30 +92,24 @@ import com.anydownlod.ui.export.JobSourceUrls
  */
 @Composable
 fun HistoryScreen(
-    graph: AppGraph,
     modifier: Modifier = Modifier,
     onCopyUrls: ((String) -> Unit)? = null,
+    viewModel: HistoryViewModel = metroViewModel(),
 ) {
-    val jobs by graph.engine.jobs.collectAsState()
-    val rows = remember(jobs) { HistoryPresenter.rows(jobs) }
-    val presenter = remember(graph.engine) { HistoryPresenter(graph.engine) }
+    val uiState by viewModel.state.collectAsState()
+    val rows = uiState.rows
+    val selectedIds = uiState.selectedIds
+    val pendingRemoveIds = uiState.pendingRemoveIds
+    val pendingDeleteId = uiState.pendingDeleteId
+    val statusMessage = uiState.statusMessage
+    val statusTone = uiState.statusTone
     val clipboard = LocalClipboardManager.current
     val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
-    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var pendingRemoveIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
-    var statusMessage by remember { mutableStateOf<UiText?>(null) }
-    var statusTone by remember { mutableStateOf(StatusTone.Information) }
 
     fun copy(urls: List<String>) {
         if (urls.isEmpty()) return
         copyUrls(JobSourceUrls.text(urls))
-        statusMessage = UiText.of(Res.string.copied_urls, urls.size)
-        statusTone = StatusTone.Information
-    }
-
-    LaunchedEffect(rows) {
-        selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
+        viewModel.noteCopied(urls.size)
     }
 
     Box(modifier.fillMaxSize()) {
@@ -165,14 +159,12 @@ fun HistoryScreen(
                 }
                 SelectionBar(
                     selection = selectionState(selectedIds.size, rows.size),
-                    onToggleAll = {
-                        selectedIds = if (selectedIds.size == rows.size) emptySet() else rows.map { it.id }.toSet()
-                    },
+                    onToggleAll = { viewModel.toggleAll() },
                     selectAllTag = "history-select-all",
                     modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
                 ) {
                     FilledTonalButton(
-                        onClick = { presenter.retrySelected(selectedIds) },
+                        onClick = { viewModel.retrySelected(selectedIds) },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-retry-selected"),
                     ) {
@@ -180,20 +172,20 @@ fun HistoryScreen(
                     }
                     DestructiveOutlinedButton(
                         text = stringResource(Res.string.remove_selected),
-                        onClick = { pendingRemoveIds = selectedIds },
+                        onClick = { viewModel.requestRemove(selectedIds) },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-remove-selected"),
                     )
                     TextButton(
-                        onClick = { copy(presenter.selectedUrls(selectedIds)) },
+                        onClick = { copy(viewModel.selectedUrls(selectedIds)) },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("history-copy-selected"),
                     ) {
                         Text(stringResource(Res.string.copy_urls))
                     }
                     TextButton(
-                        onClick = { copy(presenter.batchUrls(selectedIds)) },
-                        enabled = presenter.batchUrls(selectedIds).isNotEmpty(),
+                        onClick = { copy(viewModel.batchUrls(selectedIds)) },
+                        enabled = viewModel.batchUrls(selectedIds).isNotEmpty(),
                         modifier = Modifier.testTag("history-copy-batch"),
                     ) {
                         Text(stringResource(Res.string.copy_batch))
@@ -208,23 +200,21 @@ fun HistoryScreen(
                         HistoryRowItem(
                             row = row,
                             selected = row.id in selectedIds,
-                            onSelectedChange = { checked ->
-                                selectedIds = if (checked) selectedIds + row.id else selectedIds - row.id
-                            },
-                            onRetry = { presenter.retry(row.id) },
+                            onSelectedChange = { viewModel.toggle(row.id) },
+                            onRetry = { viewModel.retry(row.id) },
                             onCopyError = {
                                 row.errorMessage?.let { message ->
                                     clipboard.setText(AnnotatedString(message))
                                 }
                             },
                             onOpenFile = {
-                                row.artifacts.firstOrNull { !it.removed }?.let { graph.openFile(it.source) }
+                                row.artifacts.firstOrNull { !it.removed }?.let { viewModel.openArtifact(it.source) }
                             },
                             onRevealFile = {
-                                row.artifacts.firstOrNull { !it.removed }?.let { graph.revealFile(it.source) }
+                                row.artifacts.firstOrNull { !it.removed }?.let { viewModel.revealArtifact(it.source) }
                             },
-                            onDeleteFile = { pendingDeleteId = row.id },
-                            onRemove = { pendingRemoveIds = setOf(row.id) },
+                            onDeleteFile = { viewModel.requestDelete(row.id) },
+                            onRemove = { viewModel.requestRemove(setOf(row.id)) },
                         )
                     }
                 }
@@ -233,7 +223,7 @@ fun HistoryScreen(
 
         if (pendingRemoveIds.isNotEmpty()) {
             AlertDialog(
-                onDismissRequest = { pendingRemoveIds = emptySet() },
+                onDismissRequest = viewModel::dismissRemove,
                 title = {
                     Text(
                         if (pendingRemoveIds.size == 1) {
@@ -247,16 +237,12 @@ fun HistoryScreen(
                 confirmButton = {
                     DestructiveTextButton(
                         text = stringResource(Res.string.remove),
-                        onClick = {
-                            presenter.removeSelected(pendingRemoveIds)
-                            selectedIds = selectedIds - pendingRemoveIds
-                            pendingRemoveIds = emptySet()
-                        },
+                        onClick = { viewModel.confirmRemove() },
                         modifier = Modifier.testTag("history-confirm-remove"),
                     )
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingRemoveIds = emptySet() }) {
+                    TextButton(onClick = viewModel::dismissRemove) {
                         Text(stringResource(Res.string.keep))
                     }
                 },
@@ -266,7 +252,7 @@ fun HistoryScreen(
         pendingDeleteId?.let { jobId ->
             val row = rows.firstOrNull { it.id == jobId }
             AlertDialog(
-                onDismissRequest = { pendingDeleteId = null },
+                onDismissRequest = viewModel::dismissDelete,
                 title = { Text(stringResource(Res.string.delete_file_title)) },
                 text = {
                     Text(
@@ -278,36 +264,12 @@ fun HistoryScreen(
                 confirmButton = {
                     DestructiveTextButton(
                         text = stringResource(Res.string.delete),
-                        onClick = {
-                            val result = presenter.deleteArtifacts(jobId)
-                            when {
-                                result.failures.isNotEmpty() -> {
-                                    statusMessage = UiText.of(
-                                        Res.string.delete_failures,
-                                        result.failures.joinToString(),
-                                    )
-                                    statusTone = StatusTone.Negative
-                                }
-                                result.deletedCount == 0 -> {
-                                    statusMessage = UiText.of(Res.string.file_already_gone)
-                                    statusTone = StatusTone.Information
-                                }
-                                else -> {
-                                    statusMessage = UiText.quantity(
-                                        Res.plurals.deleted_files,
-                                        result.deletedCount,
-                                        result.deletedCount,
-                                    )
-                                    statusTone = StatusTone.Information
-                                }
-                            }
-                            pendingDeleteId = null
-                        },
+                        onClick = { viewModel.confirmDelete() },
                         modifier = Modifier.testTag("history-confirm-delete"),
                     )
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingDeleteId = null }) {
+                    TextButton(onClick = viewModel::dismissDelete) {
                         Text(stringResource(Res.string.keep_file))
                     }
                 },

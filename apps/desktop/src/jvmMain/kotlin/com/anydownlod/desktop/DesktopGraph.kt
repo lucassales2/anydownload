@@ -13,13 +13,20 @@
 package com.anydownlod.desktop
 
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.FileOpener
+import com.anydownlod.core.FileRevealer
+import com.anydownlod.core.FolderPicker
 import com.anydownlod.core.MediaPreviewSource
+import com.anydownlod.core.ThumbnailLoader
+import com.anydownlod.core.UrlOpener
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.HttpDownloadEngine
@@ -76,7 +83,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 
-@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class, AddFormBindings::class])
 internal interface DesktopGraph : ViewModelGraph, AppGraph {
 
     override val engine: DownloadEngine
@@ -378,6 +385,41 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
         tokenStore = tokenStore,
         http = extractorHttp,
     )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotifyOptional(service: SpotifyDownloadService): SpotifyDownloadService? = service
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotifyAuthOptional(auth: SpotifyAuthService): SpotifyAuthService? = auth
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun urlOpener(): UrlOpener = UrlOpener { url -> openInBrowser(url) }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileOpener(settings: SettingsRepository): FileOpener =
+        FileOpener { artifact -> openArtifact(settings, artifact, reveal = false) }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileRevealer(settings: SettingsRepository): FileRevealer =
+        FileRevealer { artifact -> openArtifact(settings, artifact, reveal = true) }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun folderPicker(): FolderPicker = FolderPicker { chooseDirectory() }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { chooseCookieFile() }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun thumbnailLoader(ioDispatcher: CoroutineDispatcher): ThumbnailLoader =
+        ThumbnailLoader { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } }
 }
 
 /**

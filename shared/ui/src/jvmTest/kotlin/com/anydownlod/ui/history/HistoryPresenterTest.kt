@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class HistoryPresenterTest {
+class HistoryViewModelTest {
 
     private fun engine() = InMemoryDownloadEngine(seedJobs = InMemoryDownloadEngine.sampleJobs())
 
@@ -17,7 +17,7 @@ class HistoryPresenterTest {
     fun rowsKeepTerminalAndUnknownStates() {
         val unknown = InMemoryDownloadEngine.sampleJobs().first()
             .copy(id = "future", state = JobState.UNKNOWN)
-        val rows = HistoryPresenter.rows(InMemoryDownloadEngine.sampleJobs() + unknown)
+        val rows = HistoryViewModel.rows(InMemoryDownloadEngine.sampleJobs() + unknown)
 
         assertEquals(setOf("seed-completed", "seed-failed", "future"), rows.map { it.id }.toSet())
         assertEquals(UiText.raw("unknown"), rows.first { it.id == "future" }.stateLabel)
@@ -28,7 +28,7 @@ class HistoryPresenterTest {
     @Test
     fun retrySelectedOnlyRetriesFailedAndCancelled() {
         val engine = engine()
-        val presenter = HistoryPresenter(engine)
+        val presenter = HistoryViewModel(engine)
 
         presenter.retrySelected(setOf("seed-failed", "seed-completed"))
 
@@ -39,7 +39,7 @@ class HistoryPresenterTest {
     @Test
     fun removeSelectedDropsEveryRowAndKeepsArtifacts() {
         val engine = engine()
-        val presenter = HistoryPresenter(engine)
+        val presenter = HistoryViewModel(engine)
 
         presenter.removeSelected(setOf("seed-failed", "seed-completed"))
 
@@ -49,7 +49,7 @@ class HistoryPresenterTest {
     @Test
     fun removeHistoryAndDeleteArtifactsAreDifferentOperations() {
         val engine = engine()
-        val presenter = HistoryPresenter(engine)
+        val presenter = HistoryViewModel(engine)
 
         assertTrue(presenter.remove("seed-failed"))
         assertTrue(engine.jobs.value.none { it.id == "seed-failed" })
@@ -83,7 +83,7 @@ class HistoryPresenterTest {
 
     @Test
     fun selectedUrlsReturnOnePerSelectedJobAndIncludeFailures() {
-        val presenter = HistoryPresenter(batchEngine())
+        val presenter = HistoryViewModel(batchEngine())
 
         assertEquals(
             listOf("https://example.com/watch?v=batch-1", "https://example.com/watch?v=batch-3"),
@@ -95,7 +95,7 @@ class HistoryPresenterTest {
 
     @Test
     fun batchUrlsIncludeEveryChildAndExcludeJobsOutsideTheParent() {
-        val presenter = HistoryPresenter(batchEngine())
+        val presenter = HistoryViewModel(batchEngine())
 
         assertEquals(
             listOf(

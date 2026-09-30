@@ -15,13 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
-import com.anydownlod.core.AppGraph
-import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.add.AddFormViewModel
 import com.anydownlod.ui.add.UrlEntryRow
 import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.shell.AppHeader
 import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.StatusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 
 /**
  * The idle screen: a header and one paste-link field. No clipboard checks, no
@@ -31,23 +31,18 @@ import com.anydownlod.ui.theme.StatusTone
  */
 @Composable
 fun HomeScreen(
-    graph: AppGraph,
-    addForm: AddFormPresenter,
+    startupWarning: String?,
     onOpenSettings: () -> Unit,
     onPreviewSingleUrl: (String) -> Unit,
+    form: AddFormViewModel = metroViewModel(),
 ) {
-    val settings by graph.settings.settings.collectAsState()
-    val state by addForm.state.collectAsState()
-    val status by addForm.status.collectAsState()
+    val state by form.state.collectAsState()
+    val status by form.status.collectAsState()
     val clipboard = LocalClipboardManager.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        AppHeader(
-            theme = settings.theme,
-            onThemeChange = { theme -> graph.settings.update { it.copy(theme = theme) } },
-            onOpenSettings = onOpenSettings,
-        )
-        graph.startupWarning?.let { warning ->
+        AppHeader(onOpenSettings = onOpenSettings)
+        startupWarning?.let { warning ->
             MessageStrip(
                 text = warning,
                 tone = StatusTone.Negative,
@@ -71,10 +66,10 @@ fun HomeScreen(
                 UrlEntryRow(
                     urlText = state.urlText,
                     downloadEnabled = state.hasInput,
-                    onUrlChange = addForm::setUrl,
-                    onPaste = { addForm.applyPastedText(clipboard.getText()?.text) },
+                    onUrlChange = form::setUrl,
+                    onPaste = { form.applyPastedText(clipboard.getText()?.text) },
                     onDownload = {
-                        val single = addForm.validateForPreview() ?: return@UrlEntryRow
+                        val single = form.validateForPreview() ?: return@UrlEntryRow
                         onPreviewSingleUrl(single)
                     },
                 )

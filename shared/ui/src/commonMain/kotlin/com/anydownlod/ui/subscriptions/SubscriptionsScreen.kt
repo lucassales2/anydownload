@@ -32,7 +32,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anydownlod.core.AppGraph
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.all_titles
 import com.anydownlod.ui.generated.resources.cancel
@@ -82,23 +81,22 @@ import com.anydownlod.ui.theme.SelectionBar
 import com.anydownlod.ui.theme.StatusBadge
 import com.anydownlod.ui.theme.StatusTone
 import com.anydownlod.ui.theme.colors
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 
 /**
  * Subscriptions bound to [com.anydownlod.core.SubscriptionRepository].
  * Checks only record timestamps until a real scan is wired.
  */
 @Composable
-fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
-    val subscriptions by graph.subscriptions.subscriptions.collectAsState()
-    val rows = remember(subscriptions) { SubscriptionsPresenter.rows(subscriptions) }
-    val presenter = remember(graph.subscriptions) { SubscriptionsPresenter(graph.subscriptions) }
-    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var editingId by remember { mutableStateOf<String?>(null) }
-    var deletingId by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(rows) {
-        selectedIds = selectedIds.intersect(rows.map { it.id }.toSet())
-    }
+fun SubscriptionsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SubscriptionsViewModel = metroViewModel(),
+) {
+    val uiState by viewModel.state.collectAsState()
+    val rows = uiState.rows
+    val selectedIds = uiState.selectedIds
+    val editingId = uiState.editingId
+    val deletingId = uiState.deletingId
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = PageInset)) {
@@ -127,20 +125,18 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                 }
                 SelectionBar(
                     selection = selectionState(selectedIds.size, rows.size),
-                    onToggleAll = {
-                        selectedIds = if (selectedIds.size == rows.size) emptySet() else rows.map { it.id }.toSet()
-                    },
+                    onToggleAll = { viewModel.toggleAll() },
                     selectAllTag = "subscriptions-select-all",
                     modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
                 ) {
                     FilledTonalButton(
-                        onClick = { presenter.checkAll() },
+                        onClick = { viewModel.checkAll() },
                         modifier = Modifier.testTag("subscriptions-check-all"),
                     ) {
                         Text(stringResource(Res.string.check_all))
                     }
                     OutlinedButton(
-                        onClick = { presenter.checkSelected(selectedIds) },
+                        onClick = { viewModel.checkSelected(selectedIds) },
                         enabled = selectedIds.isNotEmpty(),
                         modifier = Modifier.testTag("subscriptions-check-selected"),
                     ) {
@@ -156,15 +152,13 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
                         SubscriptionRowItem(
                             row = row,
                             selected = row.id in selectedIds,
-                            onSelectedChange = { checked ->
-                                selectedIds = if (checked) selectedIds + row.id else selectedIds - row.id
-                            },
-                            onCheck = { presenter.checkNow(row.id) },
+                            onSelectedChange = { viewModel.toggle(row.id) },
+                            onCheck = { viewModel.checkNow(row.id) },
                             onTogglePause = {
-                                if (row.paused) presenter.resume(row.id) else presenter.pause(row.id)
+                                if (row.paused) viewModel.resume(row.id) else viewModel.pause(row.id)
                             },
-                            onEdit = { editingId = row.id },
-                            onDelete = { deletingId = row.id },
+                            onEdit = { viewModel.beginEdit(row.id) },
+                            onDelete = { viewModel.beginDelete(row.id) },
                         )
                     }
                 }
@@ -176,11 +170,9 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
         rows.firstOrNull { it.id == id }?.let { row ->
             EditSubscriptionDialog(
                 row = row,
-                onDismiss = { editingId = null },
+                onDismiss = viewModel::dismissEdit,
                 onSave = { name, interval, filter, members ->
-                    val message = presenter.update(id, name, interval, filter, members)
-                    if (message == null) editingId = null
-                    message
+                    viewModel.update(id, name, interval, filter, members)
                 },
             )
         }
@@ -188,21 +180,18 @@ fun SubscriptionsScreen(graph: AppGraph, modifier: Modifier = Modifier) {
 
     deletingId?.let { id ->
         AlertDialog(
-            onDismissRequest = { deletingId = null },
+            onDismissRequest = viewModel::dismissDelete,
             title = { Text(stringResource(Res.string.delete_subscription_title)) },
             text = { Text(stringResource(Res.string.delete_subscription_body)) },
             confirmButton = {
                 DestructiveTextButton(
                     text = stringResource(Res.string.delete),
-                    onClick = {
-                        presenter.delete(id)
-                        deletingId = null
-                    },
+                    onClick = { viewModel.confirmDelete() },
                     modifier = Modifier.testTag("subscriptions-confirm-delete"),
                 )
             },
             dismissButton = {
-                TextButton(onClick = { deletingId = null }) {
+                TextButton(onClick = viewModel::dismissDelete) {
                     Text(stringResource(Res.string.keep))
                 }
             },

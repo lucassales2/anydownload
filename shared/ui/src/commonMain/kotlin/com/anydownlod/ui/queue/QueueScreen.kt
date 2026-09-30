@@ -83,12 +83,13 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun QueueScreen(
     onCopyUrls: ((String) -> Unit)? = null,
-    onOpenSource: (String) -> Unit,
+    onOpenSource: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: QueueViewModel = metroViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val rows = state.rows
+    val openSource = onOpenSource ?: viewModel::openSource
     val clipboard = LocalClipboardManager.current
     val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
 
@@ -178,7 +179,7 @@ fun QueueScreen(
                             onSelectedChange = { viewModel.toggle(row.id) },
                             onStart = { viewModel.startSelected(setOf(row.id)) },
                             onCancel = { viewModel.requestCancelSelected(setOf(row.id)) },
-                            onOpenSource = { onOpenSource(row.sourceUrl) },
+                            onOpenSource = { openSource(row.sourceUrl) },
                         )
                     }
                 }

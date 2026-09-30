@@ -1,5 +1,6 @@
 package com.anydownlod.ui.settings
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.onNodeWithTag
@@ -10,6 +11,8 @@ import androidx.compose.ui.test.runComposeUiTest
 import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.core.music.InMemorySpotifyTokenStore
 import com.anydownlod.core.music.SpotifyAuthService
+import com.anydownlod.ui.viewmodel.fallbackViewModelFactory
+import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,7 +29,13 @@ class SpotifyAuthUiTest {
         val store = InMemorySpotifyTokenStore()
         val auth = SpotifyAuthService(store)
         val graph = InMemoryAppGraph(spotifyAuth = auth)
-        setContent { SettingsScreen(graph = graph, onClose = {}) }
+        setContent {
+            CompositionLocalProvider(
+                LocalMetroViewModelFactory provides fallbackViewModelFactory(graph),
+            ) {
+                SettingsScreen(onClose = {})
+            }
+        }
 
         onNodeWithText(
             "Not logged in. Saved songs, your playlists, saved albums, and followed artists " +

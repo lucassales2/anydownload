@@ -1,37 +1,13 @@
 package com.anydownlod.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,96 +15,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anydownlod.ui.theme.AppTextField
-import com.anydownlod.ui.theme.DestructiveOutlinedButton
-import com.anydownlod.ui.theme.DestructiveTextButton
-import com.anydownlod.ui.theme.MessageStrip
-import com.anydownlod.ui.theme.ObjectCard
-import com.anydownlod.ui.theme.StatusTone
-import com.anydownlod.ui.theme.colors
-import com.anydownlod.core.AppGraph
-import com.anydownlod.core.domain.AppSettingsDefaults
-import com.anydownlod.core.domain.Preset
-import com.anydownlod.core.domain.PresetOptionKeys
-import com.anydownlod.core.domain.ToolAvailability
-import com.anydownlod.core.domain.ToolStatus
+import com.anydownlod.core.domain.*
 import com.anydownlod.core.music.SpotifyAuthService
-import com.anydownlod.ui.generated.resources.Res
-import com.anydownlod.ui.generated.resources.add_preset
-import com.anydownlod.ui.generated.resources.cancel
-import com.anydownlod.ui.generated.resources.channel_template
-import com.anydownlod.ui.generated.resources.chapter_template
-import com.anydownlod.ui.generated.resources.choose_folder
-import com.anydownlod.ui.generated.resources.clear_completed
-import com.anydownlod.ui.generated.resources.clear_completed_hint
-import com.anydownlod.ui.generated.resources.close
-import com.anydownlod.ui.generated.resources.cookie_cleared
-import com.anydownlod.ui.generated.resources.cookie_configured
-import com.anydownlod.ui.generated.resources.cookie_import_desktop_only
-import com.anydownlod.ui.generated.resources.cookie_import_failed
-import com.anydownlod.ui.generated.resources.cookie_imported
-import com.anydownlod.ui.generated.resources.cookie_not_configured
-import com.anydownlod.ui.generated.resources.cookie_status
-import com.anydownlod.ui.generated.resources.cookie_warning
-import com.anydownlod.ui.generated.resources.default_concurrent
-import com.anydownlod.ui.generated.resources.defaults_restored
-import com.anydownlod.ui.generated.resources.delete
-import com.anydownlod.ui.generated.resources.delete_cookie_body
-import com.anydownlod.ui.generated.resources.delete_cookie_title
-import com.anydownlod.ui.generated.resources.down
-import com.anydownlod.ui.generated.resources.download_folder_updated
-import com.anydownlod.ui.generated.resources.folder_desktop_only
-import com.anydownlod.ui.generated.resources.import_file
-import com.anydownlod.ui.generated.resources.keep
-import com.anydownlod.ui.generated.resources.max_concurrent
-import com.anydownlod.ui.generated.resources.name
-import com.anydownlod.ui.generated.resources.no_folder
-import com.anydownlod.ui.generated.resources.no_presets_yet
-import com.anydownlod.ui.generated.resources.options
-import com.anydownlod.ui.generated.resources.output_template
-import com.anydownlod.ui.generated.resources.playlist_template
-import com.anydownlod.ui.generated.resources.preset_added
-import com.anydownlod.ui.generated.resources.preset_name_required
-import com.anydownlod.ui.generated.resources.preset_no_options
-import com.anydownlod.ui.generated.resources.presets_layer_hint
-import com.anydownlod.ui.generated.resources.remove
-import com.anydownlod.ui.generated.resources.replace_file
-import com.anydownlod.ui.generated.resources.restore
-import com.anydownlod.ui.generated.resources.restore_defaults
-import com.anydownlod.ui.generated.resources.restore_defaults_body
-import com.anydownlod.ui.generated.resources.restore_defaults_title
-import com.anydownlod.ui.generated.resources.save
-import com.anydownlod.ui.generated.resources.section_cookies
-import com.anydownlod.ui.generated.resources.section_filenames
-import com.anydownlod.ui.generated.resources.section_presets
-import com.anydownlod.ui.generated.resources.section_queue
-import com.anydownlod.ui.generated.resources.section_spotify
-import com.anydownlod.ui.generated.resources.section_storage
-import com.anydownlod.ui.generated.resources.section_tools
-import com.anydownlod.ui.generated.resources.settings_js_runtime
-import com.anydownlod.ui.generated.resources.settings_kotlin_extractors
-import com.anydownlod.ui.generated.resources.settings
-import com.anydownlod.ui.generated.resources.settings_subtitle
-import com.anydownlod.ui.generated.resources.spotify_login
-import com.anydownlod.ui.generated.resources.spotify_logged_in
-import com.anydownlod.ui.generated.resources.spotify_logged_out
-import com.anydownlod.ui.generated.resources.spotify_logout
-import com.anydownlod.ui.generated.resources.spotify_logout_done
-import com.anydownlod.ui.generated.resources.spotify_token_hint
-import com.anydownlod.ui.generated.resources.spotify_token_saved
-import com.anydownlod.ui.generated.resources.spotify_unavailable
-import com.anydownlod.ui.generated.resources.templates_hint
-import com.anydownlod.ui.generated.resources.theme
-import com.anydownlod.ui.generated.resources.tool_available
-import com.anydownlod.ui.generated.resources.tool_not_checked
-import com.anydownlod.ui.generated.resources.tool_js_none
-import com.anydownlod.ui.generated.resources.tool_not_found
-import com.anydownlod.ui.generated.resources.tools_hint
-import com.anydownlod.ui.generated.resources.up
+import com.anydownlod.ui.generated.resources.*
 import com.anydownlod.ui.i18n.UiText
-import com.anydownlod.ui.i18n.labelResource
 import com.anydownlod.ui.i18n.presetOptionLabel
 import com.anydownlod.ui.i18n.resolve
+import com.anydownlod.ui.theme.*
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -136,34 +30,13 @@ import org.jetbrains.compose.resources.stringResource
  * and Tools. Nothing here reads a cookie file or spawns a process.
  */
 @Composable
-fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Modifier) {
-    val settings by graph.settings.settings.collectAsState()
-    val presenter = remember(graph.settings) { SettingsPresenter(graph.settings) }
-
-    var tools by remember { mutableStateOf<ToolStatus?>(null) }
-    var notice by remember { mutableStateOf<UiText?>(null) }
-    var confirmRestore by remember { mutableStateOf(false) }
-    var confirmCookieDelete by remember { mutableStateOf(false) }
-    var addingPreset by remember { mutableStateOf(false) }
-
-    var outputTemplate by remember { mutableStateOf(settings.outputTemplate) }
-    var outputError by remember { mutableStateOf<UiText?>(null) }
-    var playlistTemplate by remember { mutableStateOf(settings.playlistTemplate) }
-    var playlistError by remember { mutableStateOf<UiText?>(null) }
-    var channelTemplate by remember { mutableStateOf(settings.channelTemplate) }
-    var channelError by remember { mutableStateOf<UiText?>(null) }
-    var chapterTemplate by remember { mutableStateOf(settings.chapterTemplate) }
-    var chapterError by remember { mutableStateOf<UiText?>(null) }
-    var concurrencyText by remember { mutableStateOf(settings.maxConcurrentDownloads.toString()) }
-    var concurrencyError by remember { mutableStateOf<UiText?>(null) }
-    var clearMinutesText by remember {
-        mutableStateOf((settings.clearCompletedAfterSeconds / 60).toString())
-    }
-    var clearMinutesError by remember { mutableStateOf<UiText?>(null) }
-
-    LaunchedEffect(graph.toolProbe) {
-        tools = graph.toolProbe.probe()
-    }
+fun SettingsScreen(
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = metroViewModel(),
+) {
+    val uiState by viewModel.state.collectAsState()
+    val settings = uiState.settings
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -195,183 +68,116 @@ fun SettingsScreen(graph: AppGraph, onClose: () -> Unit, modifier: Modifier = Mo
         ) {
             AppearanceSection(
                 theme = settings.theme,
-                onThemeChange = presenter::setTheme,
+                onThemeChange = viewModel::setTheme,
             )
 
             StorageSection(
                 downloadRoot = settings.downloadRoot,
-                onChooseFolder = {
-                    val chosen = graph.pickFolder()
-                    if (chosen != null) {
-                        presenter.setDownloadRoot(chosen)
-                        notice = UiText.of(Res.string.download_folder_updated)
-                    } else {
-                        notice = UiText.of(Res.string.folder_desktop_only)
-                    }
-                },
+                onChooseFolder = viewModel::chooseFolder,
             )
 
             FilenamesSection(
-                outputTemplate = outputTemplate,
-                outputError = outputError,
-                onOutputChange = { value ->
-                    outputTemplate = value
-                    outputError = presenter.setOutputTemplate(value)
-                },
-                playlistTemplate = playlistTemplate,
-                playlistError = playlistError,
-                onPlaylistChange = { value ->
-                    playlistTemplate = value
-                    playlistError = presenter.setPlaylistTemplate(value)
-                },
-                channelTemplate = channelTemplate,
-                channelError = channelError,
-                onChannelChange = { value ->
-                    channelTemplate = value
-                    channelError = presenter.setChannelTemplate(value)
-                },
-                chapterTemplate = chapterTemplate,
-                chapterError = chapterError,
-                onChapterChange = { value ->
-                    chapterTemplate = value
-                    chapterError = presenter.setChapterTemplate(value)
-                },
+                outputTemplate = uiState.outputTemplate,
+                outputError = uiState.outputError,
+                onOutputChange = viewModel::setOutputTemplate,
+                playlistTemplate = uiState.playlistTemplate,
+                playlistError = uiState.playlistError,
+                onPlaylistChange = viewModel::setPlaylistTemplate,
+                channelTemplate = uiState.channelTemplate,
+                channelError = uiState.channelError,
+                onChannelChange = viewModel::setChannelTemplate,
+                chapterTemplate = uiState.chapterTemplate,
+                chapterError = uiState.chapterError,
+                onChapterChange = viewModel::setChapterTemplate,
             )
 
             QueueSection(
-                concurrencyText = concurrencyText,
-                concurrencyError = concurrencyError,
-                onConcurrencyChange = { value ->
-                    val digits = value.filter(Char::isDigit)
-                    concurrencyText = digits
-                    concurrencyError = presenter.setMaxConcurrentDownloads(digits)
-                },
-                clearMinutesText = clearMinutesText,
-                clearMinutesError = clearMinutesError,
-                onClearMinutesChange = { value ->
-                    val digits = value.filter(Char::isDigit)
-                    clearMinutesText = digits
-                    clearMinutesError = presenter.setClearCompletedMinutes(digits)
-                },
+                concurrencyText = uiState.concurrencyText,
+                concurrencyError = uiState.concurrencyError,
+                onConcurrencyChange = { value -> viewModel.setMaxConcurrentDownloads(value.filter(Char::isDigit)) },
+                clearMinutesText = uiState.clearMinutesText,
+                clearMinutesError = uiState.clearMinutesError,
+                onClearMinutesChange = { value -> viewModel.setClearCompletedMinutes(value.filter(Char::isDigit)) },
             )
 
             CookiesSection(
                 configured = settings.cookiesConfigured,
-                onImport = {
-                    val picked = graph.pickCookieFile()
-                    if (picked == null) {
-                        notice = UiText.of(Res.string.cookie_import_desktop_only)
-                    } else {
-                        val result = graph.cookieStore.import(picked)
-                        if (result.success) {
-                            presenter.setCookiesConfigured(true)
-                            notice = UiText.of(Res.string.cookie_imported)
-                        } else {
-                            notice = result.message?.let(UiText::raw)
-                                ?: UiText.of(Res.string.cookie_import_failed)
-                        }
-                    }
-                },
-                onDelete = { confirmCookieDelete = true },
+                onImport = viewModel::importCookies,
+                onDelete = viewModel::requestCookieDelete,
             )
 
             SpotifySection(
-                auth = graph.spotifyAuth,
-                onNotice = { message -> notice = message },
+                auth = uiState.spotifyAuth,
+                onNotice = viewModel::setNotice,
             )
 
             PresetsSection(
                 presets = settings.presets,
-                onAdd = { addingPreset = true },
-                onRemove = { presenter.removePreset(it) },
-                onMoveUp = { presenter.movePresetUp(it) },
-                onMoveDown = { presenter.movePresetDown(it) },
+                onAdd = viewModel::beginAddPreset,
+                onRemove = viewModel::removePreset,
+                onMoveUp = viewModel::movePresetUp,
+                onMoveDown = viewModel::movePresetDown,
             )
 
-            ToolsSection(tools = tools)
+            ToolsSection(tools = uiState.tools)
 
-            notice?.let { message ->
+            uiState.notice?.let { message ->
                 MessageStrip(text = message.resolve(), tone = StatusTone.Information)
             }
 
             DestructiveOutlinedButton(
                 text = stringResource(Res.string.restore_defaults),
-                onClick = { confirmRestore = true },
+                onClick = viewModel::requestRestore,
                 modifier = Modifier.testTag("settings-restore-defaults"),
             )
         }
         }
     }
 
-    if (confirmRestore) {
+    if (uiState.confirmRestore) {
         AlertDialog(
-            onDismissRequest = { confirmRestore = false },
+            onDismissRequest = viewModel::dismissRestore,
             title = { Text(stringResource(Res.string.restore_defaults_title)) },
             text = { Text(stringResource(Res.string.restore_defaults_body)) },
             confirmButton = {
                 DestructiveTextButton(
                     text = stringResource(Res.string.restore),
-                    onClick = {
-                        presenter.restoreDefaults()
-                        outputTemplate = AppSettingsDefaults.OUTPUT_TEMPLATE
-                        outputError = null
-                        playlistTemplate = AppSettingsDefaults.PLAYLIST_TEMPLATE
-                        playlistError = null
-                        channelTemplate = AppSettingsDefaults.CHANNEL_TEMPLATE
-                        channelError = null
-                        chapterTemplate = AppSettingsDefaults.CHAPTER_TEMPLATE
-                        chapterError = null
-                        concurrencyText = AppSettingsDefaults.MAX_CONCURRENT_DOWNLOADS.toString()
-                        concurrencyError = null
-                        clearMinutesText = "0"
-                        clearMinutesError = null
-                        confirmRestore = false
-                        notice = UiText.of(Res.string.defaults_restored)
-                    },
+                    onClick = viewModel::confirmRestore,
                     modifier = Modifier.testTag("settings-confirm-restore"),
                 )
             },
             dismissButton = {
-                TextButton(onClick = { confirmRestore = false }) {
+                TextButton(onClick = viewModel::dismissRestore) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
         )
     }
 
-    if (confirmCookieDelete) {
+    if (uiState.confirmCookieDelete) {
         AlertDialog(
-            onDismissRequest = { confirmCookieDelete = false },
+            onDismissRequest = viewModel::dismissCookieDelete,
             title = { Text(stringResource(Res.string.delete_cookie_title)) },
             text = { Text(stringResource(Res.string.delete_cookie_body)) },
             confirmButton = {
                 DestructiveTextButton(
                     text = stringResource(Res.string.delete),
-                    onClick = {
-                        graph.cookieStore.delete()
-                        presenter.setCookiesConfigured(false)
-                        confirmCookieDelete = false
-                        notice = UiText.of(Res.string.cookie_cleared)
-                    },
+                    onClick = viewModel::confirmCookieDelete,
                     modifier = Modifier.testTag("settings-confirm-cookie-delete"),
                 )
             },
             dismissButton = {
-                TextButton(onClick = { confirmCookieDelete = false }) {
+                TextButton(onClick = viewModel::dismissCookieDelete) {
                     Text(stringResource(Res.string.keep))
                 }
             },
         )
     }
 
-    if (addingPreset) {
+    if (uiState.addingPreset) {
         AddPresetDialog(
-            onDismiss = { addingPreset = false },
-            onAdd = { name, options ->
-                presenter.addPreset(name, options)
-                addingPreset = false
-                notice = UiText.of(Res.string.preset_added)
-            },
+            onDismiss = viewModel::dismissAddPreset,
+            onAdd = { name, options -> viewModel.addPreset(name, options) },
         )
     }
 }

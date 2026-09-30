@@ -37,11 +37,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.JobState
-import com.anydownlod.core.domain.Preset
+import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.add.AddForm
-import com.anydownlod.ui.add.AddFormPresenter
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.files_stay_on_device
 import com.anydownlod.ui.generated.resources.library
@@ -49,9 +47,12 @@ import com.anydownlod.ui.history.HistoryScreen
 import com.anydownlod.ui.i18n.labelResource
 import com.anydownlod.ui.i18n.resolve
 import com.anydownlod.ui.queue.QueueScreen
+import com.anydownlod.ui.queue.QueueViewModel
+import com.anydownlod.ui.settings.SettingsViewModel
 import com.anydownlod.ui.subscriptions.SubscriptionsScreen
 import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.StatusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import org.jetbrains.compose.resources.stringResource
 
 /** The three list regions of the desktop shell. */
@@ -71,24 +72,21 @@ enum class ShellTab {
  */
 @Composable
 fun AppShell(
-    graph: AppGraph,
-    addForm: AddFormPresenter,
+    startupWarning: String?,
+    capabilities: ToolkitCapabilities,
     selectedTab: ShellTab,
     onTabSelected: (ShellTab) -> Unit,
     onOpenSettings: () -> Unit,
     onPreviewSingleUrl: (String) -> Unit,
     onCopyUrls: ((String) -> Unit)? = null,
 ) {
-    val settings by graph.settings.settings.collectAsState()
-    val jobs by graph.engine.jobs.collectAsState()
-    val openDownloads = jobs.count { !it.state.isTerminal && it.state != JobState.UNKNOWN }
+    val settings by metroViewModel<SettingsViewModel>().state.collectAsState()
+    val queue by metroViewModel<QueueViewModel>().state.collectAsState()
+    val openDownloads = queue.rows.size
+    val saved = settings.settings
 
     Column(modifier = Modifier.fillMaxSize()) {
-        AppHeader(
-            theme = settings.theme,
-            onThemeChange = { theme -> graph.settings.update { it.copy(theme = theme) } },
-            onOpenSettings = onOpenSettings,
-        )
+        AppHeader(onOpenSettings = onOpenSettings)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 880.dp
             if (wide) {
@@ -100,10 +98,10 @@ fun AppShell(
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Workspace(
-                        graph = graph,
-                        addForm = addForm,
-                        presets = settings.presets,
-                        cookiesConfigured = settings.cookiesConfigured,
+                        startupWarning = startupWarning,
+                        capabilities = capabilities,
+                        presets = saved.presets,
+                        cookiesConfigured = saved.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
                         onCopyUrls = onCopyUrls,
@@ -117,10 +115,10 @@ fun AppShell(
                         onTabSelected = onTabSelected,
                     )
                     Workspace(
-                        graph = graph,
-                        addForm = addForm,
-                        presets = settings.presets,
-                        cookiesConfigured = settings.cookiesConfigured,
+                        startupWarning = startupWarning,
+                        capabilities = capabilities,
+                        presets = saved.presets,
+                        cookiesConfigured = saved.cookiesConfigured,
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
                         onCopyUrls = onCopyUrls,
@@ -266,16 +264,16 @@ private fun Destination(
 
 @Composable
 private fun Workspace(
-    graph: AppGraph,
-    addForm: AddFormPresenter,
-    presets: List<Preset>,
+    startupWarning: String?,
+    capabilities: ToolkitCapabilities,
+    presets: List<com.anydownlod.core.domain.Preset>,
     cookiesConfigured: Boolean,
     selectedTab: ShellTab,
     onPreviewSingleUrl: (String) -> Unit,
     onCopyUrls: ((String) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
-        graph.startupWarning?.let { warning ->
+        startupWarning?.let { warning ->
             MessageStrip(
                 text = warning,
                 tone = StatusTone.Negative,
@@ -283,17 +281,16 @@ private fun Workspace(
             )
         }
         AddForm(
-            presenter = addForm,
             presets = presets,
             cookiesConfigured = cookiesConfigured,
             onPreviewSingleUrl = onPreviewSingleUrl,
-            capabilities = graph.toolkitCapabilities,
+            capabilities = capabilities,
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
-                ShellTab.DOWNLOADING -> QueueScreen(onCopyUrls = onCopyUrls, onOpenSource = graph.openUrl)
-                ShellTab.COMPLETED -> HistoryScreen(graph = graph, onCopyUrls = onCopyUrls)
-                ShellTab.SUBSCRIPTIONS -> SubscriptionsScreen(graph = graph)
+                ShellTab.DOWNLOADING -> QueueScreen(onCopyUrls = onCopyUrls)
+                ShellTab.COMPLETED -> HistoryScreen(onCopyUrls = onCopyUrls)
+                ShellTab.SUBSCRIPTIONS -> SubscriptionsScreen()
             }
         }
     }

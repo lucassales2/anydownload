@@ -33,7 +33,7 @@ val AudioContainer.isLossy: Boolean
 
 /**
  * Every control of the MeTube add form as plain state. The composable renders
- * it; [AddFormPresenter] mutates it and turns it into a [DownloadOptions].
+ * it; [AddFormViewModel] mutates it and turns it into a [DownloadOptions].
  */
 data class AddFormState(
     val urlText: String = "",

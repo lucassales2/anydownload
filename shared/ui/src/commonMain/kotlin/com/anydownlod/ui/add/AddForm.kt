@@ -112,6 +112,7 @@ import com.anydownlod.ui.theme.MessageStrip
 import com.anydownlod.ui.theme.PageInset
 import com.anydownlod.ui.theme.SegmentedChoice
 import com.anydownlod.ui.theme.StatusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
 import org.jetbrains.compose.resources.stringResource
 
 internal val qualityOptions = listOf(
@@ -129,17 +130,17 @@ internal val bitrateOptions = listOf("", "128", "192", "256", "320")
 
 /**
  * The add composer: a source field with the primary action beside it, format
- * choices, and a delivery group. State lives in [AddFormPresenter] so it
+ * choices, and a delivery group. State lives in [AddFormViewModel] so it
  * survives opening Settings and switching lists.
  */
 @Composable
 fun AddForm(
-    presenter: AddFormPresenter,
     presets: List<Preset>,
     cookiesConfigured: Boolean,
     onPreviewSingleUrl: (String) -> Unit,
     capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
     modifier: Modifier = Modifier,
+    presenter: AddFormViewModel = metroViewModel(),
 ) {
     val state by presenter.state.collectAsState()
     val status by presenter.status.collectAsState()
@@ -259,7 +260,7 @@ fun AddForm(
 @Composable
 private fun DeliveryFields(
     state: AddFormState,
-    presenter: AddFormPresenter,
+    presenter: AddFormViewModel,
     cookiesConfigured: Boolean,
 ) {
     AutoStartRow(state, presenter)
@@ -289,7 +290,7 @@ private fun DeliveryFields(
 }
 
 @Composable
-private fun AutoStartRow(state: AddFormState, presenter: AddFormPresenter) {
+private fun AutoStartRow(state: AddFormState, presenter: AddFormViewModel) {
     val automatic = state.startPolicy == StartPolicy.AUTOMATIC
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -319,7 +320,7 @@ private fun AutoStartRow(state: AddFormState, presenter: AddFormPresenter) {
 }
 
 @Composable
-private fun PrefixField(state: AddFormState, presenter: AddFormPresenter, modifier: Modifier) {
+private fun PrefixField(state: AddFormState, presenter: AddFormViewModel, modifier: Modifier) {
     AppTextField(
         value = state.filenamePrefix,
         onValueChange = presenter::setFilenamePrefix,
@@ -330,7 +331,7 @@ private fun PrefixField(state: AddFormState, presenter: AddFormPresenter, modifi
 }
 
 @Composable
-private fun FolderField(state: AddFormState, presenter: AddFormPresenter, modifier: Modifier) {
+private fun FolderField(state: AddFormState, presenter: AddFormViewModel, modifier: Modifier) {
     AppTextField(
         value = state.destinationFolder,
         onValueChange = presenter::setDestinationFolder,
@@ -392,7 +393,7 @@ internal fun UrlEntryRow(
 }
 
 @Composable
-private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
+private fun VideoFields(state: AddFormState, presenter: AddFormViewModel) {
     ChoiceRow(
         label = text(Res.string.container_profile),
         options = VideoContainerProfile.entries,
@@ -424,7 +425,7 @@ private fun VideoFields(state: AddFormState, presenter: AddFormPresenter) {
 @Composable
 private fun AudioFields(
     state: AddFormState,
-    presenter: AddFormPresenter,
+    presenter: AddFormViewModel,
     capabilities: ToolkitCapabilities,
 ) {
     val cannotWrite = buildMap {
@@ -465,7 +466,7 @@ private fun AudioFields(
 }
 
 @Composable
-private fun CaptionsFields(state: AddFormState, presenter: AddFormPresenter) {
+private fun CaptionsFields(state: AddFormState, presenter: AddFormViewModel) {
     AppTextField(
         value = state.captionLanguage,
         onValueChange = presenter::setCaptionLanguage,
@@ -494,7 +495,7 @@ private fun CaptionsFields(state: AddFormState, presenter: AddFormPresenter) {
 private fun AdvancedSection(
     state: AddFormState,
     presets: List<Preset>,
-    presenter: AddFormPresenter,
+    presenter: AddFormViewModel,
 ) {
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     TextButton(

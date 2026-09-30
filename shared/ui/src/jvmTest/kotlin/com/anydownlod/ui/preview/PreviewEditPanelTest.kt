@@ -15,7 +15,8 @@ import com.anydownlod.core.fake.InMemoryDownloadEngine
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
 import com.anydownlod.core.postprocess.ToolkitCapabilities
-import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.add.AddBatchIds
+import com.anydownlod.ui.add.AddFormViewModel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -29,7 +30,7 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class PreviewEditPanelTest {
 
-    private fun presenter(): AddFormPresenter = AddFormPresenter(
+    private fun presenter(): AddFormViewModel = AddFormViewModel(
         engine = InMemoryDownloadEngine(),
         subscriptions = InMemorySubscriptionRepository(),
         settingsRepository = InMemorySettingsRepository(),

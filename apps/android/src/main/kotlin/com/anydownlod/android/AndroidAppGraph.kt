@@ -25,14 +25,21 @@ import com.anydownlod.android.engine.ChaquopyPort
 import com.anydownlod.android.engine.media.AndroidMediaToolkit
 import com.anydownlod.android.media.AndroidPlatformMuxer
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.FileOpener
+import com.anydownlod.core.FileRevealer
+import com.anydownlod.core.FolderPicker
+import com.anydownlod.core.ThumbnailLoader
+import com.anydownlod.core.UrlOpener
 import com.anydownlod.core.ExtractorMediaPreviewSource
 import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadRequest
@@ -67,7 +74,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class])
+@DependencyGraph(scope = AppScope::class, bindingContainers = [SharedEngineBindings::class, AddFormBindings::class])
 internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
 
     override val engine: DownloadEngine
@@ -304,6 +311,38 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
             context.startActivity(intent)
         }
     }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun urlOpener(openUrl: (String) -> Unit): UrlOpener = UrlOpener { openUrl(it) }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileOpener(): FileOpener = FileOpener { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun fileRevealer(): FileRevealer = FileRevealer { _ -> }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun folderPicker(): FolderPicker = FolderPicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun thumbnailLoader(): ThumbnailLoader = ThumbnailLoader { null }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStore(): CookieStore = CookieStore.Unavailable
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun spotifyOptional(service: SpotifyDownloadService): SpotifyDownloadService? = service
 }
 
 /** The restored rows, already split by route, plus the startup warning. */

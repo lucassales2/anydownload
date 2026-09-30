@@ -30,6 +30,8 @@ import com.anydownlod.ui.generated.resources.settings
 import com.anydownlod.ui.generated.resources.theme
 import com.anydownlod.ui.i18n.labelResource
 import com.anydownlod.ui.i18n.resolve
+import com.anydownlod.ui.theme.LocalThemeChanger
+import com.anydownlod.ui.theme.LocalThemePreference
 import com.anydownlod.ui.theme.SegmentedChoice
 import org.jetbrains.compose.resources.stringResource
 
@@ -40,10 +42,10 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Composable
 fun AppHeader(
-    theme: ThemePreference,
-    onThemeChange: (ThemePreference) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val theme = LocalThemePreference.current
+    val onThemeChange = LocalThemeChanger.current
     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val tight = maxWidth < 640.dp

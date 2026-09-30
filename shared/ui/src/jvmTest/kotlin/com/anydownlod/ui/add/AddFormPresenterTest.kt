@@ -17,6 +17,7 @@ import com.anydownlod.ui.generated.resources.url_error_blank
 import com.anydownlod.ui.generated.resources.url_error_one_only
 import com.anydownlod.ui.generated.resources.url_error_scheme
 import com.anydownlod.ui.generated.resources.url_error_userinfo
+import com.anydownlod.ui.add.AddBatchIds
 import com.anydownlod.ui.i18n.UiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,11 +34,11 @@ class AddFormPresenterTest {
         val subscriptions = InMemorySubscriptionRepository()
         val settings = InMemorySettingsRepository()
         var ids = 0
-        val presenter = AddFormPresenter(
+        val presenter = AddFormViewModel(
             engine = engine,
             subscriptions = subscriptions,
             settingsRepository = settings,
-            idGenerator = { "test-${++ids}" },
+            idGenerator = AddBatchIds { "test-${++ids}" },
         )
     }
 

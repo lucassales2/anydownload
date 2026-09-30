@@ -21,7 +21,7 @@ import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.VideoContainerProfile
 import com.anydownlod.core.postprocess.ToolkitCapabilities
-import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.add.AddFormViewModel
 import com.anydownlod.ui.add.ChoiceRow
 import com.anydownlod.ui.add.bitrateOptions
 import com.anydownlod.ui.add.displayName
@@ -50,7 +50,7 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Composable
 internal fun PreviewEditPanel(
-    editor: AddFormPresenter,
+    editor: AddFormViewModel,
     availableFormats: FormatChoices? = null,
     capabilities: ToolkitCapabilities = ToolkitCapabilities.Unavailable,
     modifier: Modifier = Modifier,

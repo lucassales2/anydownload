@@ -20,8 +20,9 @@ import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.core.fake.InMemoryDownloadEngine
 import com.anydownlod.core.fake.InMemorySettingsRepository
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
+import com.anydownlod.core.ThumbnailLoader
 import com.anydownlod.ui.App
-import com.anydownlod.ui.add.AddFormPresenter
+import com.anydownlod.ui.add.AddFormViewModel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -70,10 +71,16 @@ class StatusVideoSelectionUiTest {
             MediaPreviewResult.Failed(PreviewFailure.Failed)
     }
 
-    private fun presenter(): AddFormPresenter = AddFormPresenter(
+    private fun presenter(): AddFormViewModel = AddFormViewModel(
         engine = InMemoryDownloadEngine(),
         subscriptions = InMemorySubscriptionRepository(),
         settingsRepository = InMemorySettingsRepository(),
+    )
+
+    private fun previewModel(source: MediaPreviewSource) = PreviewViewModel(
+        previews = source,
+        thumbnails = ThumbnailLoader { null },
+        capabilities = com.anydownlod.core.postprocess.ToolkitCapabilities.Unavailable,
     )
 
     @Test
@@ -82,11 +89,10 @@ class StatusVideoSelectionUiTest {
         setContent {
             PreviewScreen(
                 url = statusUrl,
-                source = TwoVideoSource(),
-                loadThumbnail = { null },
                 onBack = {},
                 onDownload = { _, ids -> downloaded = ids },
-                editor = presenter(),
+                form = presenter(),
+                viewModel = previewModel(TwoVideoSource()),
             )
         }
 
@@ -118,11 +124,10 @@ class StatusVideoSelectionUiTest {
         setContent {
             PreviewScreen(
                 url = statusUrl,
-                source = TwoVideoSource(),
-                loadThumbnail = { null },
                 onBack = {},
                 onDownload = { _, _ -> },
-                editor = editor,
+                form = editor,
+                viewModel = previewModel(TwoVideoSource()),
             )
         }
 
@@ -140,10 +145,10 @@ class StatusVideoSelectionUiTest {
         setContent {
             PreviewScreen(
                 url = statusUrl,
-                source = NoVideoSource(),
-                loadThumbnail = { null },
                 onBack = {},
                 onDownload = { _, _ -> },
+                form = presenter(),
+                viewModel = previewModel(NoVideoSource()),
             )
         }
 
@@ -156,10 +161,10 @@ class StatusVideoSelectionUiTest {
         setContent {
             PreviewScreen(
                 url = statusUrl,
-                source = PhotoOnlyFailureSource(),
-                loadThumbnail = { null },
                 onBack = {},
                 onDownload = { _, _ -> },
+                form = presenter(),
+                viewModel = previewModel(PhotoOnlyFailureSource()),
             )
         }
 

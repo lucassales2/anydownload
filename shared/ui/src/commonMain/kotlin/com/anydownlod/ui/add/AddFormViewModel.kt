@@ -34,11 +34,21 @@ import com.anydownlod.ui.generated.resources.subscribed
 import com.anydownlod.ui.generated.resources.url_error_one_only
 import com.anydownlod.ui.i18n.UiText
 import com.anydownlod.ui.i18n.toUiText
+import androidx.lifecycle.ViewModel
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesIntoMap
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.random.Random
+
+/** Builds the batch id prefix for one submit. A binding supplies the random default. */
+fun interface AddBatchIds {
+    operator fun invoke(): String
+}
 
 /** What one Download click did. */
 data class AddSubmitReport(
@@ -67,12 +77,17 @@ data class AddSubscribeReport(
  * submit; pasting the same URL again is an intentional new download and gets a
  * new key.
  */
-class AddFormPresenter(
+@Inject
+@ViewModelKey
+@ContributesIntoMap(AppScope::class)
+class AddFormViewModel(
     private val engine: DownloadEngine,
     private val subscriptions: SubscriptionRepository,
     private val settingsRepository: SettingsRepository,
-    private val idGenerator: () -> String = { "add-${Random.nextLong().toULong().toString(16)}" },
-) {
+    private val idGenerator: AddBatchIds = AddBatchIds {
+        "add-${Random.nextLong().toULong().toString(16)}"
+    },
+) : ViewModel() {
     private val _state = MutableStateFlow(AddFormState())
     val state: StateFlow<AddFormState> = _state.asStateFlow()
 

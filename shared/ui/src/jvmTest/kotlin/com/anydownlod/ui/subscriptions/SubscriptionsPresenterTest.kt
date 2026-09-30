@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class SubscriptionsPresenterTest {
+class SubscriptionsViewModelTest {
 
     private fun repository() = InMemorySubscriptionRepository()
 
@@ -35,7 +35,7 @@ class SubscriptionsPresenterTest {
             skipMembersOnly = true,
         )
 
-        val row = SubscriptionsPresenter.rows(repository.subscriptions.value).single()
+        val row = SubscriptionsViewModel.rows(repository.subscriptions.value).single()
 
         assertEquals("Fixture", row.name)
         assertEquals("example.com", row.sourceHost)
@@ -54,7 +54,7 @@ class SubscriptionsPresenterTest {
         val first = repository.addFixture("First")
         val second = repository.addFixture("Second")
 
-        SubscriptionsPresenter(repository).checkSelected(setOf(first.id))
+        SubscriptionsViewModel(repository).checkSelected(setOf(first.id))
 
         val stored = repository.subscriptions.value
         assertNotNull(stored.first { it.id == first.id }.lastCheckedAtEpochMillis)
@@ -65,7 +65,7 @@ class SubscriptionsPresenterTest {
     fun updateRejectsInvalidRegexIntervalAndBlankName() {
         val repository = repository()
         val subscription = repository.addFixture()
-        val presenter = SubscriptionsPresenter(repository)
+        val presenter = SubscriptionsViewModel(repository)
 
         assertNotNull(presenter.update(subscription.id, "Name", "30", "[", false))
         assertNotNull(presenter.update(subscription.id, "Name", "0", "", false))
@@ -79,7 +79,7 @@ class SubscriptionsPresenterTest {
         val repository = repository()
         val options = DownloadOptions(quality = QualityPreference.Resolution("1080"))
         val subscription = repository.addFixture(options = options)
-        val presenter = SubscriptionsPresenter(repository)
+        val presenter = SubscriptionsViewModel(repository)
 
         assertNull(presenter.update(subscription.id, "New name", "45", "fixture", true))
 
@@ -96,7 +96,7 @@ class SubscriptionsPresenterTest {
         val repository = repository()
         val first = repository.addFixture("First")
         val second = repository.addFixture("Second")
-        val presenter = SubscriptionsPresenter(repository)
+        val presenter = SubscriptionsViewModel(repository)
 
         assertTrue(presenter.delete(first.id))
 
@@ -107,7 +107,7 @@ class SubscriptionsPresenterTest {
     fun pauseClearsNextCheckAndResumeRestoresIt() {
         val repository = repository()
         val subscription = repository.addFixture()
-        val presenter = SubscriptionsPresenter(repository)
+        val presenter = SubscriptionsViewModel(repository)
 
         assertTrue(presenter.pause(subscription.id))
         assertTrue(repository.subscriptions.value.single().paused)
@@ -120,8 +120,8 @@ class SubscriptionsPresenterTest {
 
     @Test
     fun titleFilterValidationOnlyCompilesThePattern() {
-        assertTrue(SubscriptionsPresenter.isValidTitleFilter(""))
-        assertTrue(SubscriptionsPresenter.isValidTitleFilter("^episode [0-9]+$"))
-        assertFalse(SubscriptionsPresenter.isValidTitleFilter("["))
+        assertTrue(SubscriptionsViewModel.isValidTitleFilter(""))
+        assertTrue(SubscriptionsViewModel.isValidTitleFilter("^episode [0-9]+$"))
+        assertFalse(SubscriptionsViewModel.isValidTitleFilter("["))
     }
 }

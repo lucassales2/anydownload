@@ -4,14 +4,17 @@
  * T-122: the Downloading list state moves out of `QueueScreen` and into a
  * MetroX ViewModel. The ViewModel owns selection, the cancel confirmation,
  * and the copy decisions; the screen only lays out, resolves strings, and
- * forwards events. `QueuePresenter` keeps the pure row mapping and the
- * engine-action rules.
+ * forwards events.
  */
 package com.anydownlod.ui.queue
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydownlod.core.DownloadEngine
+import com.anydownlod.core.UrlOpener
+import com.anydownlod.core.domain.DownloadJob
+import com.anydownlod.core.domain.JobState
+import com.anydownlod.ui.export.JobSourceUrls
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.copied_urls
 import com.anydownlod.ui.i18n.UiText
@@ -43,9 +46,9 @@ data class QueueUiState(
 @ContributesIntoMap(AppScope::class)
 class QueueViewModel(
     private val engine: DownloadEngine,
+    private val openUrl: UrlOpener = UrlOpener { _ -> },
 ) : ViewModel() {
 
-    private val presenter = QueuePresenter(engine)
     private val selectedIds = MutableStateFlow<Set<String>>(emptySet())
     private val pendingCancelIds = MutableStateFlow<Set<String>>(emptySet())
     private val statusMessage = MutableStateFlow<UiText?>(null)
@@ -56,7 +59,7 @@ class QueueViewModel(
         pendingCancelIds,
         statusMessage,
     ) { jobs, selected, pending, status ->
-        val rows = QueuePresenter.rows(jobs)
+        val rows = rows(jobs)
         QueueUiState(
             rows = rows,
             selectedIds = selected,
@@ -64,7 +67,7 @@ class QueueViewModel(
             statusMessage = status,
             working = rows.count { it.state.isActive },
             notStarted = rows.size - rows.count { it.state.isActive },
-            batchCopyEnabled = presenter.batchUrls(selected).isNotEmpty(),
+            batchCopyEnabled = batchUrls(selected).isNotEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, QueueUiState())
 
@@ -73,7 +76,7 @@ class QueueViewModel(
         // like the old screen-side `LaunchedEffect(rows)`.
         viewModelScope.launch {
             engine.jobs.collect { jobs ->
-                val ids = QueuePresenter.rows(jobs).map { it.id }.toSet()
+                val ids = rows(jobs).map { it.id }.toSet()
                 selectedIds.update { it.intersect(ids) }
                 pendingCancelIds.update { it.intersect(ids) }
             }
@@ -92,7 +95,7 @@ class QueueViewModel(
     /** Starts the selected rows; [ids] defaults to the current selection. */
     fun startSelected(ids: Set<String> = selectedIds.value) {
         if (ids.isEmpty()) return
-        presenter.startSelected(ids)
+        startSelectedJobs(ids)
     }
 
     /**
@@ -106,7 +109,7 @@ class QueueViewModel(
         if (needsConfirm) {
             pendingCancelIds.value = ids
         } else {
-            presenter.cancelSelected(ids)
+            cancelSelectedJobs(ids)
             selectedIds.update { it - ids }
         }
     }
@@ -114,7 +117,7 @@ class QueueViewModel(
     fun confirmCancel() {
         val pending = pendingCancelIds.value
         if (pending.isEmpty()) return
-        presenter.cancelSelected(pending)
+        cancelSelectedJobs(pending)
         selectedIds.update { it - pending }
         pendingCancelIds.value = emptySet()
     }
@@ -124,13 +127,36 @@ class QueueViewModel(
     }
 
     /** Source URLs of the selected rows; the screen does the clipboard write. */
-    fun copySelected(): List<String> = presenter.selectedUrls(selectedIds.value)
+    fun copySelected(): List<String> = selectedUrls(selectedIds.value)
 
-    /** Source URLs of every child of the selected rows' batches. */
-    fun copyBatch(): List<String> = presenter.batchUrls(selectedIds.value)
+    fun copyBatch(): List<String> = batchUrls(selectedIds.value)
+
+    fun openSource(url: String) = openUrl(url)
 
     /** Records a completed copy so the screen can show the count. */
     fun noteCopied(count: Int) {
         statusMessage.value = UiText.of(Res.string.copied_urls, count)
+    }
+
+    private fun startSelectedJobs(ids: Set<String>) {
+        engine.jobs.value
+            .filter { it.id in ids && (it.state == JobState.PENDING || it.state == JobState.SCHEDULED) }
+            .forEach { engine.start(it.id) }
+    }
+
+    private fun cancelSelectedJobs(ids: Set<String>) {
+        engine.jobs.value
+            .filter { it.id in ids && !it.state.isTerminal && it.state != JobState.UNKNOWN }
+            .forEach { engine.cancel(it.id) }
+    }
+
+    private fun selectedUrls(ids: Set<String>): List<String> = JobSourceUrls.forSelected(engine.jobs.value, ids)
+
+    private fun batchUrls(ids: Set<String>): List<String> = JobSourceUrls.forBatches(engine.jobs.value, ids)
+
+    companion object {
+        fun rows(jobs: List<DownloadJob>): List<QueueRow> =
+            jobs.filter { !it.state.isTerminal && it.state != JobState.UNKNOWN }
+                .map { it.toQueueRow() }
     }
 }
