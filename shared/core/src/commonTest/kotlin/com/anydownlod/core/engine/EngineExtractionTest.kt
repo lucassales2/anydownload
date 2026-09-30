@@ -423,9 +423,9 @@ class EngineExtractionTest {
 
         val finished = engine.jobs.value.first { it.id == job.id }
         assertEquals(JobState.CANCELLED, finished.state)
-        assertEquals(1, finished.artifacts.size, "the published file stays; the current temp is discarded")
+        assertTrue(finished.artifacts.single().removed, "cancel deletes the file already written")
+        assertTrue(store.live.isEmpty(), "the published file is removed from storage")
         assertTrue(store.created.last().discarded, "the cancelled temp must be discarded")
-        assertTrue(store.live.values.none { it.discarded })
     }
 
     @Test

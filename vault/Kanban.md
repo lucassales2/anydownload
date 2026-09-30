@@ -6,7 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
 - [ ] [T-127 — Medium extractors, first half](06-tasks/T-127-Medium-extractors-a.md) #D18 #P1
 - [ ] [T-128 — Medium extractors, second half](06-tasks/T-128-Medium-extractors-b.md) #D19 #P1
 - [ ] [T-129 — Small extractors, first half](06-tasks/T-129-Small-extractors-a.md) #D20 #P1
@@ -21,7 +20,7 @@ tags: [project, board]
 
 ## In progress
 
-
+- [ ] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
 
 ## Blocked
 

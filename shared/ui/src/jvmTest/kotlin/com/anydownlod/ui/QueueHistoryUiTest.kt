@@ -40,10 +40,10 @@ class QueueHistoryUiTest {
         onNodeWithTag("queue-start-seed-pending").performClick()
         assertEquals(JobState.QUEUED, graph.job("seed-pending").state)
 
-        // Cancelling live work asks first and never claims to delete a file.
+        // Cancelling live work asks first and deletes the stored file.
         onNodeWithTag("queue-list").performScrollToNode(hasTestTag("queue-cancel-seed-downloading"))
         onNodeWithTag("queue-cancel-seed-downloading").performClick()
-        onNodeWithText("This stops the download. It does not delete a finished file.").assertExists()
+        onNodeWithText("This stops the download and deletes its file from the download folder.").assertExists()
         onNodeWithTag("queue-confirm-cancel").performClick()
         assertEquals(JobState.CANCELLED, graph.job("seed-downloading").state)
 
@@ -93,6 +93,7 @@ class QueueHistoryUiTest {
         onNodeWithTag("history-list").performScrollToNode(hasTestTag("history-select-seed-failed"))
         onNodeWithTag("history-select-seed-failed").performClick()
         onNodeWithTag("history-remove-selected").performClick()
+        onNodeWithText("Also delete the file from the download folder?").assertExists()
         onNodeWithTag("history-confirm-remove").performClick()
         assertNull(graph.jobOrNull("seed-completed"))
         assertNull(graph.jobOrNull("seed-failed"))

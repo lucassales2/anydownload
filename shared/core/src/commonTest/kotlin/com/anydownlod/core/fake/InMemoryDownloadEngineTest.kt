@@ -87,6 +87,23 @@ class InMemoryDownloadEngineTest {
     }
 
     @Test
+    fun cancelMarksStoredFilesRemoved() {
+        val completed = InMemoryDownloadEngine.sampleJobs().first { it.state == JobState.COMPLETED }
+        val downloading = completed.copy(
+            id = "partial",
+            state = JobState.DOWNLOADING,
+            finishedAtEpochMillis = null,
+        )
+        val engine = engine(seedJobs = listOf(downloading))
+
+        val cancelled = engine.cancel(downloading.id)
+
+        assertNotNull(cancelled)
+        assertEquals(JobState.CANCELLED, cancelled.state)
+        assertTrue(cancelled.artifacts.single().removed)
+    }
+
+    @Test
     fun cancelLeavesATerminalJobAlone() {
         val completed = InMemoryDownloadEngine.sampleJobs().first { it.state == JobState.COMPLETED }
         val engine = engine(seedJobs = listOf(completed))

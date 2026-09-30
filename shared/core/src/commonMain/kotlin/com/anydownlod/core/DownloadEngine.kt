@@ -29,7 +29,10 @@ interface DownloadEngine {
     /** Queues a [JobState.PENDING] or [JobState.SCHEDULED] job. */
     fun start(jobId: String): DownloadJob?
 
-    /** Cancels non-terminal work. Does not delete finished files. */
+    /**
+     * Cancels non-terminal work and deletes that job's file from storage.
+     * A job that already finished is left unchanged, including its file.
+     */
     fun cancel(jobId: String): DownloadJob?
 
     /** Appends a new attempt to a failed or cancelled job and queues it. */

@@ -1,9 +1,14 @@
 package com.anydownlod.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -13,13 +18,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.core.fake.InMemoryAppGraph
-import com.anydownlod.ui.home.HomeScreen
-import com.anydownlod.ui.preview.PreviewScreen
+import com.anydownlod.ui.phone.PhonePage
+import com.anydownlod.ui.phone.PhoneShell
 import com.anydownlod.ui.settings.SettingsScreen
 import com.anydownlod.ui.settings.SettingsViewModel
+import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.close
+import com.anydownlod.ui.shell.AppShell
+import com.anydownlod.ui.shell.ShellTab
+import com.anydownlod.ui.subscriptions.SubscriptionsScreen
 import com.anydownlod.ui.theme.AnyDownloadTheme
 import com.anydownlod.ui.theme.LocalThemeChanger
 import com.anydownlod.ui.theme.LocalThemePreference
@@ -31,6 +42,7 @@ import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
 import dev.zacsweers.metrox.viewmodel.MetroViewModelFactory
 import dev.zacsweers.metrox.viewmodel.ViewModelGraph
 import dev.zacsweers.metrox.viewmodel.metroViewModel
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Root composable called by the Android, iOS, desktop, and web hosts.
@@ -38,21 +50,29 @@ import dev.zacsweers.metrox.viewmodel.metroViewModel
  * The [graph] supplies the engine, repositories, and tool probe. Screens below
  * this root resolve Metro ViewModels and do not take the graph.
  *
- * The idle screen is the link field alone; the app never reads the clipboard
- * on its own. A single compatible link opens the metadata preview, and
- * Settings is reached from the header.
+ * The idle screen keeps the paste field and an inline preview beside the
+ * All / Complete / Failed list. Narrow windows stack those pieces. The app
+ * never reads the clipboard on its own. Settings and Subscriptions open from
+ * the header.
+ *
+ * [phone] is the Android layout: a welcome screen, a paste-and-preview home,
+ * and the All / Complete / Failed list. Desktop keeps the window shell.
  */
 @Composable
 fun App(
     graph: AppGraph = remember { InMemoryAppGraph() },
     viewModelFactory: MetroViewModelFactory? = null,
+    phone: Boolean = false,
 ) {
     val metroViewModelFactory = viewModelFactory
         ?: (graph as? ViewModelGraph)?.metroViewModelFactory
         ?: remember(graph) { fallbackViewModelFactory(graph) }
 
     var settingsOpen by remember { mutableStateOf(false) }
+    var subscriptionsOpen by remember { mutableStateOf(false) }
     var previewUrl by remember { mutableStateOf<String?>(null) }
+    var selectedTab by remember { mutableStateOf(ShellTab.DOWNLOADING) }
+    var phonePage by remember { mutableStateOf(PhonePage.Home) }
 
     // T-020: a shared or deep link is validated once and opens the preview;
     // a rejection is consumed silently (the Add field stays the manual path).
@@ -62,7 +82,10 @@ fun App(
     LaunchedEffect(pendingSharedText) {
         val pending = pendingSharedText ?: return@LaunchedEffect
         when (val result = SharedLink.extract(pending)) {
-            is SharedLinkResult.Accepted -> previewUrl = result.url
+            is SharedLinkResult.Accepted -> {
+                previewUrl = result.url
+                phonePage = PhonePage.Home
+            }
             is SharedLinkResult.Rejected -> Unit
         }
         sharedInbox?.consume()
@@ -82,17 +105,37 @@ fun App(
         ) {
             AnyDownloadTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val openPreview = previewUrl
                     when {
                         settingsOpen -> SettingsScreen(onClose = { settingsOpen = false })
-                        openPreview != null -> PreviewScreen(
-                            url = openPreview,
-                            onBack = { previewUrl = null },
-                        )
-                        else -> HomeScreen(
-                            startupWarning = graph.startupWarning,
+                        phone -> PhoneShell(
+                            page = phonePage,
+                            onPageChange = { phonePage = it },
+                            previewUrl = previewUrl,
+                            onPreviewUrl = { previewUrl = it },
+                            onClearPreview = { previewUrl = null },
                             onOpenSettings = { settingsOpen = true },
+                            startupWarning = graph.startupWarning,
+                        )
+                        subscriptionsOpen -> Column(Modifier.fillMaxSize()) {
+                            TextButton(
+                                onClick = { subscriptionsOpen = false },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) {
+                                Text(stringResource(Res.string.close))
+                            }
+                            SubscriptionsScreen(Modifier.weight(1f).fillMaxWidth())
+                        }
+                        else -> AppShell(
+                            startupWarning = graph.startupWarning,
+                            capabilities = graph.toolkitCapabilities,
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it },
+                            onOpenSettings = { settingsOpen = true },
+                            onOpenSubscriptions = { subscriptionsOpen = true },
                             onPreviewSingleUrl = { previewUrl = it },
+                            onClearPreview = { previewUrl = null },
+                            previewUrl = previewUrl,
+                            previewLink = true,
                         )
                     }
                 }

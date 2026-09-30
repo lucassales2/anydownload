@@ -7,11 +7,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.core.view.WindowCompat
 import com.anydownlod.core.SharedLinkInbox
 import com.anydownlod.core.cookies.NetscapeCookieFile
 import com.anydownlod.ui.App
+import com.anydownlod.ui.phone.LocalLightStatusBarIcons
 import dev.zacsweers.metro.createGraphFactory
 import java.io.File
 import kotlin.coroutines.resume
@@ -53,7 +56,14 @@ class MainActivity : ComponentActivity() {
                     pendingSharedText = null
                 }
             }
-            App(graph = graph)
+            CompositionLocalProvider(
+                LocalLightStatusBarIcons provides { lightIcons ->
+                    WindowCompat.getInsetsController(window, window.decorView)
+                        .isAppearanceLightStatusBars = !lightIcons
+                },
+            ) {
+                App(graph = graph, phone = true)
+            }
         }
     }
 

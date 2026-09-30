@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -40,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.add.AddForm
+import com.anydownlod.ui.home.AdaptiveHome
+import com.anydownlod.ui.home.PreviewLinkEntry
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.files_stay_on_device
 import com.anydownlod.ui.generated.resources.library
@@ -68,7 +71,9 @@ enum class ShellTab {
  * Wide windows use a navigation rail. Narrow windows keep the same three
  * destinations in a horizontal strip so a later phone layout can restack
  * these composables. [selectedTab] is hoisted so opening and closing Settings
- * returns to the same list.
+ * returns to the same list. The Downloading destination shows how many jobs
+ * are actively working. [previewLink] keeps the paste-and-preview field
+ * instead of the full options form.
  */
 @Composable
 fun AppShell(
@@ -79,21 +84,38 @@ fun AppShell(
     onOpenSettings: () -> Unit,
     onPreviewSingleUrl: (String) -> Unit,
     onCopyUrls: ((String) -> Unit)? = null,
+    previewLink: Boolean = false,
+    previewUrl: String? = null,
+    onClearPreview: () -> Unit = {},
+    onOpenSubscriptions: () -> Unit = {},
 ) {
     val settings by metroViewModel<SettingsViewModel>().state.collectAsState()
     val queue by metroViewModel<QueueViewModel>().state.collectAsState()
-    val openDownloads = queue.rows.size
+    val activeDownloads = queue.working
     val saved = settings.settings
 
     Column(modifier = Modifier.fillMaxSize()) {
-        AppHeader(onOpenSettings = onOpenSettings)
+        AppHeader(
+            onOpenSettings = onOpenSettings,
+            onOpenSubscriptions = if (previewLink) onOpenSubscriptions else null,
+        )
+        if (previewLink) {
+            AdaptiveHome(
+                previewUrl = previewUrl,
+                onPreviewUrl = onPreviewSingleUrl,
+                onClearPreview = onClearPreview,
+                startupWarning = startupWarning,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            return@Column
+        }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 880.dp
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     LibraryRail(
                         selectedTab = selectedTab,
-                        openDownloads = openDownloads,
+                        openDownloads = activeDownloads,
                         onTabSelected = onTabSelected,
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -105,13 +127,14 @@ fun AppShell(
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
                         onCopyUrls = onCopyUrls,
+                        previewLink = previewLink,
                     )
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
                     CompactLibrary(
                         selectedTab = selectedTab,
-                        openDownloads = openDownloads,
+                        openDownloads = activeDownloads,
                         onTabSelected = onTabSelected,
                     )
                     Workspace(
@@ -122,6 +145,7 @@ fun AppShell(
                         selectedTab = selectedTab,
                         onPreviewSingleUrl = onPreviewSingleUrl,
                         onCopyUrls = onCopyUrls,
+                        previewLink = previewLink,
                     )
                 }
             }
@@ -225,6 +249,7 @@ private fun Destination(
                 onClick = onClick,
             )
             .semantics { this.selected = selected }
+            .testTag("shell-tab-${tab.name}")
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -271,6 +296,7 @@ private fun Workspace(
     selectedTab: ShellTab,
     onPreviewSingleUrl: (String) -> Unit,
     onCopyUrls: ((String) -> Unit)? = null,
+    previewLink: Boolean = false,
 ) {
     Column(Modifier.fillMaxSize()) {
         startupWarning?.let { warning ->
@@ -280,12 +306,16 @@ private fun Workspace(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
-        AddForm(
-            presets = presets,
-            cookiesConfigured = cookiesConfigured,
-            onPreviewSingleUrl = onPreviewSingleUrl,
-            capabilities = capabilities,
-        )
+        if (previewLink) {
+            PreviewLinkEntry(onPreviewSingleUrl = onPreviewSingleUrl)
+        } else {
+            AddForm(
+                presets = presets,
+                cookiesConfigured = cookiesConfigured,
+                onPreviewSingleUrl = onPreviewSingleUrl,
+                capabilities = capabilities,
+            )
+        }
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
                 ShellTab.DOWNLOADING -> QueueScreen(onCopyUrls = onCopyUrls)

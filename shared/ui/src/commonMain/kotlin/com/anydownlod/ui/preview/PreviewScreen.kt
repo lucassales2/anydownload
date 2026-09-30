@@ -72,6 +72,7 @@ fun PreviewScreen(
     url: String,
     onBack: () -> Unit,
     onDownload: ((MediaPreview?, List<String>) -> Unit)? = null,
+    modifier: Modifier = Modifier,
     form: AddFormViewModel = metroViewModel(),
     viewModel: PreviewViewModel = metroViewModel(),
 ) {
@@ -89,7 +90,10 @@ fun PreviewScreen(
         readyPreview.videos.isEmpty() || selectedMediaIds.isNotEmpty()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = PageInset, vertical = 16.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = PageInset, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
@@ -206,7 +210,7 @@ private fun ReadyBody(
     onToggleVideo: (String) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(

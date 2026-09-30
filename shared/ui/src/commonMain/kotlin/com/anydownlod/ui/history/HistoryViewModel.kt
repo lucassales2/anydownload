@@ -123,9 +123,22 @@ class HistoryViewModel(
         pendingRemoveIds.value = emptySet()
     }
 
-    fun confirmRemove() {
+    /**
+     * Drops the pending history rows. When [deleteStoredFile] is true, each
+     * row's file is deleted from the download folder first.
+     */
+    fun confirmRemove(deleteStoredFile: Boolean = false) {
         val pending = pendingRemoveIds.value
         if (pending.isEmpty()) return
+        if (deleteStoredFile) {
+            val results = pending.map { engine.deleteArtifacts(it) }
+            noteDeletion(
+                ArtifactDeletionResult(
+                    deletedCount = results.sumOf { it.deletedCount },
+                    failures = results.flatMap { it.failures },
+                ),
+            )
+        }
         pending.forEach { engine.removeHistory(it) }
         selectedIds.update { it - pending }
         pendingRemoveIds.value = emptySet()

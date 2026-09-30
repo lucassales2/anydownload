@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.anydownlod.core.fake.InMemoryAppGraph
@@ -99,8 +100,8 @@ class SpotifyPreviewUiTest {
         onNodeWithText("Never Gonna Give You Up — Rick Astley").assertExists()
         onNodeWithText("Together Forever — Rick Astley").assertExists()
 
-        onNodeWithTag("preview-download").performClick()
-        waitForIdle()
+        onNodeWithTag("preview-download").performScrollTo().performClick()
+        waitUntil(timeoutMillis = 5_000) { engine.jobs.value.size == 2 }
 
         assertEquals(2, engine.jobs.value.size)
         assertTrue(engine.jobs.value.all { it.parentBatchId == "batch-ui" })

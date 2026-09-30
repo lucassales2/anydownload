@@ -30,20 +30,30 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * End-to-end clicks on the T-052 link-only home. This is the headless version
- * of the desktop click-through: the idle screen is the link field alone, with
- * no clipboard dialog, no clipboard banner, and no add-form option controls.
+ * End-to-end clicks on the home library. The idle screen keeps the link field
+ * and shows one download list at a time, with no clipboard dialog, no
+ * clipboard banner, and no add-form option controls.
  */
 @OptIn(ExperimentalTestApi::class)
 class AddFormUiTest {
 
     @Test
-    fun idleScreenShowsOnlyTheLinkField() = runComposeUiTest {
+    fun idleScreenShowsTheLinkFieldAndTheDownloadLists() = runComposeUiTest {
         val graph = InMemoryAppGraph()
         setContent { App(graph) }
 
         onNodeWithTag("add-url-field").assertExists()
         onNodeWithTag("add-download-button").assertIsNotEnabled()
+        onNodeWithTag("add-subscribe-button").assertExists()
+
+        onNodeWithText("All").assertExists()
+        onNodeWithText("No downloads yet").assertExists()
+        onNodeWithText("Complete").performClick()
+        onNodeWithText("No finished downloads").assertExists()
+        onNodeWithText("Failed").performClick()
+        onNodeWithText("No failed downloads").assertExists()
+        onNodeWithText("Subscriptions").performClick()
+        onNodeWithText("No subscriptions").assertExists()
 
         // No clipboard dialog, no clipboard banner, no add-form option controls.
         onNodeWithText("Check the clipboard for links?").assertDoesNotExist()
@@ -52,6 +62,20 @@ class AddFormUiTest {
         onNodeWithTag("add-advanced-toggle").assertDoesNotExist()
         onNodeWithText("Media type").assertDoesNotExist()
         onNodeWithText("Delivery").assertDoesNotExist()
+    }
+
+    @Test
+    fun clickingTheLatestDownloadOpensItsPreview() = runComposeUiTest {
+        val graph = InMemoryAppGraph.seeded()
+        val before = graph.engine.jobs.value.size
+        setContent { App(graph) }
+
+        onNodeWithTag("latest-download").performClick()
+
+        onNodeWithTag("preview-title").assertTextEquals("Preview title")
+        onNodeWithTag("preview-back").assertExists()
+        onNodeWithTag("add-url-field").assertTextEquals("https://example.com/watch?v=seed-completed")
+        assertEquals(before, graph.engine.jobs.value.size)
     }
 
     @Test
@@ -126,9 +150,9 @@ class AddFormUiTest {
         onNodeWithTag("add-url-field").performTextInput("https://example.com/watch?v=edit")
         onNodeWithTag("add-download-button").performClick()
         onNodeWithTag("preview-edit-toggle").performClick()
-        onNodeWithTag("preview-edit-media-audio").performClick()
-        onNodeWithTag("preview-edit-quality-192").performClick()
-        onNodeWithTag("preview-download").performClick()
+        onNodeWithTag("preview-edit-media-audio").performScrollTo().performClick()
+        onNodeWithTag("preview-edit-quality-192").performScrollTo().performClick()
+        onNodeWithTag("preview-download").performScrollTo().performClick()
 
         val job = graph.engine.jobs.value.single()
         assertEquals(MediaType.AUDIO, job.request.options.mediaType)

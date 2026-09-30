@@ -15,11 +15,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,6 +29,7 @@ import com.anydownlod.core.domain.ThemePreference
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.app_name
 import com.anydownlod.ui.generated.resources.settings
+import com.anydownlod.ui.generated.resources.tab_subscriptions
 import com.anydownlod.ui.generated.resources.theme
 import com.anydownlod.ui.i18n.labelResource
 import com.anydownlod.ui.i18n.resolve
@@ -43,6 +46,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun AppHeader(
     onOpenSettings: () -> Unit,
+    onOpenSubscriptions: (() -> Unit)? = null,
 ) {
     val theme = LocalThemePreference.current
     val onThemeChange = LocalThemeChanger.current
@@ -57,6 +61,7 @@ fun AppHeader(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ProductLockup(Modifier.weight(1f))
                         Spacer(Modifier.width(12.dp))
+                        SubscriptionsButton(onOpenSubscriptions)
                         SettingsButton(onOpenSettings)
                     }
                     ThemeControl(theme, onThemeChange)
@@ -69,6 +74,7 @@ fun AppHeader(
                 ) {
                     ProductLockup(Modifier.weight(1f))
                     ThemeControl(theme, onThemeChange)
+                    SubscriptionsButton(onOpenSubscriptions)
                     SettingsButton(onOpenSettings)
                 }
             }
@@ -117,6 +123,14 @@ private fun ThemeControl(theme: ThemePreference, onThemeChange: (ThemePreference
             optionLabel = { it.labelResource().resolve() },
             onSelect = onThemeChange,
         )
+    }
+}
+
+@Composable
+private fun SubscriptionsButton(onOpenSubscriptions: (() -> Unit)?) {
+    if (onOpenSubscriptions == null) return
+    OutlinedButton(onClick = onOpenSubscriptions, modifier = Modifier.testTag("open-subscriptions")) {
+        Text(stringResource(Res.string.tab_subscriptions))
     }
 }
 

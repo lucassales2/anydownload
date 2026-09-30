@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.ui.generated.resources.Res
+import com.anydownlod.ui.generated.resources.cancel
 import com.anydownlod.ui.generated.resources.copy_batch
 import com.anydownlod.ui.generated.resources.copy_error
 import com.anydownlod.ui.generated.resources.copy_urls
@@ -48,6 +49,7 @@ import com.anydownlod.ui.generated.resources.empty_history_title
 import com.anydownlod.ui.generated.resources.file_already_gone
 import com.anydownlod.ui.generated.resources.file_removed
 import com.anydownlod.ui.generated.resources.file_stays
+import com.anydownlod.ui.generated.resources.remove_also_delete
 import com.anydownlod.ui.generated.resources.history_subtitle
 import com.anydownlod.ui.generated.resources.history_title
 import com.anydownlod.ui.generated.resources.keep
@@ -222,6 +224,7 @@ fun HistoryScreen(
         }
 
         if (pendingRemoveIds.isNotEmpty()) {
+            val asksAboutStorage = rows.any { it.id in pendingRemoveIds && it.hasArtifact }
             AlertDialog(
                 onDismissRequest = viewModel::dismissRemove,
                 title = {
@@ -233,17 +236,39 @@ fun HistoryScreen(
                         }
                     )
                 },
-                text = { Text(stringResource(Res.string.file_stays)) },
-                confirmButton = {
-                    DestructiveTextButton(
-                        text = stringResource(Res.string.remove),
-                        onClick = { viewModel.confirmRemove() },
-                        modifier = Modifier.testTag("history-confirm-remove"),
+                text = {
+                    Text(
+                        stringResource(
+                            if (asksAboutStorage) Res.string.remove_also_delete else Res.string.file_stays,
+                        ),
                     )
+                },
+                confirmButton = {
+                    if (asksAboutStorage) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            DestructiveTextButton(
+                                text = stringResource(Res.string.delete_file),
+                                onClick = { viewModel.confirmRemove(deleteStoredFile = true) },
+                                modifier = Modifier.testTag("history-confirm-remove-delete"),
+                            )
+                            TextButton(
+                                onClick = { viewModel.confirmRemove(deleteStoredFile = false) },
+                                modifier = Modifier.testTag("history-confirm-remove"),
+                            ) {
+                                Text(stringResource(Res.string.keep_file))
+                            }
+                        }
+                    } else {
+                        DestructiveTextButton(
+                            text = stringResource(Res.string.remove),
+                            onClick = { viewModel.confirmRemove(deleteStoredFile = false) },
+                            modifier = Modifier.testTag("history-confirm-remove"),
+                        )
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = viewModel::dismissRemove) {
-                        Text(stringResource(Res.string.keep))
+                        Text(stringResource(if (asksAboutStorage) Res.string.cancel else Res.string.keep))
                     }
                 },
             )

@@ -9,7 +9,7 @@ tags: [project, engine, release]
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [Schedule](Full-engine-schedule.md) · [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md)
 
-**Planned. 8 engineer-days**, plus the 80-day rework buffer already spent in D17–D21. Depends on D21. This phase is the end of the 614-day estimate.
+**Planned. 8 engineer-days**, plus the 80-day rework buffer spent in D17–D21. Depends on D21. This phase is the end of the 614-day estimate. One card per wake: T-131, then T-022, then T-023. Session prompt: [Phase 17–22 loop](Phase-17-22-Loop-prompt.md). Plan: [Phase 17–22 plan](Phase-17-22-Plan.md).
 
 ## Done looks like
 

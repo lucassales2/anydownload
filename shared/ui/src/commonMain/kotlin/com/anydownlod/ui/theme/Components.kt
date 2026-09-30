@@ -39,6 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -192,31 +194,62 @@ fun ObjectCard(
     modifier: Modifier = Modifier,
     accent: Color? = null,
     contentPadding: Dp = 12.dp,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        if (accent == null) {
+    val shape = RoundedCornerShape(14.dp)
+    val color = MaterialTheme.colorScheme.surface
+    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    val cardModifier = modifier
+        .fillMaxWidth()
+        .then(if (onClick != null) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+    val body: @Composable () -> Unit = {
+        ObjectCardBody(accent = accent, contentPadding = contentPadding, content = content)
+    }
+    if (onClick == null) {
+        Surface(
+            modifier = cardModifier,
+            shape = shape,
+            color = color,
+            border = border,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = body,
+        )
+    } else {
+        Surface(
+            onClick = onClick,
+            modifier = cardModifier,
+            shape = shape,
+            color = color,
+            border = border,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            content = body,
+        )
+    }
+}
+
+@Composable
+private fun ObjectCardBody(
+    accent: Color?,
+    contentPadding: Dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (accent == null) {
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
+    } else {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(4.dp).fillMaxHeight().background(accent))
             Column(
-                modifier = Modifier.padding(contentPadding),
+                modifier = Modifier.weight(1f).padding(contentPadding),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 content = content,
             )
-        } else {
-            Row(Modifier.height(IntrinsicSize.Min)) {
-                Box(Modifier.width(4.dp).fillMaxHeight().background(accent))
-                Column(
-                    modifier = Modifier.weight(1f).padding(contentPadding),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    content = content,
-                )
-            }
         }
     }
 }

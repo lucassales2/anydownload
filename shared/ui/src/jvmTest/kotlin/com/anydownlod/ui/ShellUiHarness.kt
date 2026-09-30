@@ -27,9 +27,8 @@ import dev.zacsweers.metrox.viewmodel.metroViewModel
 
 /**
  * Renders the shell with its own tab and Settings state, wrapped the same way
- * [App] wraps it (theme plus a full-size surface). T-052 removed the queue
- * chrome from the idle home screen, so shell click-through tests compose
- * [AppShell] here instead of going through [App].
+ * [App] wraps it (theme plus a full-size surface). These tests keep the full
+ * add form; [App] uses the preview link field above the same lists.
  */
 @Composable
 internal fun ShellUiHarness(

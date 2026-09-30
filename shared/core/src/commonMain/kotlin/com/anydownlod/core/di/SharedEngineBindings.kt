@@ -17,12 +17,53 @@ import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.bbc.BBCCoUkIE
 import com.anydownlod.core.extract.archiveorg.ArchiveOrgIE
+import com.anydownlod.core.extract.cbc.CBCGemContentIE
+import com.anydownlod.core.extract.cbc.CBCGemIE
+import com.anydownlod.core.extract.cbc.CBCGemLiveIE
+import com.anydownlod.core.extract.cbc.CBCGemOlympicsIE
+import com.anydownlod.core.extract.cbc.CBCGemPlaylistIE
+import com.anydownlod.core.extract.cbc.CBCIE
+import com.anydownlod.core.extract.cbc.CBCListenIE
+import com.anydownlod.core.extract.cbc.CBCPlayerIE
+import com.anydownlod.core.extract.cbc.CBCPlayerPlaylistIE
 import com.anydownlod.core.extract.dailymotion.DailymotionIE
+import com.anydownlod.core.extract.dplay.AmHistoryChannelIE
+import com.anydownlod.core.extract.dplay.AnimalPlanetIE
+import com.anydownlod.core.extract.dplay.CookingChannelIE
+import com.anydownlod.core.extract.dplay.DestinationAmericaIE
+import com.anydownlod.core.extract.dplay.DiscoveryLifeIE
+import com.anydownlod.core.extract.dplay.DiscoveryNetworksDeIE
+import com.anydownlod.core.extract.dplay.DiscoveryPlusIE
+import com.anydownlod.core.extract.dplay.DiscoveryPlusIndiaIE
+import com.anydownlod.core.extract.dplay.DiscoveryPlusIndiaShowIE
+import com.anydownlod.core.extract.dplay.DiscoveryPlusItalyIE
+import com.anydownlod.core.extract.dplay.DiscoveryPlusItalyShowIE
+import com.anydownlod.core.extract.dplay.DPlayIE
+import com.anydownlod.core.extract.dplay.FoodNetworkIE
+import com.anydownlod.core.extract.dplay.GoDiscoveryIE
+import com.anydownlod.core.extract.dplay.HGTVDeIE
+import com.anydownlod.core.extract.dplay.HGTVUsaIE
+import com.anydownlod.core.extract.dplay.InvestigationDiscoveryIE
+import com.anydownlod.core.extract.dplay.ScienceChannelIE
+import com.anydownlod.core.extract.dplay.TLCIE
+import com.anydownlod.core.extract.dplay.TravelChannelIE
 import com.anydownlod.core.extract.facebook.FacebookIE
 import com.anydownlod.core.extract.facebook.FacebookPluginsVideoIE
 import com.anydownlod.core.extract.facebook.FacebookRedirectURLIE
 import com.anydownlod.core.extract.facebook.FacebookReelIE
 import com.anydownlod.core.extract.instagram.InstagramIE
+import com.anydownlod.core.extract.nbc.BravoTVIE
+import com.anydownlod.core.extract.nbc.NBCIE
+import com.anydownlod.core.extract.nbc.NBCNewsIE
+import com.anydownlod.core.extract.nbc.NBCOlympicsIE
+import com.anydownlod.core.extract.nbc.NBCStationsIE
+import com.anydownlod.core.extract.nbc.SyfyIE
+import com.anydownlod.core.extract.niconico.NiconicoIE
+import com.anydownlod.core.extract.niconico.NiconicoPlaylistIE
+import com.anydownlod.core.extract.niconico.NiconicoSeriesIE
+import com.anydownlod.core.extract.niconico.NiconicoUserIE
+import com.anydownlod.core.extract.niconico.NicovideoSearchURLIE
+import com.anydownlod.core.extract.niconico.NicovideoTagURLIE
 import com.anydownlod.core.extract.instagram.InstagramIOSIE
 import com.anydownlod.core.extract.bilibili.BiliBiliIE
 import com.anydownlod.core.extract.bilibili.BiliBiliPlayerIE
@@ -182,6 +223,170 @@ object SharedEngineBindings {
 
     @Provides
     @SingleIn(AppScope::class)
+    fun dplay(http: ExtractorHttp): DPlayIE = DPlayIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun hgtvDe(http: ExtractorHttp): HGTVDeIE = HGTVDeIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun goDiscovery(http: ExtractorHttp): GoDiscoveryIE = GoDiscoveryIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun travelChannel(http: ExtractorHttp): TravelChannelIE = TravelChannelIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookingChannel(http: ExtractorHttp): CookingChannelIE = CookingChannelIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun hgtvUsa(http: ExtractorHttp): HGTVUsaIE = HGTVUsaIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun foodNetwork(http: ExtractorHttp): FoodNetworkIE = FoodNetworkIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun destinationAmerica(http: ExtractorHttp): DestinationAmericaIE = DestinationAmericaIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun investigationDiscovery(http: ExtractorHttp): InvestigationDiscoveryIE = InvestigationDiscoveryIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun amHistoryChannel(http: ExtractorHttp): AmHistoryChannelIE = AmHistoryChannelIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun scienceChannel(http: ExtractorHttp): ScienceChannelIE = ScienceChannelIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryLife(http: ExtractorHttp): DiscoveryLifeIE = DiscoveryLifeIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun animalPlanet(http: ExtractorHttp): AnimalPlanetIE = AnimalPlanetIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun tlc(http: ExtractorHttp): TLCIE = TLCIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryPlus(http: ExtractorHttp): DiscoveryPlusIE = DiscoveryPlusIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryPlusIndia(http: ExtractorHttp): DiscoveryPlusIndiaIE = DiscoveryPlusIndiaIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryNetworksDe(http: ExtractorHttp): DiscoveryNetworksDeIE = DiscoveryNetworksDeIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryPlusItaly(http: ExtractorHttp): DiscoveryPlusItalyIE = DiscoveryPlusItalyIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryPlusItalyShow(http: ExtractorHttp): DiscoveryPlusItalyShowIE = DiscoveryPlusItalyShowIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun discoveryPlusIndiaShow(http: ExtractorHttp): DiscoveryPlusIndiaShowIE = DiscoveryPlusIndiaShowIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nbc(http: ExtractorHttp): NBCIE = NBCIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nbcNews(http: ExtractorHttp): NBCNewsIE = NBCNewsIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nbcOlympics(http: ExtractorHttp): NBCOlympicsIE = NBCOlympicsIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nbcStations(http: ExtractorHttp): NBCStationsIE = NBCStationsIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun bravoTv(http: ExtractorHttp): BravoTVIE = BravoTVIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun syfy(http: ExtractorHttp): SyfyIE = SyfyIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbc(http: ExtractorHttp): CBCIE = CBCIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcPlayer(http: ExtractorHttp): CBCPlayerIE = CBCPlayerIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcPlayerPlaylist(http: ExtractorHttp): CBCPlayerPlaylistIE = CBCPlayerPlaylistIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcGem(http: ExtractorHttp): CBCGemIE = CBCGemIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcGemPlaylist(http: ExtractorHttp): CBCGemPlaylistIE = CBCGemPlaylistIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcGemContent(http: ExtractorHttp): CBCGemContentIE = CBCGemContentIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcGemOlympics(http: ExtractorHttp): CBCGemOlympicsIE = CBCGemOlympicsIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcGemLive(http: ExtractorHttp): CBCGemLiveIE = CBCGemLiveIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cbcListen(http: ExtractorHttp): CBCListenIE = CBCListenIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun niconico(http: ExtractorHttp): NiconicoIE = NiconicoIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun niconicoPlaylist(http: ExtractorHttp): NiconicoPlaylistIE = NiconicoPlaylistIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun niconicoSeries(http: ExtractorHttp): NiconicoSeriesIE = NiconicoSeriesIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nicovideoSearchUrl(http: ExtractorHttp): NicovideoSearchURLIE = NicovideoSearchURLIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun nicovideoTagUrl(http: ExtractorHttp): NicovideoTagURLIE = NicovideoTagURLIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun niconicoUser(http: ExtractorHttp): NiconicoUserIE = NiconicoUserIE(http)
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun extractorRegistry(
         youtube: YoutubeIE,
         youtubeTab: YoutubeTabIE,
@@ -212,6 +417,47 @@ object SharedEngineBindings {
         vk: VKIE,
         patreon: PatreonIE,
         archiveOrg: ArchiveOrgIE,
+        dplay: DPlayIE,
+        hgtvDe: HGTVDeIE,
+        goDiscovery: GoDiscoveryIE,
+        travelChannel: TravelChannelIE,
+        cookingChannel: CookingChannelIE,
+        hgtvUsa: HGTVUsaIE,
+        foodNetwork: FoodNetworkIE,
+        destinationAmerica: DestinationAmericaIE,
+        investigationDiscovery: InvestigationDiscoveryIE,
+        amHistoryChannel: AmHistoryChannelIE,
+        scienceChannel: ScienceChannelIE,
+        discoveryLife: DiscoveryLifeIE,
+        animalPlanet: AnimalPlanetIE,
+        tlc: TLCIE,
+        discoveryPlus: DiscoveryPlusIE,
+        discoveryPlusIndia: DiscoveryPlusIndiaIE,
+        discoveryNetworksDe: DiscoveryNetworksDeIE,
+        discoveryPlusItaly: DiscoveryPlusItalyIE,
+        discoveryPlusItalyShow: DiscoveryPlusItalyShowIE,
+        discoveryPlusIndiaShow: DiscoveryPlusIndiaShowIE,
+        nbc: NBCIE,
+        nbcNews: NBCNewsIE,
+        nbcOlympics: NBCOlympicsIE,
+        nbcStations: NBCStationsIE,
+        bravoTv: BravoTVIE,
+        syfy: SyfyIE,
+        cbc: CBCIE,
+        cbcPlayer: CBCPlayerIE,
+        cbcPlayerPlaylist: CBCPlayerPlaylistIE,
+        cbcGem: CBCGemIE,
+        cbcGemPlaylist: CBCGemPlaylistIE,
+        cbcGemContent: CBCGemContentIE,
+        cbcGemOlympics: CBCGemOlympicsIE,
+        cbcGemLive: CBCGemLiveIE,
+        cbcListen: CBCListenIE,
+        niconico: NiconicoIE,
+        niconicoPlaylist: NiconicoPlaylistIE,
+        niconicoSeries: NiconicoSeriesIE,
+        nicovideoSearchUrl: NicovideoSearchURLIE,
+        nicovideoTagUrl: NicovideoTagURLIE,
+        niconicoUser: NiconicoUserIE,
     ): ExtractorRegistry = productionExtractorRegistry(
         youtube,
         youtubeTab,
@@ -242,6 +488,47 @@ object SharedEngineBindings {
         vk,
         patreon,
         archiveOrg,
+        dplay,
+        hgtvDe,
+        goDiscovery,
+        travelChannel,
+        cookingChannel,
+        hgtvUsa,
+        foodNetwork,
+        destinationAmerica,
+        investigationDiscovery,
+        amHistoryChannel,
+        scienceChannel,
+        discoveryLife,
+        animalPlanet,
+        tlc,
+        discoveryPlus,
+        discoveryPlusIndia,
+        discoveryNetworksDe,
+        discoveryPlusItaly,
+        discoveryPlusItalyShow,
+        discoveryPlusIndiaShow,
+        nbc,
+        nbcNews,
+        nbcOlympics,
+        nbcStations,
+        bravoTv,
+        syfy,
+        cbc,
+        cbcPlayer,
+        cbcPlayerPlaylist,
+        cbcGem,
+        cbcGemPlaylist,
+        cbcGemContent,
+        cbcGemOlympics,
+        cbcGemLive,
+        cbcListen,
+        niconico,
+        niconicoPlaylist,
+        niconicoSeries,
+        nicovideoSearchUrl,
+        nicovideoTagUrl,
+        niconicoUser,
     )
 }
 
@@ -288,6 +575,47 @@ fun productionExtractorRegistry(
     vk: VKIE,
     patreon: PatreonIE,
     archiveOrg: ArchiveOrgIE,
+    dplay: DPlayIE,
+    hgtvDe: HGTVDeIE,
+    goDiscovery: GoDiscoveryIE,
+    travelChannel: TravelChannelIE,
+    cookingChannel: CookingChannelIE,
+    hgtvUsa: HGTVUsaIE,
+    foodNetwork: FoodNetworkIE,
+    destinationAmerica: DestinationAmericaIE,
+    investigationDiscovery: InvestigationDiscoveryIE,
+    amHistoryChannel: AmHistoryChannelIE,
+    scienceChannel: ScienceChannelIE,
+    discoveryLife: DiscoveryLifeIE,
+    animalPlanet: AnimalPlanetIE,
+    tlc: TLCIE,
+    discoveryPlus: DiscoveryPlusIE,
+    discoveryPlusIndia: DiscoveryPlusIndiaIE,
+    discoveryNetworksDe: DiscoveryNetworksDeIE,
+    discoveryPlusItaly: DiscoveryPlusItalyIE,
+    discoveryPlusItalyShow: DiscoveryPlusItalyShowIE,
+    discoveryPlusIndiaShow: DiscoveryPlusIndiaShowIE,
+    nbc: NBCIE,
+    nbcNews: NBCNewsIE,
+    nbcOlympics: NBCOlympicsIE,
+    nbcStations: NBCStationsIE,
+    bravoTv: BravoTVIE,
+    syfy: SyfyIE,
+    cbc: CBCIE,
+    cbcPlayer: CBCPlayerIE,
+    cbcPlayerPlaylist: CBCPlayerPlaylistIE,
+    cbcGem: CBCGemIE,
+    cbcGemPlaylist: CBCGemPlaylistIE,
+    cbcGemContent: CBCGemContentIE,
+    cbcGemOlympics: CBCGemOlympicsIE,
+    cbcGemLive: CBCGemLiveIE,
+    cbcListen: CBCListenIE,
+    niconico: NiconicoIE,
+    niconicoPlaylist: NiconicoPlaylistIE,
+    niconicoSeries: NiconicoSeriesIE,
+    nicovideoSearchUrl: NicovideoSearchURLIE,
+    nicovideoTagUrl: NicovideoTagURLIE,
+    niconicoUser: NiconicoUserIE,
 ): ExtractorRegistry = ExtractorRegistry(
     listOf(
         youtube,
@@ -319,6 +647,47 @@ fun productionExtractorRegistry(
         vk,
         patreon,
         archiveOrg,
+        dplay,
+        hgtvDe,
+        goDiscovery,
+        travelChannel,
+        cookingChannel,
+        hgtvUsa,
+        foodNetwork,
+        destinationAmerica,
+        investigationDiscovery,
+        amHistoryChannel,
+        scienceChannel,
+        discoveryLife,
+        animalPlanet,
+        tlc,
+        discoveryPlus,
+        discoveryPlusIndia,
+        discoveryNetworksDe,
+        discoveryPlusItaly,
+        discoveryPlusItalyShow,
+        discoveryPlusIndiaShow,
+        nbc,
+        nbcNews,
+        nbcOlympics,
+        nbcStations,
+        bravoTv,
+        syfy,
+        cbc,
+        cbcPlayer,
+        cbcPlayerPlaylist,
+        cbcGem,
+        cbcGemPlaylist,
+        cbcGemContent,
+        cbcGemOlympics,
+        cbcGemLive,
+        cbcListen,
+        niconico,
+        niconicoPlaylist,
+        niconicoSeries,
+        nicovideoSearchUrl,
+        nicovideoTagUrl,
+        niconicoUser,
     ),
 )
 
@@ -357,6 +726,47 @@ fun productionExtractorRegistry(http: ExtractorHttp, jsRuntime: JsRuntime): Extr
         vk = VKIE(http),
         patreon = PatreonIE(http),
         archiveOrg = ArchiveOrgIE(http),
+        dplay = DPlayIE(http),
+        hgtvDe = HGTVDeIE(http),
+        goDiscovery = GoDiscoveryIE(http),
+        travelChannel = TravelChannelIE(http),
+        cookingChannel = CookingChannelIE(http),
+        hgtvUsa = HGTVUsaIE(http),
+        foodNetwork = FoodNetworkIE(http),
+        destinationAmerica = DestinationAmericaIE(http),
+        investigationDiscovery = InvestigationDiscoveryIE(http),
+        amHistoryChannel = AmHistoryChannelIE(http),
+        scienceChannel = ScienceChannelIE(http),
+        discoveryLife = DiscoveryLifeIE(http),
+        animalPlanet = AnimalPlanetIE(http),
+        tlc = TLCIE(http),
+        discoveryPlus = DiscoveryPlusIE(http),
+        discoveryPlusIndia = DiscoveryPlusIndiaIE(http),
+        discoveryNetworksDe = DiscoveryNetworksDeIE(http),
+        discoveryPlusItaly = DiscoveryPlusItalyIE(http),
+        discoveryPlusItalyShow = DiscoveryPlusItalyShowIE(http),
+        discoveryPlusIndiaShow = DiscoveryPlusIndiaShowIE(http),
+        nbc = NBCIE(http),
+        nbcNews = NBCNewsIE(http),
+        nbcOlympics = NBCOlympicsIE(http),
+        nbcStations = NBCStationsIE(http),
+        bravoTv = BravoTVIE(http),
+        syfy = SyfyIE(http),
+        cbc = CBCIE(http),
+        cbcPlayer = CBCPlayerIE(http),
+        cbcPlayerPlaylist = CBCPlayerPlaylistIE(http),
+        cbcGem = CBCGemIE(http),
+        cbcGemPlaylist = CBCGemPlaylistIE(http),
+        cbcGemContent = CBCGemContentIE(http),
+        cbcGemOlympics = CBCGemOlympicsIE(http),
+        cbcGemLive = CBCGemLiveIE(http),
+        cbcListen = CBCListenIE(http),
+        niconico = NiconicoIE(http),
+        niconicoPlaylist = NiconicoPlaylistIE(http),
+        niconicoSeries = NiconicoSeriesIE(http),
+        nicovideoSearchUrl = NicovideoSearchURLIE(http),
+        nicovideoTagUrl = NicovideoTagURLIE(http),
+        niconicoUser = NiconicoUserIE(http),
     )
 
 /** Same list, built from a raw transfer; used by the host classes' constructors. */

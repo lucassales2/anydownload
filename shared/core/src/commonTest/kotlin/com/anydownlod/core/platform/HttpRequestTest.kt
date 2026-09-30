@@ -64,6 +64,11 @@ class HttpRequestTest {
         )
         // The visitor id is the one x-goog name upstream may send.
         assertTrue(HttpHeaders.isAllowedRequestHeader("X-Goog-Visitor-Id"))
+        assertTrue(HttpHeaders.isAllowedRequestHeader("X-Disco-Client"))
+        assertTrue(HttpHeaders.isAllowedRequestHeader("x-disco-params"))
+        assertTrue(HttpHeaders.isAllowedRequestHeader("X-Access-Right-Key"))
+        assertTrue(HttpHeaders.isAllowedRequestHeader("X-Frontend-Id"))
+        assertTrue(HttpHeaders.isAllowedRequestHeader("x-niconico-language"))
         assertFalse(HttpHeaders.isAllowedRequestHeader("Cookie"))
         assertFalse(HttpHeaders.isAllowedRequestHeader("Authorization"))
     }

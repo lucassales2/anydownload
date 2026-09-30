@@ -9,7 +9,7 @@ tags: [project, engine, schedule]
 
 [Home](../Home.md) · [Kanban](../Kanban.md) · [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md) · [ADR-004](../03-decisions/ADR-004-Local-kotlin-engine.md) · [yt-dlp equivalence](../01-product/Ytdlp-equivalence.md) · [Phase 8](Phase-8-On-device-core.md)
 
-**Start here for everything after Metro.** D1–D8 are done. [ADR-013](../03-decisions/ADR-013-Metro-graphs-and-viewmodels.md) is Phase D9 (tasks T-113–T-122). This note is D10–D22: the work that makes the Kotlin engine match yt-dlp `2026.08.19` without calling yt-dlp or Chaquopy. Decision: [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md), accepted 2026-09-29 as the plan of record.
+**Start here for everything after Metro.** D1–D16 are done. D17–D22 are the remaining engine: the plan is [Phase 17–22](Phase-17-22-Plan.md), the file lists are [Catalog D17–D21](Catalog-D17-D21.md), and the session prompt is [Phase 17–22 loop](Phase-17-22-Loop-prompt.md). [ADR-013](../03-decisions/ADR-013-Metro-graphs-and-viewmodels.md) is Phase D9 (tasks T-113–T-122). This note is D10–D22: the work that makes the Kotlin engine match yt-dlp `2026.08.19` without calling yt-dlp or Chaquopy. Decision: [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md), accepted 2026-09-29 as the plan of record.
 
 ## Estimate
 

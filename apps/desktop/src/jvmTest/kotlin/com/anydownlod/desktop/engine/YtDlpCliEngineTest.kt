@@ -113,11 +113,18 @@ class YtDlpCliEngineTest {
                 engine.jobs.first { jobs -> jobs.any { it.id == job.id && it.state == JobState.DOWNLOADING } }
             }
 
+            val partial = root.resolve("clip.mp4.part")
+            val kept = root.resolve("already-there.mp4")
+            Files.writeString(partial, "partial")
+            Files.writeString(kept, "keep")
+
             engine.cancel(job.id)
 
             assertEquals(JobState.CANCELLED, engine.jobs.value.single().state)
             assertEquals(JobErrorCode.CANCELLED, engine.jobs.value.single().error?.code)
             assertTrue(process.destroyed)
+            assertFalse(Files.exists(partial), "cancel deletes the partial file")
+            assertTrue(Files.exists(kept), "cancel leaves unrelated files alone")
         } finally {
             scope.cancel()
         }

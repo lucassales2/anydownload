@@ -83,4 +83,4 @@ Work toward the goal. When T-125 is Done, call loop_control with status "done" a
 - D9 and D10 are Done. The first eligible card is T-018, which is still Backlog.
 - [Phase-11-Loop-prompt.md](Phase-11-Loop-prompt.md) is the D11-only prompt. This file replaces it for a session that continues through D16. Do not run both.
 - Owner decisions for cookies, 2026-09-30, are copied into the prompt: app-private storage, and a desktop Chrome/Firefox/Safari snapshot. Mobile and web stay file-import only.
-- D17 begins at [T-126](../06-tasks/T-126-Remaining-large-sites.md). This loop does not start it.
+- D17 begins at [T-126](../06-tasks/T-126-Remaining-large-sites.md). This loop does not start it. The session that continues through D22 uses [Phase 17–22 loop](Phase-17-22-Loop-prompt.md).

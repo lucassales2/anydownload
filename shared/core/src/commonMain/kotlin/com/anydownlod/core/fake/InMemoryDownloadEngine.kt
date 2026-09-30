@@ -97,13 +97,21 @@ class InMemoryDownloadEngine(
     override fun cancel(jobId: String): DownloadJob? {
         val job = findJob(jobId) ?: return null
         if (job.state.isTerminal) return job
-        return transition(
+        val cancelled = transition(
             job = job,
             state = JobState.CANCELLED,
             error = JobError(
                 code = JobErrorCode.CANCELLED,
                 message = "The download was cancelled.",
                 retryable = false,
+            ),
+        )
+        if (cancelled.artifacts.none { !it.removed }) return cancelled
+        return publish(
+            cancelled.copy(
+                artifacts = cancelled.artifacts.map { artifact ->
+                    if (artifact.removed) artifact else artifact.copy(removed = true)
+                },
             ),
         )
     }

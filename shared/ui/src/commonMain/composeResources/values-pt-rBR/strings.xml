@@ -8,6 +8,17 @@
     <string name="tab_downloading">Baixando</string>
     <string name="tab_completed">Concluídos</string>
     <string name="tab_subscriptions">Inscrições</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_complete">Concluídos</string>
+    <string name="filter_failed">Falhas</string>
+    <string name="sort_newest">Mais recentes</string>
+    <string name="sort_oldest">Mais antigos</string>
+    <string name="sort_title">Título</string>
+    <string name="empty_all_title">Nenhum download ainda</string>
+    <string name="empty_all_body">Cole um link para ver a prévia e baixar.</string>
+    <string name="empty_failed_title">Nenhuma falha</string>
+    <string name="empty_failed_body">Os downloads que falharem aparecem aqui.</string>
+    <string name="latest_download">Mais recente</string>
     <string name="settings">Ajustes</string>
     <string name="settings_subtitle">Como os downloads são salvos neste dispositivo.</string>
     <string name="close">Fechar</string>
@@ -27,7 +38,7 @@
     <string name="cancel_selected">Cancelar selecionados</string>
     <string name="cancel_one_title">Cancelar este download?</string>
     <string name="cancel_many_title">Cancelar os downloads selecionados?</string>
-    <string name="cancel_body">Isso interrompe o download. Não apaga um arquivo já concluído.</string>
+    <string name="cancel_body">Isso interrompe o download e apaga o arquivo da pasta de downloads.</string>
     <string name="cancel_download">Cancelar download</string>
     <string name="keep_downloading">Continuar baixando</string>
     <string name="phase">Fase: %1$s</string>
@@ -50,6 +61,7 @@
     <string name="remove_one_title">Remover esta entrada do histórico?</string>
     <string name="remove_many_title">Remover %1$s entradas do histórico?</string>
     <string name="file_stays">O arquivo permanece no disco.</string>
+    <string name="remove_also_delete">Apagar o arquivo da pasta de downloads também?</string>
     <string name="remove">Remover</string>
     <string name="keep">Manter</string>
     <string name="delete_file_title">Apagar este arquivo da pasta de downloads?</string>
@@ -303,6 +315,16 @@
     <string name="template_absolute">O modelo não pode ser um caminho absoluto.</string>
     <string name="template_parent">O modelo não pode conter um segmento "..".</string>
     <string name="template_empty_segment">O modelo tem um segmento de caminho vazio.</string>
+
+    <string name="phone_home_title">Baixar vídeos</string>
+    <string name="phone_home_subtitle">Baixe de qualquer plataforma na hora</string>
+    <string name="phone_paste_hint">Cole o link aqui ou detecte automaticamente</string>
+    <string name="phone_rights">Lembrete: respeite o trabalho dos criadores e os direitos autorais.</string>
+    <string name="phone_recent">Baixados recentemente</string>
+    <string name="phone_view_all">Ver tudo</string>
+    <string name="phone_downloads">Downloads</string>
+    <string name="phone_share">Compartilhar</string>
+    <string name="phone_settings">Ajustes</string>
 
     <plurals name="added_jobs">
         <item quantity="one">Adicionado %1$s trabalho: %2$s iniciado, %3$s aguardando início.</item>

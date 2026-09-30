@@ -388,6 +388,28 @@ object ExtractorUtils {
         return Codecs(video, audio)
     }
 
+    private val usAgeRatings = mapOf("G" to 0, "PG" to 10, "PG-13" to 13, "R" to 16, "NC" to 18)
+    private val tvParentalAgeRatings = mapOf(
+        "TV-Y" to 0,
+        "TV-Y7" to 7,
+        "TV-G" to 0,
+        "TV-PG" to 0,
+        "TV-14" to 14,
+        "TV-MA" to 17,
+    )
+    private val tvAgeRatings = Regex("^TV[_-]?(Y7|Y|G|PG|14|MA)$", RegexOption.IGNORE_CASE)
+
+    /** Upstream `parse_age_limit`. */
+    fun parseAgeLimit(value: String?): Int? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        usAgeRatings[text.uppercase()]?.let { return it }
+        Regex("^(?<age>\\d{1,2})\\+?$").matchEntire(text)?.let {
+            return it.groups["age"]?.value?.toIntOrNull()
+        }
+        val match = tvAgeRatings.matchEntire(text.uppercase()) ?: return null
+        return tvParentalAgeRatings["TV-" + match.groupValues[1].uppercase()]
+    }
+
     /** Upstream `mimetype2ext`. Parameter suffixes and casing are ignored. */
     fun mimetype2ext(mimeType: String?): String? {
         val mime = mimeType?.trim()?.substringBefore(';')?.lowercase() ?: return null

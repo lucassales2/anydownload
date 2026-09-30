@@ -78,7 +78,13 @@ object HeaderNames {
  * Only names in [ALLOWLIST] leave the device through [sanitize]. `Cookie`,
  * `Authorization` from the header map, and every `X-Goog-*` auth header are
  * refused; the visitor id is the one `x-goog-*` name upstream's innertube
- * clients may declare. A trusted caller may set the explicit
+ * clients may declare. The `x-disco-*` pair are the fixed public client
+ * identifiers the Discovery API needs and carry no credential. The
+ * `x-frontend-*`, `x-niconico-language`, and
+ * `x-request-with` names are the fixed public client identifiers the
+ * Niconico APIs need; `x-access-right-key` carries the short-lived key the
+ * watch API itself returned for one video and is never persisted or logged.
+ * A trusted caller may set the explicit
  * `HttpRequest.authorization` field instead (D6 Spotify metadata) or the
  * `HttpRequest.cookie` field (D11 T-018 jar); those values are added after
  * this filter and never enter a diagnostic. Refused names are dropped, never
@@ -93,6 +99,13 @@ object HttpHeaders {
         "referer",
         "user-agent",
         "range",
+        "x-disco-client",
+        "x-disco-params",
+        "x-access-right-key",
+        "x-frontend-id",
+        "x-frontend-version",
+        "x-niconico-language",
+        "x-request-with",
         "x-youtube-client-name",
         "x-youtube-client-version",
         "x-goog-visitor-id",

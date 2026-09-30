@@ -63,6 +63,8 @@ class YtDlpCliEngine(
     private val processes = ConcurrentHashMap<String, CliProcess>()
     private val cancelRequested = ConcurrentHashMap<String, Boolean>()
     private val running = ConcurrentHashMap<String, Job>()
+    private val partialCleanup = ConcurrentHashMap<String, PartialCleanup>()
+    private val reportedFiles = ConcurrentHashMap<String, MutableList<String>>()
     private val semaphore = Semaphore(settingsRepository.settings.value.maxConcurrentDownloads.coerceAtLeast(1))
 
     init {
@@ -97,13 +99,21 @@ class YtDlpCliEngine(
         if (job.state.isTerminal) return job
         cancelRequested[jobId] = true
         processes.remove(jobId)?.destroyTree()
-        return update(jobId) {
-            it.copy(
-                state = JobState.CANCELLED,
-                error = cancelledError(),
-                finishedAtEpochMillis = now(),
-            )
+        val updated = update(jobId) { current ->
+            if (current.state.isTerminal) {
+                current
+            } else {
+                current.copy(
+                    state = JobState.CANCELLED,
+                    error = cancelledError(),
+                    finishedAtEpochMillis = now(),
+                )
+            }
+        } ?: return null
+        if (updated.state == JobState.CANCELLED) {
+            discardStoredFiles(jobId, clear = false)
         }
+        return findJob(jobId) ?: updated
     }
 
     override fun retry(jobId: String): DownloadJob? {
@@ -321,6 +331,7 @@ class YtDlpCliEngine(
                 return@withPermit
             }
             processes[jobId] = process
+            partialCleanup[jobId] = PartialCleanup(baseRoot, destination, processStartedAt)
             update(jobId, persistNow = false) {
                 it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
             }
@@ -351,7 +362,12 @@ class YtDlpCliEngine(
                                 }
 
                                 is YtDlpEvent.Progress -> applyProgress(jobId, event)
-                                is YtDlpEvent.FinalFile -> finalPaths += event.path
+                                is YtDlpEvent.FinalFile -> {
+                                    reportedFiles.computeIfAbsent(jobId) {
+                                        java.util.Collections.synchronizedList(mutableListOf())
+                                    }.add(event.path)
+                                    finalPaths += event.path
+                                }
                                 is YtDlpEvent.Entry -> Unit
                                 null -> Unit
                             }
@@ -365,6 +381,7 @@ class YtDlpCliEngine(
             }
 
             if (cancelRequested[jobId] == true) {
+                discardStoredFiles(jobId, clear = true)
                 confirmCancelled(jobId)
                 return@withPermit
             }
@@ -393,6 +410,60 @@ class YtDlpCliEngine(
                     completeFromFiles(jobId, baseRoot, files, effectiveOptions)
                 }
             }
+            partialCleanup.remove(jobId)
+            reportedFiles.remove(jobId)
+        }
+    }
+
+    /**
+     * Deletes the in-progress file for a cancelled job: yt-dlp partials written
+     * since the process started, any path the process already reported, and
+     * artifacts already registered on the row. [clear] drops the bookkeeping
+     * so a later pass does not delete a file from a retry.
+     */
+    private fun discardStoredFiles(jobId: String, clear: Boolean) {
+        val cleanup = if (clear) partialCleanup.remove(jobId) else partialCleanup[jobId]
+        val reported = if (clear) {
+            reportedFiles.remove(jobId).orEmpty()
+        } else {
+            reportedFiles[jobId].orEmpty().toList()
+        }
+        cleanup?.let { deletePartialFiles(it) }
+        val root = cleanup?.root
+        if (root != null) {
+            reported.forEach { reportedPath ->
+                val path = runCatching { DownloadPaths.artifactPath(root, reportedPath) }.getOrNull() ?: return@forEach
+                runCatching { Files.deleteIfExists(path) }
+            }
+        }
+        if (findJob(jobId)?.state == JobState.CANCELLED) {
+            deleteArtifacts(jobId)
+        }
+    }
+
+    private fun deletePartialFiles(cleanup: PartialCleanup) {
+        if (!Files.isDirectory(cleanup.directory)) return
+        val cutoff = cleanup.startedAtMillis - 2_000
+        runCatching {
+            Files.walkFileTree(
+                cleanup.directory,
+                object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                        val name = file.fileName.toString()
+                        val partial = name.endsWith(".part") || name.endsWith(".ytdl") ||
+                            name.endsWith(".tmp") || name.endsWith(".temp")
+                        val absolute = file.toAbsolutePath().normalize()
+                        if (
+                            partial &&
+                            absolute.startsWith(cleanup.directory) &&
+                            attrs.lastModifiedTime().toMillis() >= cutoff
+                        ) {
+                            runCatching { Files.deleteIfExists(absolute) }
+                        }
+                        return FileVisitResult.CONTINUE
+                    }
+                },
+            )
         }
     }
 
@@ -538,6 +609,9 @@ class YtDlpCliEngine(
         }
         val totalSize = artifacts.sumOf { it.sizeBytes ?: 0L }.takeIf { it > 0 }
         update(jobId) { current ->
+            if (current.state == JobState.CANCELLED || cancelRequested[jobId] == true) {
+                return@update current
+            }
             current.copy(
                 state = JobState.COMPLETED,
                 progress = JobProgress(
@@ -652,6 +726,12 @@ class YtDlpCliEngine(
 
     private fun cancelledError(): JobError =
         JobError(JobErrorCode.CANCELLED, "The download was cancelled.", retryable = false)
+
+    private data class PartialCleanup(
+        val root: Path,
+        val directory: Path,
+        val startedAtMillis: Long,
+    )
 
     private fun findJob(jobId: String): DownloadJob? = _jobs.value.firstOrNull { it.id == jobId }
 

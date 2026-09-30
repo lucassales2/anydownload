@@ -1154,7 +1154,7 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSorter.kt"
       ],
       "status": "partial",
-      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), jsToJson (`js_to_json` subset: comments, single/backtick quotes, unquoted keys, trailing commas, undefined/void 0, hex/octal, new Date/new X, parseInt; no vars, templates, or new Map), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, determineExt (`determine_ext` with the `KNOWN_EXTENSIONS` subset the HLS/DASH slice needs), parseIso8601, unifiedStrdate, parseFilesize, the RFC 1321 `md5Hex` the Bilibili WBI signature needs, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
+      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), jsToJson (`js_to_json` subset: comments, single/backtick quotes, unquoted keys, trailing commas, undefined/void 0, hex/octal, new Date/new X, parseInt; no vars, templates, or new Map), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseAgeLimit (`parse_age_limit`), parseCodecs, mimetype2ext, determineExt (`determine_ext` with the `KNOWN_EXTENSIONS` subset the HLS/DASH slice needs), parseIso8601, unifiedStrdate, parseFilesize, the RFC 1321 `md5Hex` the Bilibili WBI signature needs, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
       "tasks": [
         "T-057",
         "T-058",
@@ -1508,6 +1508,808 @@
         "T-124"
       ],
       "portedAt": "2026-09-30"
+    },
+    {
+      "id": "AdobePassIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/adobepass.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/adobepass/AdobePassIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Base class for the TV Everywhere extractors: `_get_mvpd_resource` (the XML-escaped v-chip RSS resource string) and the typed login-wall failure for `_extract_mvpd_auth` are translated. The MSO table, device registration, SAML/OAuth authorization, token cache, and credential submission are not; a participating TV provider account is required (login wall). There is no `_VALID_URL`, so the class is not in the registry.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DPlayBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Shared `dplay.py` machinery: `_get_auth`'s anonymous device token, `content/videos` metadata, the v1 playback streaming map, and the `included` channel/image/show/tag walk. `series`, `season_number`, `episode_number`, `creator`, `tags`, `display_id`, and `http_headers` are not modeled on the port's InfoDict; geo-block and missing-package error bodies cannot be read through the typed HTTP seam; manifests are parsed at download time. No cookie or credential is stored.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The v3 `playback/v3/videoPlaybackInfo` variant plus the `WEB:UNKNOWN:<product>:27.43.0` public client headers; the constructor carries upstream `_PRODUCT` and `_DISCO_API_PARAMS`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusShowBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The CMS `cms/routes/<show_str>/<show_name>` lookup and the bounded `content/videos` season listing; entries re-dispatch as `videos/<path>` URLs of the sibling video extractor.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DPlayIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`dplay.<country>` (dk/fi/jp/se/no), `discoveryplus.<country>` (dk/es/fi/it/se/no), and `es|it.dplay.com/<show>/<episode>`: the v1 playback map; geo and missing-package responses fail typed as unavailable because the error body is not readable through the HTTP seam.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "HGTVDeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`de.hgtv.com/sendungen/<show>/<episode>` through `eu1-prod.disco-api.com` with the Alps client headers; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "GoDiscoveryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(go.)discovery.com/video/<show>/<episode>` through `us1-prod-direct.go.discovery.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TravelChannelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(watch.)travelchannel.com/video/<show>/<episode>` through `us1-prod-direct.watch.travelchannel.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CookingChannelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(watch.)cookingchanneltv.com/video/<show>/<episode>` through `us1-prod-direct.watch.cookingchanneltv.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "HGTVUsaIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(watch.)hgtv.com/video/<show>/<episode>` through `us1-prod-direct.watch.hgtv.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "FoodNetworkIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(watch.)foodnetwork.com/video/<show>/<episode>` through `us1-prod-direct.watch.foodnetwork.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DestinationAmericaIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)destinationamerica.com/video/<show>/<episode>` through `us1-prod-direct.destinationamerica.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "InvestigationDiscoveryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)investigationdiscovery.com/video/<show>/<episode>` through `us1-prod-direct.investigationdiscovery.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "AmHistoryChannelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)ahctv.com/video/<show>/<episode>` through `us1-prod-direct.ahctv.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "ScienceChannelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)sciencechannel.com/video/<show>/<episode>` through `us1-prod-direct.sciencechannel.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryLifeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)discoverylife.com/video/<show>/<episode>` through `us1-prod-direct.discoverylife.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "AnimalPlanetIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)animalplanet.com/video/<show>/<episode>` through `us1-prod-direct.animalplanet.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TLCIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(go.)tlc.com/video/<show>/<episode>` through `us1-prod-direct.tlc.com`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`discoveryplus.com[/<country>]/video[/sport|/olympics]/<show>/<episode>`: br/ca/us use `us1-prod-direct.discoveryplus.com` and the other countries use `eu1-prod-direct.discoveryplus.com`; the `/it/` form is left to DiscoveryPlusItalyIE (upstream `(?!it/)`).",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusIndiaIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)discoveryplus.in/video[s]/<show>/<episode>` through `ap2-prod-direct.discoveryplus.in` with the India client headers; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryNetworksDeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`tlc.de`/`dmax.de` `(programme|show|sendungen)/<show>[/video]/<episode>`: the `de-api.loma-cms.com` `uid` supplies the video id (last 7 characters) and the disco v3 playback follows; `categories` is not modeled on the port's InfoDict.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusItalyIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)discoveryplus.com/it/video[/sport|/olympics]/<show>/<episode>` through `eu1-prod-direct.discoveryplus.com` with the Italy `siteLookupKey`; v3 playback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusItalyShowIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)discoveryplus.it/programmi/<show>`: the CMS season route lists episodes as child-job entries at `discoveryplus.it/videos/<path>`; the listing is bounded by `meta.totalPages`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DiscoveryPlusIndiaShowIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dplay.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dplay/DPlayIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`(www.)discoveryplus.in/show/<show>`: the CMS season route lists episodes as child-job entries at `discoveryplus.in/videos/<path>`; the listing is bounded by `meta.totalPages`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "ThePlatformBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/theplatform.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/theplatform/ThePlatformBaseIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The metadata and SMIL subset of the ThePlatform base: `_download_theplatform_metadata`, `_parse_theplatform_metadata` (title, description, thumbnail, duration, pubDate, billing code, rating, chapters, captions), and a small SMIL reader for the generated `link.theplatform.com` documents. The `ThePlatformIE` URL extractor, F4M handling, hdnea-cookie query rewrite, geo-verification headers, and hmac-signed feed URLs land with the D18 `theplatform.py` file.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NBCUniversalBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The shared NBCU page walk (`_extract_nbcu_video`), the two-step SMIL-to-m3u8 selection (`_download_nbcu_smil_and_extract_m3u8_url`), the `{folders}` template fill, and the DRM check. Adobe Pass paths stop at the typed login wall; the port's InfoDict does not model `media_type`, `categories`, `episode`, season/episode numbers, `series`, `creators`, `tags`, `location`, or `_old_archive_ids`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NBCIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nbc.com[/classic-tv]/<show>/video/<slug>/<id>`: the friendship.nbc.co `bonanzaPage` GraphQL metadata and the PRELOAD fallback; TP metadata supplies title/description/duration/date/uploader/chapters/captions, and the SMIL manifest supplies the HLS URL. A `locked` video fails typed as a TV-provider login wall.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NBCSportsVPlayerIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Upstream marks the extractor `_WORKING = False`; the `tp:releaseUrl` vplayer embed is not translated.",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NBCSportsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Upstream marks the extractor `_WORKING = False`; the page's vplayer embed is not translated.",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NBCSportsStreamIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Upstream marks the extractor `_WORKING = False`; the live stream needs Adobe Pass TV provider credentials (login wall).",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NBCNewsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nbcnews.com`/`today.com`/`msnbc.com` pages: the Next.js `videoAssets` state maps the progressive assets and the M3U asset to `m3u8_native`; closed captions map to subtitle tracks, and the ThePlatform asset URL gets `format=redirect`. Streams, embeds, and live pages are not translated.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NBCOlympicsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nbcolympics.com/videos?/<id>` matches and hands the drupal `vod.iframe_url` (or the `embedUrl` pattern) to the ThePlatform player URL; the player extractor itself lands with the D18 `theplatform.py` file.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NBCOlympicsStreamIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Upstream marks the extractor `_WORKING = False`; the tokenized streams need Adobe Pass TV provider credentials (login wall).",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NBCStationsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The local-station pages (`nbcbayarea` and siblings): `data-videos`/`data-meta` plus the `nbc` script JSON map title, summary, timestamp, direct mp4, and the SMIL video list; the live HEAD check is not performed and the `dataLayer` fallbacks are best-effort.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "BravoTVIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`bravotv.com` and `oxygen.com` episode/video pages walk the TVE deck or LS playlist and share the NBCU SMIL path; an `auth` entitlement fails typed as a TV-provider login wall.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "SyfyIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/nbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/nbc/NbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`syfy.com/<show>/season-N/episode-N[/videos]/<slug>` walks the TVE deck or LS playlist and shares the NBCU SMIL path; an `auth` entitlement fails typed as a TV-provider login wall.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`cbc.ca/<section>/<...>/<slug>` article pages: the `window.__INITIAL_STATE__` media ids, the `CBC.APP.Caffeine.initInstance` entries with the tpfeed/ThePlatform clip lookups, and the iframe/player/guid regexes become `https://www.cbc.ca/player/play/<id>` child-job entries. The `polopoly_media` and `app.contentId` paths are translated; title/description come from the OG meta.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCPlayerIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`cbc.ca/player/play[/video]/<id>`, `i/caffeine/syndicate/?mediaId=`, and `cbcplayer:<id>`: the currentClip state maps title/description/thumbnail/date/duration, text tracks, chapters, and the `medianet` asset JSON to a `m3u8_native` HLS record or a direct asset URL. The direct https-mp4 HEAD probe is not performed (no HEAD in the extractor seam) and a media-id-only clip fails typed because its deprecated ThePlatform path needs the D18 `theplatform.py` player.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCPlayerPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`cbc.ca/player/<category>` listings: the `clipsByCategory` state maps each item to a `/player/play/<id>` child-job entry.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The CBC Gem show and media-validation APIs (`_call_show_api`, `_call_media_api`, `_extract_item_info`) with the typed error mapping (geo, password login, unavailable); the OAuth login/refresh and claims-token flow is not translated, so a video whose validation requires an account fails typed instead of signing in.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`gem.cbc.ca[/media]/<show>/s<NN>e<NN>`: the show API item and the `gem` validation response map title (with the numeric-episode title split), description, thumbnail, duration, availability date, and age rating; the HLS manifest is recorded `m3u8_native` with `manifestType=`. Per-variant descriptive-audio preference is not available because the master is parsed at download time.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`gem.cbc.ca[/media]/<show>/s<NN>`: the season lineup becomes child-job entries at `gem.cbc.ca/media/<item>` with the item title.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemContentIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`gem.cbc.ca/<slug>` landing pages: Next.js data routes a Standalone item to its media URL (the Olympics form) or to `<slug>/s01e01`, and a Season/Parts item to its playlist URLs.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemOlympicsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`gem.cbc.ca/<slug>-<digits>/s01e<digits>`: the `formattedIdMedia` item maps the title, description, thumbnail, replay duration, and release date; the `medianetlive` validation supplies the HLS URL. An upcoming live event fails typed with `NotYetAvailable`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCGemLiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`gem.cbc.ca/live/<id>` and `live-event/<id>`: the Next.js root, `event`, or `freeTv.streams` item maps title/description/thumbnail/date; the `medianetlive` validation supplies the HLS URL, and the live/replay flag comes from `isVodEnabled`.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "CBCListenIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/cbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/cbc/CbcIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`cbc.ca/listen/(cbc-podcasts|live-radio)/<...>/<...>/<id>`: the clips API maps the direct media URL, title, description, duration, and airdate; when the API fails, the `__PRELOADED_STATE__` episodes are searched as a fallback.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The shared Niconico constants and client headers. The port always uses the guest API: `is_logged_in` and the whole `_perform_login` flow (session cookies, MFA) are not translated, so an account-only video fails typed through the API payment flags or the refusal response.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp/(watch|shorts|embed|sp)/<id>`: the guest watch API maps title, description, duration, date, counts, channel/owner, thumbnails with parsed resolution, and `availability`; the access-rights HLS call returns a `m3u8_native` master. The 400/404 API error body (`errorCode`/`reasonCode`) is not readable through the typed HTTP seam, so scheduled, geo, PPV, premium, and member-only refusals fail typed as unavailable instead of a named reason. Per-variant quality fields and danmaku comment subtitles are not modeled.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoPlaylistBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The paged `items[].video` listing helper with the page-size termination used by the mylist and series APIs.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp[/user/<id>]/(my/)mylist/<id>` and `nico.ms/mylist/<id>`: the `v2/mylists` API maps the list name/description and its items to `/watch/<id>` child entries.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoSeriesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp[/user/<id>]/series/<id>` and `nico.ms/series/<id>`: the `v2/series` API maps the detail title/description and its items to child entries.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoHistoryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "`/my/history[/like]` needs the `v1/users/me` APIs, which require login cookies; the account listing is a login wall and is not translated.",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NicovideoSearchBaseIE",
+      "kind": "core",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The `data-video-id` page scan with the empty-page termination shared by the search URL and tag URL extractors.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NicovideoSearchIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `nicosearch:` keyword pseudo-URL is not an HTTP URL the UI accepts; the search page URL form is handled by NicovideoSearchURLIE.",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NicovideoSearchURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp/search/<query>`: page-by-page `data-video-id` scanning until an empty page, emitted as `/watch/<id>` child entries.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NicovideoSearchDateIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `nicosearchdateall:` keyword pseudo-URL with the date partitioning is not an HTTP URL the UI accepts; not translated.",
+      "tasks": [
+        "T-126"
+      ]
+    },
+    {
+      "id": "NicovideoTagURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp/tag/<tag>`: the same `data-video-id` page scan as the search URL form.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/niconico/NiconicoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`nicovideo.jp/user/<id>[/video]`: the `v2/users/<id>/videos` API pages by `totalCount` and emits the `essential.id` values as `/watch/<id>` child entries.",
+      "tasks": [
+        "T-126"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "NiconicoLiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/niconico.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Live pages and age-restricted lives need the WebSocket `startWatching` handshake (and the age-auth cookie path); the port has no WebSocket seam, so the live URL form is not translated.",
+      "tasks": [
+        "T-126"
+      ]
     }
   ]
 }

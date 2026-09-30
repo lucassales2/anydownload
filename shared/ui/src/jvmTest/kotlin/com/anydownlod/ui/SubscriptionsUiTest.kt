@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasTestTag
@@ -37,7 +38,7 @@ class SubscriptionsUiTest {
         val graph = InMemoryAppGraph(subscriptions = repository)
         setContent { ShellUiHarness(graph) }
 
-        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("shell-tab-SUBSCRIPTIONS").performClick()
         onNodeWithText("Fixture channel").assertExists()
 
         // Check now records a timestamp and never enqueues a job.
@@ -77,7 +78,7 @@ class SubscriptionsUiTest {
         val second = repository.add("https://example.com/channel/two", "Two", DownloadOptions())
         setContent { ShellUiHarness(InMemoryAppGraph(subscriptions = repository)) }
 
-        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("shell-tab-SUBSCRIPTIONS").performClick()
         onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${first.id}"))
         onNodeWithTag("subscriptions-select-${first.id}").performClick()
         onNodeWithTag("subscriptions-check-selected").performClick()
@@ -91,7 +92,7 @@ class SubscriptionsUiTest {
     fun emptyStateExplainsChecksRunWhileOpen() = runComposeUiTest {
         setContent { ShellUiHarness(InMemoryAppGraph()) }
 
-        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("shell-tab-SUBSCRIPTIONS").performClick()
         onNodeWithText("Checks run while the app is open.", substring = true).assertExists()
     }
 
@@ -103,7 +104,7 @@ class SubscriptionsUiTest {
         }
         setContent { ShellUiHarness(graph) }
 
-        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("shell-tab-SUBSCRIPTIONS").performClick()
 
         onNodeWithTag("subscriptions-pause-note").assertExists()
     }
@@ -123,7 +124,7 @@ class SubscriptionsUiTest {
         )
         setContent { ShellUiHarness(InMemoryAppGraph(subscriptions = repository)) }
 
-        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("shell-tab-SUBSCRIPTIONS").performClick()
         onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${first.id}"))
         onNodeWithTag("subscriptions-select-${first.id}").performClick()
         onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${second.id}"))

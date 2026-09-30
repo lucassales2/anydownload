@@ -242,9 +242,9 @@ class HttpDownloadEngine(
             cancelRequested[jobId] = true
             running.remove(jobId)?.cancel()
         }
-        return update(jobId) { current ->
-            // A completion that already published an artifact wins the race:
-            // a late cancel must not turn a finished row into CANCELLED.
+        val updated = update(jobId) { current ->
+            // A completion that already finished wins the race: a late cancel
+            // must not turn a finished row into CANCELLED or delete its file.
             if (current.state == JobState.COMPLETED || current.state == JobState.UNKNOWN) {
                 current
             } else {
@@ -254,7 +254,11 @@ class HttpDownloadEngine(
                     finishedAtEpochMillis = now(),
                 )
             }
+        } ?: return null
+        if (updated.state == JobState.CANCELLED) {
+            deleteArtifacts(jobId)
         }
+        return findJob(jobId) ?: updated
     }
 
     override fun retry(jobId: String): DownloadJob? {
@@ -3014,8 +3018,8 @@ class HttpDownloadEngine(
         false
     }
 
-    private fun confirmCancelled(jobId: String): DownloadJob? =
-        update(jobId) { job ->
+    private fun confirmCancelled(jobId: String): DownloadJob? {
+        val updated = update(jobId) { job ->
             if (job.state == JobState.COMPLETED) {
                 job
             } else {
@@ -3025,7 +3029,12 @@ class HttpDownloadEngine(
                     finishedAtEpochMillis = now(),
                 )
             }
+        } ?: return null
+        if (updated.state == JobState.CANCELLED) {
+            deleteArtifacts(jobId)
         }
+        return findJob(jobId) ?: updated
+    }
 
     /**
      * A source extraction says is not published yet. The row waits in

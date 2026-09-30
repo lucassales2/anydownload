@@ -1,5 +1,7 @@
 package com.anydownlod.ui.history
 
+import com.anydownlod.core.ArtifactDeletionResult
+import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.fake.InMemoryDownloadEngine
 import com.anydownlod.ui.export.JobSourceUrls
@@ -44,6 +46,31 @@ class HistoryViewModelTest {
         presenter.removeSelected(setOf("seed-failed", "seed-completed"))
 
         assertTrue(engine.jobs.value.none { it.id == "seed-failed" || it.id == "seed-completed" })
+    }
+
+    @Test
+    fun confirmRemoveAsksToDeleteTheStoredFile() {
+        val delegate = engine()
+        val deleted = mutableListOf<String>()
+        val recording = object : DownloadEngine by delegate {
+            override fun deleteArtifacts(jobId: String): ArtifactDeletionResult {
+                deleted += jobId
+                return delegate.deleteArtifacts(jobId)
+            }
+        }
+        val presenter = HistoryViewModel(recording)
+
+        presenter.requestRemove(setOf("seed-completed"))
+        presenter.confirmRemove(deleteStoredFile = false)
+
+        assertTrue(deleted.isEmpty())
+        assertTrue(recording.jobs.value.none { it.id == "seed-completed" })
+
+        presenter.requestRemove(setOf("seed-failed"))
+        presenter.confirmRemove(deleteStoredFile = true)
+
+        assertEquals(listOf("seed-failed"), deleted)
+        assertTrue(recording.jobs.value.none { it.id == "seed-failed" })
     }
 
     @Test
