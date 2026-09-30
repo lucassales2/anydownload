@@ -13,6 +13,7 @@
 package com.anydownlod.desktop
 
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.BrowserCookieImport
 import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.DownloadEngine
@@ -25,11 +26,14 @@ import com.anydownlod.core.UrlOpener
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
+import com.anydownlod.core.cookies.CookieJarSource
 import com.anydownlod.core.di.SharedEngineBindings
 import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.engine.HttpDownloadEngine
+import com.anydownlod.core.engine.DownloadArchive
+import com.anydownlod.core.engine.FileDownloadArchive
 import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.ExtractorRegistry
 import com.anydownlod.core.extract.youtube.YoutubeSearch
@@ -52,6 +56,8 @@ import com.anydownlod.desktop.engine.CliProcessRunner
 import com.anydownlod.desktop.engine.DesktopFfmpegToolkit
 import com.anydownlod.desktop.engine.DesktopFileStore
 import com.anydownlod.desktop.engine.DesktopPreviewSource
+import com.anydownlod.desktop.cookies.DesktopBrowserCookieImport
+import com.anydownlod.desktop.cookies.DesktopCookieJarSource
 import com.anydownlod.desktop.engine.DesktopRoute
 import com.anydownlod.desktop.engine.DesktopRouteClassifier
 import com.anydownlod.desktop.engine.DesktopRoutingEngine
@@ -98,6 +104,7 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
     val hostPreviews: MediaPreviewSource
     val hostStartupWarning: String?
     val hostCookieStore: CookieStore
+    val hostBrowserCookieImport: BrowserCookieImport
     val hostToolkitCapabilities: ToolkitCapabilities
     val hostSpotify: SpotifyDownloadService
     val hostSpotifyAuth: SpotifyAuthService
@@ -105,6 +112,7 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
     override val previews: MediaPreviewSource get() = hostPreviews
     override val startupWarning: String? get() = hostStartupWarning
     override val cookieStore: CookieStore get() = hostCookieStore
+    override val browserCookieImport: BrowserCookieImport? get() = hostBrowserCookieImport
     override val toolkitCapabilities: ToolkitCapabilities get() = hostToolkitCapabilities
     override val spotify: SpotifyDownloadService? get() = hostSpotify
     override val spotifyAuth: SpotifyAuthService? get() = hostSpotifyAuth
@@ -128,7 +136,7 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
         get() = { artifact -> openArtifact(settings, artifact, reveal = true) }
     override val pickFolder: () -> String?
         get() = { chooseDirectory() }
-    override val pickCookieFile: () -> String?
+    override val pickCookieFile: suspend () -> String?
         get() = { chooseCookieFile() }
     override val loadThumbnail: suspend (String) -> ByteArray?
         get() = { url -> withContext(ioDispatcher) { ThumbnailBytes.fetch(url) } }
@@ -248,6 +256,11 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
+    fun downloadArchive(store: DesktopStore): DownloadArchive =
+        FileDownloadArchive(store.stateDirectory.resolve("downloadArchive.txt"))
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun httpEngine(
         transfer: HttpTransfer,
         settings: SettingsRepository,
@@ -256,6 +269,8 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
         persist: (List<DownloadJob>) -> Unit,
         extractorRegistry: ExtractorRegistry,
         toolkit: DesktopFfmpegToolkit,
+        cookieJarSource: CookieJarSource,
+        archive: DownloadArchive,
         persisted: PersistedState,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
@@ -266,6 +281,8 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
         persist = persist,
         registry = extractorRegistry,
         toolkit = toolkit,
+        cookieJarSource = cookieJarSource,
+        archive = archive,
         seedJobs = persisted.jobs.filter {
             DesktopRouteClassifier.resumeRoute(it.request.sourceUrl, extractorRegistry) !=
                 DesktopRoute.YTDLP_CLI
@@ -318,7 +335,20 @@ internal interface DesktopGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun cookieStore(store: DesktopStore): CookieStore = DesktopCookieStore(store)
+    fun desktopCookieStore(store: DesktopStore): DesktopCookieStore = DesktopCookieStore(store)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStore(store: DesktopCookieStore): CookieStore = store
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieJarSource(store: DesktopCookieStore): CookieJarSource = DesktopCookieJarSource(store)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun browserCookieImport(store: DesktopCookieStore): BrowserCookieImport =
+        DesktopBrowserCookieImport(store)
 
     @Provides
     @SingleIn(AppScope::class)

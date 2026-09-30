@@ -27,17 +27,33 @@ targets:
         FRAMEWORK_SEARCH_PATHS:
           - "$(inherited)"
           - "$(SRCROOT)/../../shared/ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+    dependencies:
+      - target: AnyDownloadShare
+        embed: true
     preBuildScripts:
       - name: Build shared Kotlin framework
         basedOnDependencyAnalysis: false
         script: |
           cd "$SRCROOT/../.."
           ./gradlew :shared:ui:embedAndSignAppleFrameworkForXcode
+  AnyDownloadShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AnyDownloadShare
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anydownlod.ios.share
+        PRODUCT_NAME: AnyDownloadShare
+        INFOPLIST_FILE: AnyDownloadShare/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"
 schemes:
   AnyDownload:
     build:
       targets:
         AnyDownload: all
+        AnyDownloadShare: all
     run:
       config: Debug
     archive:

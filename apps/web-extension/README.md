@@ -93,6 +93,23 @@ request, and YouTube answers 403 to any origin that is not
 path, and never touches cookies or signed media URLs.
 - `cancel` — cancel the browser download for a job.
 
+## Cookie files (T-018) — recorded web gap
+
+The web host records a gap for F-18: the extension does **not** store or
+apply a Netscape cookie file in this phase, and the page never receives
+cookie bytes.
+
+- MV3 `fetch` forbids the `Cookie` request header, and the extension does
+  not yet create per-host `declarativeNetRequest` rules for arbitrary sites,
+  so an imported file could not be applied to requests reliably.
+- `WebAppGraph` therefore binds `CookieStore.Unavailable` and a picker that
+  returns null: Settings shows Not configured and import is unavailable.
+  The extension never asks the page for a cookie file and never fetches an
+  arbitrary origin on the page's behalf.
+- Fixing this needs extension-side storage plus cookie-header injection, a
+  separate task; until then no cookie text is put on the page or in
+  localStorage.
+
 ## Tests (node, no browser needed)
 
 ```sh

@@ -70,6 +70,7 @@
 
     <string name="subscriptions_title">Followed sources</string>
     <string name="subscriptions_subtitle">Channels and playlists on a schedule.</string>
+    <string name="subscriptions_pause_on_suspend">This host stops scans when the app is suspended or closed. Open the app to scan again.</string>
     <string name="empty_subscriptions_title">No subscriptions</string>
     <string name="empty_subscriptions_body">Paste a channel or playlist URL in the add form above and choose Subscribe. Checks run while the app is open.</string>
     <string name="kpi_running">Running</string>
@@ -259,7 +260,17 @@
     <string name="cookie_status">Status: %1$s</string>
     <string name="cookie_configured">Configured</string>
     <string name="cookie_not_configured">Not configured</string>
+    <string name="cookie_error_unreadable">Error: the stored file could not be read. Replace or delete it.</string>
+    <string name="cookie_error_no_cookies">Error: the stored file has no cookies. Replace or delete it.</string>
+    <string name="cookie_error_all_expired">Error: the stored file has no unexpired cookies. Replace or delete it.</string>
     <string name="cookie_warning">A cookie file stays on this computer and can expose an account. Importing it does not guarantee the site will allow the download. Contents are never shown here.</string>
+    <string name="cookie_browser_button">Copy from a browser…</string>
+    <string name="cookie_browser_title">Copy cookies from a browser?</string>
+    <string name="cookie_browser_body">AnyDownload copies the selected browser's cookies once into the local cookie file. The browser database is not kept open and is not read again for each download. Only Chrome, Firefox, and Safari are supported; other browsers are not. The copy can expose an account and does not guarantee access.</string>
+    <string name="cookie_browser_chrome">Chrome</string>
+    <string name="cookie_browser_firefox">Firefox</string>
+    <string name="cookie_browser_safari">Safari</string>
+    <string name="cookie_browser_unavailable">Browser cookie copy is only available on desktop.</string>
     <string name="import_file">Import</string>
     <string name="replace_file">Replace</string>
     <string name="section_spotify">Spotify library</string>
@@ -281,7 +292,7 @@
     <string name="section_appearance">Appearance</string>
     <string name="section_tools">Tools</string>
     <string name="tools_hint">Versions come from the local PATH probe. A simple media page needs neither yt-dlp nor ffmpeg; direct file downloads work without them too, and site and other video URLs still need them.</string>
-    <string name="settings_kotlin_extractors">Kotlin extractors: YouTube (single video)</string>
+    <string name="settings_kotlin_extractors">Kotlin engine: yt-dlp pin %1$s · Kotlin %2$s</string>
     <string name="settings_js_runtime">JavaScript runtime: %1$s</string>
     <string name="tool_js_none">none — some YouTube formats hidden</string>
     <string name="tool_not_checked">Not checked</string>

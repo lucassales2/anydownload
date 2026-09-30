@@ -9,6 +9,7 @@
  */
 package com.anydownlod.core.extract
 
+import com.anydownlod.core.cookies.withActiveCookie
 import com.anydownlod.core.platform.HttpBody
 import com.anydownlod.core.platform.HttpFailureReason
 import com.anydownlod.core.platform.HttpMethods
@@ -77,7 +78,9 @@ class ExtractorHttp(
 
     /** A bounded body for callers that decode it themselves (player JS, XML). */
     suspend fun downloadBytes(request: HttpRequest, maxBytes: Int = defaultMaxBytes): ByteArray {
-        var current = request
+        // Attach the active job jar's header for this request URL (T-018).
+        // Extractor-declared `Cookie` headers stay refused by the allowlist.
+        var current = request.withActiveCookie()
         var hops = 0
         while (true) {
             when (val response = transfer.execute(current)) {
@@ -101,7 +104,7 @@ class ExtractorHttp(
                             response.location,
                         )
                     ) {
-                        is RedirectDecision.Follow -> current = decision.request
+                        is RedirectDecision.Follow -> current = decision.request.withActiveCookie()
                         is RedirectDecision.Fails -> throw ExtractionError.Unavailable(
                             "The source redirected in a way this app will not follow.",
                         )
@@ -110,14 +113,60 @@ class ExtractorHttp(
 
                 is HttpResponse.Unavailable -> throw ExtractionError.Unavailable(response.reason)
 
-                is HttpResponse.Failed -> throw when (response.reason) {
-                    HttpFailureReason.PERMISSION -> ExtractionError.Unavailable(response.message)
-                    HttpFailureReason.BLOCKED_DESTINATION -> ExtractionError.UnsupportedUrl(response.message)
-                    HttpFailureReason.TIMEOUT -> ExtractionError.Unavailable("The source timed out.")
-                    else -> ExtractionError.Unavailable("The source could not be reached.")
-                }
+                is HttpResponse.Failed -> throw failedError(response)
             }
         }
+    }
+
+    /**
+     * Follows redirects without reading a body and returns the final URL.
+     * Mirrors upstream `_request_webpage(url, ...).url` for the redirect
+     * resolvers (the t.co shortener); the hop budget and cookie attachment
+     * are the same as [downloadBytes], and unread bodies are closed.
+     */
+    suspend fun followRedirects(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+    ): String {
+        var current = HttpRequest(url = url, headers = headers).withActiveCookie()
+        var hops = 0
+        while (true) {
+            when (val response = transfer.execute(current)) {
+                is HttpResponse.Final -> {
+                    runCatching { response.body?.close() }
+                    if (response.statusCode !in 200..299) throw errorForStatus(response.statusCode)
+                    return current.url
+                }
+
+                is HttpResponse.Redirect -> {
+                    hops++
+                    if (hops > maxRedirects) throw ExtractionError.Malformed("Too many redirects.")
+                    when (
+                        val decision = HttpRedirects.afterRedirect(
+                            current,
+                            response.statusCode ?: 302,
+                            response.location,
+                        )
+                    ) {
+                        is RedirectDecision.Follow -> current = decision.request.withActiveCookie()
+                        is RedirectDecision.Fails -> throw ExtractionError.Unavailable(
+                            "The source redirected in a way this app will not follow.",
+                        )
+                    }
+                }
+
+                is HttpResponse.Unavailable -> throw ExtractionError.Unavailable(response.reason)
+
+                is HttpResponse.Failed -> throw failedError(response)
+            }
+        }
+    }
+
+    private fun failedError(response: HttpResponse.Failed): ExtractionError = when (response.reason) {
+        HttpFailureReason.PERMISSION -> ExtractionError.Unavailable(response.message)
+        HttpFailureReason.BLOCKED_DESTINATION -> ExtractionError.UnsupportedUrl(response.message)
+        HttpFailureReason.TIMEOUT -> ExtractionError.Unavailable("The source timed out.")
+        else -> ExtractionError.Unavailable("The source could not be reached.")
     }
 
     private suspend fun readBounded(body: HttpBody, maxBytes: Int): ByteArray {

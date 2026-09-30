@@ -1,10 +1,16 @@
-package com.anydownlod.core.extract.harness
-
-/**
- * Small pure-Kotlin MD5 for the upstream `md5:` matcher. Kotlin common has no
- * message digest, so the algorithm is implemented here; the harness never
- * uses it for security.
+/*
+ * Pure-Kotlin MD5 — AnyDownload
+ *
+ * Kotlin common has no message digest. The WBI request signing in
+ * `BiliBiliIE` needs MD5 (`hashlib.md5(f'{query}{key}')` in upstream
+ * `bilibili.py` at tag `2026.08.19`, commit
+ * 3a08beaf031ab68f966401ead017ac81fe8486cf, read 2026-09-30; Unlicense, see
+ * shared/core/NOTICE.md). This is a plain RFC 1321 implementation and is
+ * never used for security.
  */
+package com.anydownlod.core.extract
+
+/** Lowercase hex MD5 of [input]. */
 internal fun md5Hex(input: ByteArray): String {
     val digest = md5(input)
     val hex = "0123456789abcdef"

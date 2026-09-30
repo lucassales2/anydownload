@@ -143,20 +143,33 @@ class YoutubeStage2Test {
         }
     }
 
-    private suspend fun extract(runtime: JsRuntime?): InfoDict {
+    private suspend fun extract(
+        runtime: JsRuntime?,
+        provider: PoTokenProvider = NoPoTokenProvider,
+    ): InfoDict {
         val transfer = ClientAwareTransfer(watchHtml, visionosJson(), webJson())
-        val ie = if (runtime == null) YoutubeIE(ExtractorHttp(transfer)) else YoutubeIE(ExtractorHttp(transfer), runtime)
+        val ie = if (runtime == null) {
+            YoutubeIE(ExtractorHttp(transfer), poTokenProvider = provider)
+        } else {
+            YoutubeIE(ExtractorHttp(transfer), runtime, provider)
+        }
         return ie.extract(watchUrl)
     }
 
+    /** A provider that only mints the web client's GVS token. */
+    private val gvsProvider = PoTokenProvider { request ->
+        if (request.context == PoTokenContext.GVS && request.client == "web") "FIXTURE_GVS" else null
+    }
+
     @Test
-    fun withARuntimeTheWebClientResolvesCiphersAndNChallenges() = runTest {
-        val info = extract(FakeRuntime())
+    fun withARuntimeAndAGvsProviderTheWebClientFormatsAreKept() = runTest {
+        val info = extract(FakeRuntime(), gvsProvider)
 
         // Stage 1 drops 140 (cipher) and 137 (n); stage 2 resolves both plus
         // the web-only 251 and merges without duplicating 140.
         assertEquals(setOf("18", "137", "140", "251"), info.formats.mapNotNull { it.formatId }.toSet())
         assertEquals(0, info.formatsNeedingJs)
+        assertEquals(0, info.formatsNeedingPoToken)
 
         val audio = info.formats.first { it.formatId == "140" }
         assertEquals("https://cdn.fixtures.example.net/audio?itag=140&sig=cba", audio.url)
@@ -164,6 +177,19 @@ class YoutubeStage2Test {
         assertEquals("https://cdn.fixtures.example.net/video?itag=137&n=SOLVED-CHALLENGE", video.url)
         val webOnly = info.formats.first { it.formatId == "251" }
         assertEquals("https://cdn.fixtures.example.net/web?itag=251&sig=zyx", webOnly.url)
+    }
+
+    @Test
+    fun withoutAGvsProviderTheWebClientFormatsAreDroppedAndCounted() = runTest {
+        val info = extract(FakeRuntime())
+
+        // The pin's `web` client requires a GVS PO token for HTTPS/DASH
+        // formats; without a provider they are dropped (E-13), while the
+        // visionos-resolved cipher and n rows stay.
+        assertEquals(setOf("18", "137", "140"), info.formats.mapNotNull { it.formatId }.toSet())
+        assertEquals(0, info.formatsNeedingJs)
+        // Both web rows are kept out: the duplicate 140 and the web-only 251.
+        assertEquals(2, info.formatsNeedingPoToken)
     }
 
     @Test

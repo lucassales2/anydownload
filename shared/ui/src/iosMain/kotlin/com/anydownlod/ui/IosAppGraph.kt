@@ -14,6 +14,7 @@ package com.anydownlod.ui
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
+import com.anydownlod.core.SharedLinkInbox
 import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.FileOpener
 import com.anydownlod.core.FileRevealer
@@ -26,6 +27,7 @@ import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
 import com.anydownlod.core.di.SharedEngineBindings
+import com.anydownlod.core.cookies.CookieJarSource
 import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.DownloadJob
@@ -42,13 +44,22 @@ import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.persist.JobDocumentRestore
 import com.anydownlod.core.persist.JobDocumentStore
+import com.anydownlod.core.persist.PersistedSubscriptionRepository
 import com.anydownlod.core.persist.PersistingDownloadEngine
+import com.anydownlod.core.subscriptions.RegistrySubscriptionEntrySource
+import com.anydownlod.core.subscriptions.ScanningSubscriptionRepository
+import com.anydownlod.core.subscriptions.SubscriptionScanner
+import com.anydownlod.core.subscriptions.enqueueSubscriptionEntry
 import com.anydownlod.core.platform.IosFileStore
 import com.anydownlod.core.platform.IosHttpTransfer
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.ui.media.IosMediaToolkit
+import com.anydownlod.ui.cookies.IosCookieJarSource
+import com.anydownlod.ui.cookies.IosCookiePicker
+import com.anydownlod.ui.cookies.IosCookieStore
 import com.anydownlod.ui.persist.IosJobDocumentStorage
+import com.anydownlod.ui.persist.IosSubscriptionDocumentStorage
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provider
@@ -83,6 +94,8 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
 
     override val previews: MediaPreviewSource get() = hostPreviews
     override val startupWarning: String? get() = hostStartupWarning
+    override val subscriptionsPauseOnSuspend: Boolean get() = true
+    override val sharedLinkInbox: SharedLinkInbox get() = IosSharedLinkInbox.inbox
     override val toolkitCapabilities: ToolkitCapabilities get() = hostToolkitCapabilities
     override val spotify: SpotifyDownloadService? get() = hostSpotify
 
@@ -182,6 +195,7 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
         persist: (List<DownloadJob>) -> Unit,
         registry: ExtractorRegistry,
         toolkit: IosMediaToolkit,
+        cookieJarSource: CookieJarSource,
         restored: IosRestoredQueue,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
@@ -190,6 +204,7 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
         scope = scope,
         registry = registry,
         toolkit = toolkit,
+        cookieJarSource = cookieJarSource,
         persist = persist,
         seedJobs = restored.jobs,
     )
@@ -214,7 +229,27 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
+    fun subscriptions(
+        registry: ExtractorRegistry,
+        scope: CoroutineScope,
+        engine: Provider<DownloadEngine>,
+    ): SubscriptionRepository {
+        val stateRoot = (NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
+            .firstOrNull() as? String)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { "$it/AnyDownload" }
+            ?: (NSTemporaryDirectory().trimEnd('/') + "/AnyDownload")
+        val storage = IosSubscriptionDocumentStorage("$stateRoot/subscriptions.json")
+        val delegate = InMemorySubscriptionRepository(
+            seedSubscriptions = PersistedSubscriptionRepository.restore(storage),
+        )
+        val persisted = PersistedSubscriptionRepository(delegate, storage)
+        val scanner = SubscriptionScanner(
+            repository = persisted,
+            entrySource = RegistrySubscriptionEntrySource(registry),
+        ) { subscription, entry -> enqueueSubscriptionEntry(engine(), subscription, entry) }
+        return ScanningSubscriptionRepository(persisted, scope, scanner)
+    }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -263,15 +298,38 @@ internal interface IosAppGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }
+    fun cookieStore(): IosCookieStore {
+        val stateRoot = (NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true)
+            .firstOrNull() as? String)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { "$it/AnyDownload" }
+            ?: (NSTemporaryDirectory().trimEnd('/') + "/AnyDownload")
+        return IosCookieStore(
+            stateDirectory = stateRoot,
+            importDirectory = NSTemporaryDirectory(),
+        )
+    }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStoreBinding(store: IosCookieStore): CookieStore = store
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieJarSource(store: IosCookieStore): CookieJarSource = IosCookieJarSource(store)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookiePicker(): IosCookiePicker = IosCookiePicker()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(picker: IosCookiePicker): CookieFilePicker =
+        CookieFilePicker { picker.pick() }
 
     @Provides
     @SingleIn(AppScope::class)
     fun thumbnailLoader(): ThumbnailLoader = ThumbnailLoader { null }
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun cookieStore(): CookieStore = CookieStore.Unavailable
 
     @Provides
     @SingleIn(AppScope::class)

@@ -23,6 +23,7 @@ fun interface FixtureStore {
  * One recorded response. Either [body] (synthesized inline) or [bodyResource]
  * (a redacted file under `shared/core/src/commonTest/resources/`) is used;
  * [urlPattern] is matched against the request URL with `*` wildcards.
+ * [redirectTo] turns the route into one redirect hop instead of a body.
  */
 data class FixtureRoute(
     val urlPattern: String,
@@ -32,9 +33,16 @@ data class FixtureRoute(
     val body: String? = null,
     val bodyResource: String? = null,
     val responseHeaders: Map<String, String> = emptyMap(),
+    /** Optional request-body marker; routes with the same URL can be told apart. */
+    val requestBodyContains: String? = null,
+    /** When set, the route answers with one redirect hop to this location. */
+    val redirectTo: String? = null,
 ) {
     internal fun matches(request: HttpRequest): Boolean =
-        method.equals(request.method, ignoreCase = true) && glob(urlPattern).matches(request.url)
+        method.equals(request.method, ignoreCase = true) &&
+            (requestBodyContains == null ||
+                request.body?.decodeToString()?.contains(requestBodyContains) == true) &&
+            glob(urlPattern).matches(request.url)
 
     internal fun bodyBytes(store: FixtureStore): ByteArray? =
         body?.encodeToByteArray() ?: bodyResource?.let { store.read(it) }?.encodeToByteArray()
@@ -63,6 +71,12 @@ class FixtureHttpTransfer(
         requests += request
         val route = routes.firstOrNull { it.matches(request) }
             ?: throw FixtureMissingException("No fixture for ${request.method} ${redactedPath(request.url)}")
+        route.redirectTo?.let { location ->
+            return HttpResponse.Redirect(
+                location = location,
+                statusCode = route.statusCode.takeIf { it != 200 } ?: 302,
+            )
+        }
         val bytes = route.bodyBytes(store)
             ?: throw FixtureMissingException("Fixture resource missing: ${route.bodyResource ?: route.urlPattern}")
         val body: HttpBody? = if (bytes.isEmpty()) null else ByteArrayHttpBody(bytes)

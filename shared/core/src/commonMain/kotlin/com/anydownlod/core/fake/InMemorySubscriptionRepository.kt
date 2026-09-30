@@ -2,6 +2,7 @@ package com.anydownlod.core.fake
 
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.domain.DownloadOptions
+import com.anydownlod.core.domain.JobError
 import com.anydownlod.core.domain.Subscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -108,6 +109,28 @@ class InMemorySubscriptionRepository(
 
     override fun checkAll() {
         _subscriptions.value.filterNot { it.paused }.map { it.id }.forEach(::checkNow)
+    }
+
+    override fun checkSelected(ids: List<String>) {
+        ids.forEach(::checkNow)
+    }
+
+    override fun recordCheck(
+        id: String,
+        seenIds: List<String>,
+        error: JobError?,
+        nextCheckAtEpochMillis: Long,
+    ): Boolean {
+        val existing = find(id) ?: return false
+        replace(
+            existing.copy(
+                seenIds = seenIds,
+                lastError = error,
+                lastCheckedAtEpochMillis = now(),
+                nextCheckAtEpochMillis = if (existing.paused) null else nextCheckAtEpochMillis,
+            ),
+        )
+        return true
     }
 
     /** Fake-only mutator for checks that need to store seen ids or an error. */

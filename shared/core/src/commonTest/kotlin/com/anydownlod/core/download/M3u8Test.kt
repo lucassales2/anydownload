@@ -97,15 +97,18 @@ class M3u8Test {
     }
 
     @Test
-    fun livePlaylistFailsTyped() {
+    fun livePlaylistReportsLiveAndTargetDuration() {
         val text = """
             #EXTM3U
             #EXT-X-TARGETDURATION:10
+            #EXT-X-MEDIA-SEQUENCE:7
             #EXTINF:9.0,
             seg0.ts
         """.trimIndent()
-        val result = assertIs<ManifestResult.Failed>(M3u8.parse(base, text))
-        assertTrue(result.reason.contains("Live"), result.reason)
+        val result = assertIs<ManifestResult.Media>(M3u8.parse(base, text))
+        assertTrue(result.isLive)
+        assertEquals(10L, result.targetDurationSeconds)
+        assertEquals(listOf(7L), result.fragments.map { it.sequence })
     }
 
     @Test

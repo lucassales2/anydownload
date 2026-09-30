@@ -72,11 +72,18 @@ class DesktopStore(
 
         val loadedSubscriptions = readJson(subscriptionsFile, SubscriptionsDocument(), warnings)
             ?.subscriptions?.map { it.toDomain() } ?: emptyList()
-        val settingsDocument = readJson(settingsFile, SettingsDocument(), warnings) ?: SettingsDocument()
-
-        cookieFilePath = settingsDocument.cookieFilePath
-        val settings = settingsDocument.toDomain().let { loaded ->
-            if (loaded.downloadRoot.isBlank()) loaded.copy(downloadRoot = defaultDownloadRoot()) else loaded
+        val settingsRead = readJson(settingsFile, SettingsDocument(), warnings)
+        val settings = if (settingsRead == null && currentSettings != null) {
+            // T-017: an invalid reload keeps the last known-good settings
+            // instead of silently reverting to defaults.
+            warnings += "The settings file could not be read; keeping the last known-good configuration."
+            currentSettings!!
+        } else {
+            val settingsDocument = settingsRead ?: SettingsDocument()
+            cookieFilePath = settingsDocument.cookieFilePath
+            settingsDocument.toDomain().let { loaded ->
+                if (loaded.downloadRoot.isBlank()) loaded.copy(downloadRoot = defaultDownloadRoot()) else loaded
+            }
         }
         currentSettings = settings
 
@@ -176,7 +183,9 @@ class DesktopStore(
         } catch (failure: Exception) {
             moveCorruptAside(path)
             warnings += "The previous ${path.fileName} could not be read."
-            fallback
+            // null marks an unreadable document so callers can keep their last
+            // known-good value; a missing file still returns [fallback].
+            null
         }
     }
 

@@ -164,6 +164,68 @@ class EnginePlaylistExpansionTest {
     }
 
     @Test
+    fun anExplicitLimitAboveFiftyRaisesTheCap() = runTest {
+        val extractor = PlaylistExtractor(playlistUrl, (1..60).map { entry("v$it") })
+        val engine = engine(this, extractor)
+
+        val parent = engine.submit(
+            DownloadRequest(
+                sourceUrl = playlistUrl,
+                options = DownloadOptions(startPolicy = StartPolicy.MANUAL, playlistItemLimit = 60),
+                idempotencyKey = "raise-cap",
+            ),
+        )
+        assertEquals(JobState.PENDING, parent.state)
+        engine.start(parent.id)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == parent.id }.state)
+        assertEquals(60, engine.jobs.value.childrenOf(parent.id).size)
+    }
+
+    @Test
+    fun playlistItemsSelectionCreatesOnlyTheChosenChildren() = runTest {
+        val extractor = PlaylistExtractor(playlistUrl, listOf(entry("v1"), entry("v2"), entry("v3")))
+        val engine = engine(this, extractor)
+
+        val parent = engine.submit(
+            DownloadRequest(
+                sourceUrl = playlistUrl,
+                options = DownloadOptions(playlistItems = "3,1"),
+                idempotencyKey = "items-spec",
+            ),
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(JobState.COMPLETED, engine.jobs.value.first { it.id == parent.id }.state)
+        val children = engine.jobs.value.childrenOf(parent.id)
+        assertEquals(
+            listOf("https://youtube.example/watch?v=v3", "https://youtube.example/watch?v=v1"),
+            children.map { it.request.sourceUrl },
+        )
+    }
+
+    @Test
+    fun anInvalidPlaylistItemsSpecFailsTheParentTyped() = runTest {
+        val extractor = PlaylistExtractor(playlistUrl, listOf(entry("v1")))
+        val engine = engine(this, extractor)
+
+        val parent = engine.submit(
+            DownloadRequest(
+                sourceUrl = playlistUrl,
+                options = DownloadOptions(playlistItems = "1,,2"),
+                idempotencyKey = "items-bad",
+            ),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val parentJob = engine.jobs.value.first { it.id == parent.id }
+        assertEquals(JobState.FAILED, parentJob.state)
+        assertEquals(JobErrorCode.INVALID_URL_OPTIONS, parentJob.error?.code)
+        assertTrue(engine.jobs.value.childrenOf(parent.id).isEmpty())
+    }
+
+    @Test
     fun limitZeroCapsExpansionAtFifty() = runTest {
         val extractor = PlaylistExtractor(playlistUrl, (1..60).map { entry("v$it") })
         val engine = engine(this, extractor)

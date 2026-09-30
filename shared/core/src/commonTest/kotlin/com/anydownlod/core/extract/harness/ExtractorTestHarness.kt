@@ -15,6 +15,7 @@ import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.extract.InfoDict
 import com.anydownlod.core.extract.InfoEntry
 import com.anydownlod.core.extract.InfoExtractor
+import com.anydownlod.core.extract.md5Hex
 import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.extract.Thumbnail
 

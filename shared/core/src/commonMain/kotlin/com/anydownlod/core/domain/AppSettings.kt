@@ -51,12 +51,44 @@ object PresetOptionKeys {
     const val SPLIT_BY_CHAPTERS = "splitByChapters"
     const val SPONSORBLOCK_REMOVE = "sponsorBlockRemove"
 
+    // T-017 typed keys. They are not shown in the Settings preset editor,
+    // which only edits the boolean switches, but the overlay accepts them.
+    const val AUDIO_CONTAINER = "audioContainer"
+    const val AUDIO_BITRATE = "audioBitrate"
+    const val CAPTION_LANGUAGE = "captionLanguage"
+    const val CAPTION_PREFERENCE = "captionPreference"
+    const val CAPTION_FORMAT = "captionFormat"
+    const val VIDEO_PROFILE = "videoProfile"
+    const val QUALITY = "quality"
+    const val VIDEO_CODEC = "videoCodec"
+    const val FILENAME_PREFIX = "filenamePrefix"
+    const val DESTINATION_FOLDER = "destinationFolder"
+    const val PLAYLIST_ITEM_LIMIT = "playlistItemLimit"
+    const val PLAYLIST_ITEMS = "playlistItems"
+
+    /** The five boolean switches the Settings preset editor shows. */
     val all: List<String> = listOf(
         EMBED_SUBTITLES,
         WRITE_METADATA,
         WRITE_THUMBNAIL,
         SPLIT_BY_CHAPTERS,
         SPONSORBLOCK_REMOVE,
+    )
+
+    /** Every key the typed preset overlay accepts, editor switches included. */
+    val typed: List<String> = all + listOf(
+        AUDIO_CONTAINER,
+        AUDIO_BITRATE,
+        CAPTION_LANGUAGE,
+        CAPTION_PREFERENCE,
+        CAPTION_FORMAT,
+        VIDEO_PROFILE,
+        QUALITY,
+        VIDEO_CODEC,
+        FILENAME_PREFIX,
+        DESTINATION_FOLDER,
+        PLAYLIST_ITEM_LIMIT,
+        PLAYLIST_ITEMS,
     )
 
 }
@@ -80,6 +112,15 @@ data class AppSettings(
     val clearCompletedAfterSeconds: Long = AppSettingsDefaults.CLEAR_COMPLETED_AFTER_SECONDS,
     val subscriptionIntervalMinutes: Int = AppSettingsDefaults.SUBSCRIPTION_INTERVAL_MINUTES,
     val theme: ThemePreference = ThemePreference.SYSTEM,
+    /**
+     * T-017 global network controls. [proxyUrl] is blank for a direct
+     * connection; a per-job proxy string is never accepted. [rateLimitKibPerSecond]
+     * and the sleep fields are 0 for "off".
+     */
+    val proxyUrl: String = "",
+    val rateLimitKibPerSecond: Int = 0,
+    val sleepRequestsSeconds: Int = 0,
+    val sleepIntervalSeconds: Int = 0,
     /** One-time choice for automatic clipboard checks. */
     val clipboardAccess: ClipboardAccess = ClipboardAccess.UNKNOWN,
     /**

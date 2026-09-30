@@ -10,6 +10,10 @@ import com.anydownlod.core.extract.harness.ExtractorTestRun
 import com.anydownlod.core.extract.harness.FixtureHttpTransfer
 import com.anydownlod.core.extract.harness.FixtureRoute
 import com.anydownlod.core.extract.harness.runCase
+import com.anydownlod.core.platform.ByteArrayHttpBody
+import com.anydownlod.core.platform.HttpRequest
+import com.anydownlod.core.platform.HttpResponse
+import com.anydownlod.core.platform.HttpTransfer
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -75,6 +79,152 @@ class YoutubeTabIEFixturesTest {
     }
 
     @Test
+    fun continuationPagesAreFollowedInOrder() = runTest {
+        val first = """
+            {"contents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":{"contents":[{"playlistVideoListRenderer":{"contents":[
+              {"playlistVideoRenderer":{"videoId":"AAAAAAAAAAA","title":{"simpleText":"One"}}},
+              {"continuationItemRenderer":{"continuationEndpoint":{"continuationCommand":{"token":"CONT1"}}}}
+            ]}}]}}]}},
+            "metadata":{"playlistMetadataRenderer":{"title":"Fixture Playlist"}}}
+        """.trimIndent()
+        val second = """
+            {"onResponseReceivedActions":[{"appendContinuationItemsAction":{"continuationItems":[
+              {"playlistVideoRenderer":{"videoId":"BBBBBBBBBBB","title":{"simpleText":"Two"}}},
+              {"continuationItemRenderer":{"continuationEndpoint":{"continuationCommand":{"token":"CONT2"}}}}
+            ]}}]}
+        """.trimIndent()
+        val third = """
+            {"onResponseReceivedActions":[{"appendContinuationItemsAction":{"continuationItems":[
+              {"playlistVideoRenderer":{"videoId":"CCCCCCCCCCC","title":{"simpleText":"Three"}}}
+            ]}}]}
+        """.trimIndent()
+        val bodies = ArrayDeque(listOf(first, second, third))
+        val requests = mutableListOf<String>()
+        val transfer = object : HttpTransfer {
+            override suspend fun execute(request: HttpRequest): HttpResponse {
+                requests += request.body?.decodeToString().orEmpty()
+                val body = bodies.removeFirst()
+                val bytes = body.encodeToByteArray()
+                return HttpResponse.Final(
+                    statusCode = 200,
+                    contentType = "application/json",
+                    totalBytes = bytes.size.toLong(),
+                    body = ByteArrayHttpBody(bytes),
+                )
+            }
+        }
+
+        val info = YoutubeTabIE(ExtractorHttp(transfer)).extract(playlistUrl)
+
+        assertEquals(listOf("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"), info.entries.map { it.id })
+        assertEquals(3, requests.size)
+        assertTrue(requests[1].contains("CONT1"), "second page uses the first continuation token")
+        assertTrue(requests[2].contains("CONT2"), "third page uses the second continuation token")
+    }
+
+    private class JsonTransfer(private val body: String) : HttpTransfer {
+        val requests = mutableListOf<String>()
+
+        override suspend fun execute(request: HttpRequest): HttpResponse {
+            requests += request.body?.decodeToString().orEmpty()
+            val bytes = body.encodeToByteArray()
+            return HttpResponse.Final(
+                statusCode = 200,
+                contentType = "application/json",
+                totalBytes = bytes.size.toLong(),
+                body = ByteArrayHttpBody(bytes),
+            )
+        }
+    }
+
+    @Test
+    fun aChannelHandleResolvesItsGridEntries() = runTest {
+        val body = """
+            {"metadata":{"channelMetadataRenderer":{"title":"Fixture Channel"}},
+             "contents":{"sectionListRenderer":{"contents":[
+               {"itemSectionRenderer":{"contents":[
+                 {"gridRenderer":{"items":[
+                   {"richItemRenderer":{"content":{"videoRenderer":{"videoId":"AAAAAAAAAAA","title":{"runs":[{"text":"Fixture One"}]}}}}},
+                   {"richItemRenderer":{"content":{"gridVideoRenderer":{"videoId":"BBBBBBBBBBB","title":{"simpleText":"Fixture Two"}}}}}
+                 ]}}
+               ]}}
+             ]}}}
+        """.trimIndent()
+        val transfer = JsonTransfer(body)
+
+        val info = YoutubeTabIE(ExtractorHttp(transfer)).extract("https://www.youtube.com/@FixtureChannel/videos")
+
+        assertEquals("Fixture Channel", info.title)
+        assertEquals(listOf("AAAAAAAAAAA", "BBBBBBBBBBB"), info.entries.map { it.id })
+        assertEquals("Fixture One", info.entries[0].title)
+        assertEquals("Fixture Two", info.entries[1].title)
+        assertTrue(transfer.requests.single().contains("@FixtureChannel"))
+    }
+
+    @Test
+    fun aMixListUsesThePlaylistPanelRenderer() = runTest {
+        val body = """
+            {"contents":{"playlistPanelRenderer":{"contents":[
+              {"playlistPanelVideoRenderer":{"videoId":"CCCCCCCCCCC","title":{"simpleText":"Mix One"}}},
+              {"playlistPanelVideoRenderer":{"videoId":"DDDDDDDDDDD","title":{"simpleText":"Mix Two"}}}
+            ]}}}
+        """.trimIndent()
+        val transfer = JsonTransfer(body)
+
+        val info = YoutubeTabIE(ExtractorHttp(transfer))
+            .extract("https://www.youtube.com/watch?v=YE7VzlLtp-4&list=RDAMVMfixture")
+
+        assertEquals("RDAMVMfixture", info.id)
+        assertEquals(listOf("CCCCCCCCCCC", "DDDDDDDDDDD"), info.entries.map { it.id })
+        assertTrue(transfer.requests.single().contains("VLRDAMVMfixture"))
+    }
+
+    @Test
+    fun aCustomChannelUrlFailsTypedWithoutTheResolver() = runTest {
+        val transfer = JsonTransfer("{}")
+        assertFailsWith<ExtractionError.UnsupportedUrl> {
+            YoutubeTabIE(ExtractorHttp(transfer)).extract("https://www.youtube.com/c/FixtureChannel")
+        }
+    }
+
+    @Test
+    fun channelHarnessCaseReadsGridEntries() = runTest {
+        val body = """
+            {"metadata":{"channelMetadataRenderer":{"title":"Fixture Channel"}},
+             "contents":{"sectionListRenderer":{"contents":[
+               {"itemSectionRenderer":{"contents":[
+                 {"gridRenderer":{"items":[
+                   {"richItemRenderer":{"content":{"videoRenderer":{"videoId":"AAAAAAAAAAA","title":{"runs":[{"text":"Fixture One"}]}}}}},
+                   {"richItemRenderer":{"content":{"gridVideoRenderer":{"videoId":"BBBBBBBBBBB","title":{"simpleText":"Fixture Two"}}}}}
+                 ]}}
+               ]}}
+             ]}}}
+        """.trimIndent()
+        val case = ExtractorCase(
+            url = "https://www.youtube.com/@FixtureChannel",
+            infoDict = mapOf(
+                "id" to Expect.Value("@FixtureChannel"),
+                "title" to Expect.Value("Fixture Channel"),
+                "entries" to Expect.Count(2),
+                "entries.0.id" to Expect.Value("AAAAAAAAAAA"),
+                "entries.1.id" to Expect.Value("BBBBBBBBBBB"),
+            ),
+            routes = listOf(
+                FixtureRoute(
+                    urlPattern = "https://www.youtube.com/youtubei/v1/browse*",
+                    method = "POST",
+                    contentType = "application/json",
+                    body = body,
+                ),
+            ),
+        )
+
+        val result = runCase(case, ExtractorTestRun(fixtures = ClasspathFixtureStore)) { http -> YoutubeTabIE(http) }
+
+        assertIs<CaseResult.Passed>(result, "case failed: $result")
+    }
+
+    @Test
     fun fixturePlaylistYieldsWatchEntriesInOrder() = runTest {
         val info = ie("playlist_page.json").extract(playlistUrl)
 
@@ -119,14 +269,23 @@ class YoutubeTabIEFixturesTest {
         supported.forEach { assertTrue(ie.suitable(it), "must match $it") }
 
         val unsupported = listOf(
-            "https://www.youtube.com/watch?v=AAAAAAAAAAA&list=PLfixture",
-            "https://www.youtube.com/playlist?list=RDfixture",
-            "https://www.youtube.com/channel/UCfixture",
-            "https://www.youtube.com/@fixture",
             "https://www.youtube.com/results?search_query=fixture",
             "https://www.youtube.com/live/AAAAAAAAAAA",
         )
         unsupported.forEach { assertFalse(ie.suitable(it), "must stay unsupported: $it") }
+
+        // T-124 forms now match the tab extractor. `/c/` and `/user/` match
+        // the URL but fail typed in `extract` because the resolver is not
+        // translated (see aCustomChannelUrlFailsTypedWithoutTheResolver).
+        val newlySupported = listOf(
+            "https://www.youtube.com/watch?v=AAAAAAAAAAA&list=PLfixture",
+            "https://www.youtube.com/playlist?list=RDfixture",
+            "https://www.youtube.com/channel/UCfixture000000000000000",
+            "https://www.youtube.com/@fixture/videos",
+            "https://www.youtube.com/c/FixtureChannel",
+            "https://www.youtube.com/user/FixtureChannel",
+        )
+        newlySupported.forEach { assertTrue(ie.suitable(it), "must match $it") }
     }
 
     @Test

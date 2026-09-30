@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    T-018: the Netscape cookies.txt is app-private state but must never ride
+    Android Auto Backup. There is no app-level cipher around the file; the
+    Settings copy says a manual copy of app data includes it.
+-->
+<full-backup-content>
+    <exclude domain="file" path="cookies.txt" />
+</full-backup-content>

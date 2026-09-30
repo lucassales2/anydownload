@@ -22,11 +22,15 @@ import com.anydownlod.android.engine.AndroidRouteClassifier
 import com.anydownlod.android.engine.AndroidRoutingEngine
 import com.anydownlod.android.engine.ChaquopyEngine
 import com.anydownlod.android.engine.ChaquopyPort
+import com.anydownlod.android.engine.cookies.AndroidCookieJarSource
+import com.anydownlod.android.engine.cookies.AndroidCookieStore
+import com.anydownlod.android.engine.AndroidSubscriptionDocumentStorage
 import com.anydownlod.android.engine.media.AndroidMediaToolkit
 import com.anydownlod.android.media.AndroidPlatformMuxer
 import com.anydownlod.core.AppGraph
 import com.anydownlod.core.CookieFilePicker
 import com.anydownlod.core.CookieStore
+import com.anydownlod.core.SharedLinkInbox
 import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.FileOpener
 import com.anydownlod.core.FileRevealer
@@ -38,6 +42,7 @@ import com.anydownlod.core.MediaPreviewSource
 import com.anydownlod.core.SettingsRepository
 import com.anydownlod.core.SubscriptionRepository
 import com.anydownlod.core.ToolProbe
+import com.anydownlod.core.cookies.CookieJarSource
 import com.anydownlod.core.di.SharedEngineBindings
 import com.anydownlod.ui.add.AddFormBindings
 import com.anydownlod.core.domain.AppSettings
@@ -57,7 +62,12 @@ import com.anydownlod.core.music.AudioMatcher
 import com.anydownlod.core.music.SpotifyDownloadService
 import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.persist.JobDocumentStore
+import com.anydownlod.core.persist.PersistedSubscriptionRepository
 import com.anydownlod.core.persist.PersistingDownloadEngine
+import com.anydownlod.core.subscriptions.RegistrySubscriptionEntrySource
+import com.anydownlod.core.subscriptions.ScanningSubscriptionRepository
+import com.anydownlod.core.subscriptions.SubscriptionScanner
+import com.anydownlod.core.subscriptions.enqueueSubscriptionEntry
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.JavaNetFileStore
 import com.anydownlod.core.platform.JavaNetHttpTransfer
@@ -91,18 +101,22 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
     val hostToolkitCapabilities: ToolkitCapabilities
     val hostSpotify: SpotifyDownloadService
     val hostOpenUrl: (String) -> Unit
+    val hostSharedLinkInbox: SharedLinkInbox
 
     override val previews: MediaPreviewSource get() = hostPreviews
     override val startupWarning: String? get() = hostStartupWarning
     override val toolkitCapabilities: ToolkitCapabilities get() = hostToolkitCapabilities
     override val spotify: SpotifyDownloadService? get() = hostSpotify
     override val openUrl: (String) -> Unit get() = hostOpenUrl
+    override val sharedLinkInbox: SharedLinkInbox? get() = hostSharedLinkInbox
 
     @DependencyGraph.Factory
     interface Factory {
         fun create(
             @Provides context: Context,
             @Provides port: ChaquopyPort = NoChaquopyPort,
+            @Provides cookiePicker: AndroidCookiePickerBridge = AndroidCookiePickerBridge.Unavailable,
+            @Provides sharedLinkInbox: SharedLinkInbox = SharedLinkInbox(),
         ): AndroidAppGraph
     }
 
@@ -206,6 +220,7 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
         persist: (List<DownloadJob>) -> Unit,
         registry: ExtractorRegistry,
         toolkit: AndroidMediaToolkit,
+        cookieJarSource: CookieJarSource,
         restored: AndroidRestoredJobs,
     ): HttpDownloadEngine = HttpDownloadEngine(
         transfer = transfer,
@@ -215,6 +230,7 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
         ioDispatcher = Dispatchers.Default,
         registry = registry,
         toolkit = toolkit,
+        cookieJarSource = cookieJarSource,
         persist = persist,
         seedJobs = restored.httpJobs,
     )
@@ -275,7 +291,25 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
+    fun subscriptions(
+        context: Context,
+        registry: ExtractorRegistry,
+        scope: CoroutineScope,
+        engine: Provider<DownloadEngine>,
+    ): SubscriptionRepository {
+        val storage = AndroidSubscriptionDocumentStorage(
+            File(context.getDir("state", Context.MODE_PRIVATE), "subscriptions.json"),
+        )
+        val delegate = InMemorySubscriptionRepository(
+            seedSubscriptions = PersistedSubscriptionRepository.restore(storage),
+        )
+        val persisted = PersistedSubscriptionRepository(delegate, storage)
+        val scanner = SubscriptionScanner(
+            repository = persisted,
+            entrySource = RegistrySubscriptionEntrySource(registry),
+        ) { subscription, entry -> enqueueSubscriptionEntry(engine(), subscription, entry) }
+        return ScanningSubscriptionRepository(persisted, scope, scanner)
+    }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -330,15 +364,27 @@ internal interface AndroidAppGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }
+    fun cookieStore(context: Context): AndroidCookieStore = AndroidCookieStore(
+        stateDirectory = Path.of(context.filesDir.absolutePath),
+        importDirectory = Path.of(context.cacheDir.absolutePath),
+    )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieStoreBinding(store: AndroidCookieStore): CookieStore = store
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieJarSource(store: AndroidCookieStore): CookieJarSource = AndroidCookieJarSource(store)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun cookieFilePicker(bridge: AndroidCookiePickerBridge): CookieFilePicker =
+        CookieFilePicker { bridge.pick() }
 
     @Provides
     @SingleIn(AppScope::class)
     fun thumbnailLoader(): ThumbnailLoader = ThumbnailLoader { null }
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun cookieStore(): CookieStore = CookieStore.Unavailable
 
     @Provides
     @SingleIn(AppScope::class)

@@ -12,6 +12,9 @@ package com.anydownlod.core.platform
  * [authorization] is a full `Authorization` header value that only trusted
  * metadata clients set (D6 Spotify); it never enters the [headers] map, so
  * extractor-declared headers still cannot carry credentials.
+ * [cookie] is a full `Cookie` header value that only the local cookie jar
+ * sets (D11 T-018); like [authorization] it is added after the header
+ * allowlist and never enters [SanitizedRequest.droppedHeaders].
  */
 data class HttpRequest(
     val url: String,
@@ -20,14 +23,15 @@ data class HttpRequest(
     val body: ByteArray? = null,
     val range: LongRange? = null,
     val authorization: String? = null,
+    val cookie: String? = null,
 ) {
     /**
      * Applies the request-header allowlist and turns [range] into a `Range`
-     * header. [authorization], when present, is added after the allowlist so
-     * it is the only way a credential leaves the device; the value never
-     * appears in [SanitizedRequest.droppedHeaders] or any diagnostic. The
-     * returned [SanitizedRequest.droppedHeaders] names are safe to report in
-     * redacted diagnostics (names only, never values).
+     * header. [authorization] and [cookie], when present, are added after the
+     * allowlist so the trusted fields are the only way a credential leaves the
+     * device; the values never appear in [SanitizedRequest.droppedHeaders] or
+     * any diagnostic. The returned [SanitizedRequest.droppedHeaders] names are
+     * safe to report in redacted diagnostics (names only, never values).
      */
     fun sanitized(): SanitizedRequest {
         val withRange = if (range != null && headers.keys.none { it.equals(HeaderNames.RANGE, ignoreCase = true) }) {
@@ -36,12 +40,14 @@ data class HttpRequest(
             headers
         }
         val sanitized = HttpHeaders.sanitize(withRange)
-        val accepted = if (!authorization.isNullOrBlank()) {
-            sanitized.accepted + (HeaderNames.AUTHORIZATION to authorization)
-        } else {
-            sanitized.accepted
+        var accepted = sanitized.accepted
+        if (!authorization.isNullOrBlank()) {
+            accepted = accepted + (HeaderNames.AUTHORIZATION to authorization)
         }
-        return SanitizedRequest(copy(headers = accepted, authorization = null), sanitized.dropped)
+        if (!cookie.isNullOrBlank()) {
+            accepted = accepted + (HeaderNames.COOKIE to cookie)
+        }
+        return SanitizedRequest(copy(headers = accepted, authorization = null, cookie = null), sanitized.dropped)
     }
 }
 
@@ -63,6 +69,7 @@ object HeaderNames {
     const val CONTENT_LENGTH = "content-length"
     const val LOCATION = "location"
     const val AUTHORIZATION = "authorization"
+    const val COOKIE = "cookie"
 }
 
 /**
@@ -70,11 +77,12 @@ object HeaderNames {
  *
  * Only names in [ALLOWLIST] leave the device through [sanitize]. `Cookie`,
  * `Authorization` from the header map, and every `X-Goog-*` auth header are
- * refused here until T-018; the visitor id is the one `x-goog-*` name
- * upstream's innertube clients may declare. A trusted caller may set the
- * explicit `HttpRequest.authorization` field instead (D6 Spotify metadata);
- * that value is added after this filter and never enters a diagnostic.
- * Refused names are dropped, never rewritten, and reported by name only.
+ * refused; the visitor id is the one `x-goog-*` name upstream's innertube
+ * clients may declare. A trusted caller may set the explicit
+ * `HttpRequest.authorization` field instead (D6 Spotify metadata) or the
+ * `HttpRequest.cookie` field (D11 T-018 jar); those values are added after
+ * this filter and never enter a diagnostic. Refused names are dropped, never
+ * rewritten, and reported by name only.
  */
 object HttpHeaders {
     val ALLOWLIST: Set<String> = setOf(

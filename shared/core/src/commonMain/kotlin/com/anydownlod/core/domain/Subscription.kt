@@ -19,6 +19,11 @@ data class Subscription(
     /** Empty means every title passes. Validated as a regex by the UI. */
     val titleFilterRegex: String = "",
     val skipMembersOnly: Boolean = false,
+    /**
+     * T-019: whether the first check may enqueue the existing backlog. False
+     * (the default) marks current items seen and downloads nothing.
+     */
+    val downloadExisting: Boolean = false,
     val downloadOptions: DownloadOptions,
     val lastCheckedAtEpochMillis: Long? = null,
     val nextCheckAtEpochMillis: Long? = null,

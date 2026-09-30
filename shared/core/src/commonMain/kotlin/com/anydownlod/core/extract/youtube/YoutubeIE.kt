@@ -20,6 +20,7 @@
  */
 package com.anydownlod.core.extract.youtube
 
+import com.anydownlod.core.extract.Chapter
 import com.anydownlod.core.extract.DownloaderOptions
 import com.anydownlod.core.extract.ExtractionError
 import com.anydownlod.core.extract.ExtractorHttp
@@ -27,6 +28,8 @@ import com.anydownlod.core.extract.ExtractorUtils
 import com.anydownlod.core.extract.InfoDict
 import com.anydownlod.core.extract.InfoExtractor
 import com.anydownlod.core.extract.MediaFormat
+import com.anydownlod.core.extract.SubtitleFormat
+import com.anydownlod.core.extract.SubtitleTrack
 import com.anydownlod.core.extract.Thumbnail
 import com.anydownlod.core.jsc.JsChallengeOutcome
 import com.anydownlod.core.jsc.JsChallengeProvider
@@ -55,6 +58,11 @@ import kotlinx.serialization.json.put
 class YoutubeIE(
     http: ExtractorHttp,
     private val jsRuntime: JsRuntime = NoJsRuntime,
+    /**
+     * E-13: optional PO-token provider. The default mints nothing, so
+     * token-gated formats stay dropped and the count is reported honestly.
+     */
+    private val poTokenProvider: PoTokenProvider = NoPoTokenProvider,
 ) : InfoExtractor(
     ieKey = IE_KEY,
     http = http,
@@ -67,38 +75,82 @@ class YoutubeIE(
     override suspend fun extract(url: String): InfoDict {
         val videoId = matchId(url) ?: throw ExtractionError.UnsupportedUrl()
         val page = fetchWatchPage(videoId)
-        val player = requestPlayer(videoId, page.visitorData)
+        val playerToken = poTokenProvider.tokenFor(
+            PoTokenRequest(videoId, client = "visionos", context = PoTokenContext.PLAYER, visitorData = page.visitorData),
+        )
+        val player = requestPlayer(videoId, page.visitorData, playerToken = playerToken)
 
         checkPlayability(player)
         val videoDetails = player.objectOrNull("videoDetails")
         val microformat = player.path("microformat", "playerMicroformatRenderer") as? JsonObject
-        checkNotLive(videoDetails)
+        // T-124 live: `isLiveContent` marks a live or was-live broadcast;
+        // `isLive` is true only while it is on air. A was-live video keeps its
+        // recorded VOD formats.
+        val liveNow = videoDetails?.booleanOrNull("isLiveContent") == true &&
+            videoDetails.booleanOrNull("isLive") == true
 
         val streamingData = player["streamingData"] as? JsonObject
-        val stage1 = mapFormats(streamingData)
-        val stage2 = if (jsRuntime.available) runCatching { resolveStage2(videoId, page, streamingData) }.getOrNull() else null
-        val mapped = if (stage2 != null) {
+        val mapped = if (liveNow) {
+            val hlsManifestUrl = streamingData?.stringOrNull("hlsManifestUrl")
+                ?: throw ExtractionError.NoFormats("This live stream has no HLS manifest.")
             MappedFormats(
-                formats = mergeFormats(stage2.first.formats, stage2.second.formats),
-                droppedNeedingRuntime = stage2.first.droppedNeedingRuntime + stage2.second.droppedNeedingRuntime,
+                formats = listOf(
+                    MediaFormat(
+                        formatId = "hls-live",
+                        url = hlsManifestUrl,
+                        ext = "mp4",
+                        protocol = "m3u8_native",
+                        formatNote = "live HLS",
+                        hasDrm = false,
+                    ),
+                ),
+                droppedNeedingRuntime = 0,
             )
         } else {
-            stage1
+            val stage1 = mapFormats(streamingData)
+            val webGvsToken = poTokenProvider.tokenFor(
+                PoTokenRequest(videoId, client = "web", context = PoTokenContext.GVS, visitorData = page.visitorData),
+            )
+            val stage2 = if (jsRuntime.available) {
+                runCatching { resolveStage2(videoId, page, streamingData, playerToken) }.getOrNull()
+            } else {
+                null
+            }
+            if (stage2 != null) {
+                val web = stage2.second
+                MappedFormats(
+                    formats = mergeFormats(
+                        stage2.first.formats,
+                        // The pin's `web` client requires a GVS PO token for its
+                        // HTTPS/DASH formats; without one they are dropped (E-13).
+                        if (webGvsToken != null) web.formats else emptyList(),
+                    ),
+                    droppedNeedingRuntime = stage2.first.droppedNeedingRuntime + web.droppedNeedingRuntime,
+                    droppedNeedingPoToken = if (webGvsToken != null) 0 else web.formats.size,
+                )
+            } else {
+                stage1
+            }
         }
         if (mapped.formats.isEmpty()) {
             throw if (mapped.droppedNeedingRuntime > 0) {
                 ExtractionError.NoFormats("No downloadable format is available without the JavaScript runtime.")
+            } else if (mapped.droppedNeedingPoToken > 0) {
+                ExtractionError.NoFormats("No downloadable format is available without a PO-token provider.")
             } else {
                 ExtractionError.NoFormats()
             }
         }
+
+        val (subtitles, automaticCaptions) = subtitleTracks(player)
+        val duration = videoDetails?.numberOrNull("lengthSeconds")
 
         return InfoDict(
             id = videoId,
             title = videoDetails?.stringOrNull("title"),
             formats = mapped.formats,
             thumbnails = thumbnails(videoDetails),
-            duration = videoDetails?.numberOrNull("lengthSeconds"),
+            duration = duration,
             uploader = videoDetails?.stringOrNull("author"),
             channel = videoDetails?.stringOrNull("author"),
             channelId = videoDetails?.stringOrNull("channelId")
@@ -119,8 +171,12 @@ class YoutubeIE(
                 page.ageRestricted -> 18
                 else -> 0
             },
-            isLive = false,
+            isLive = liveNow,
+            subtitles = subtitles,
+            automaticCaptions = automaticCaptions,
+            chapters = extractChapters(player, duration),
             formatsNeedingJs = mapped.droppedNeedingRuntime,
+            formatsNeedingPoToken = mapped.droppedNeedingPoToken,
         )
     }
 
@@ -173,8 +229,9 @@ class YoutubeIE(
         visitorData: String?,
         client: PlayerClient = PlayerClient.VISIONOS,
         signatureTimestamp: Long? = null,
+        playerToken: String? = null,
     ): JsonObject {
-        val body = playerRequestBody(videoId, client, signatureTimestamp)
+        val body = playerRequestBody(videoId, client, signatureTimestamp, playerToken)
         val headers = buildMap {
             put("content-type", "application/json")
             put("x-youtube-client-name", client.headerName)
@@ -220,7 +277,12 @@ class YoutubeIE(
         ),
     }
 
-    private fun playerRequestBody(videoId: String, client: PlayerClient, sts: Long?): ByteArray = buildJsonObject {
+    private fun playerRequestBody(
+        videoId: String,
+        client: PlayerClient,
+        sts: Long?,
+        playerToken: String? = null,
+    ): ByteArray = buildJsonObject {
         put(
             "context",
             buildJsonObject {
@@ -259,6 +321,14 @@ class YoutubeIE(
         )
         put("contentCheckOk", true)
         put("racyCheckOk", true)
+        // Upstream `_extract_player_response`: a provider-supplied player PO
+        // token rides in `serviceIntegrityDimensions` and is never stored.
+        playerToken?.takeIf { it.isNotBlank() }?.let { token ->
+            put(
+                "serviceIntegrityDimensions",
+                buildJsonObject { put("poToken", token) },
+            )
+        }
     }.toString().encodeToByteArray()
 
     // --------------------------------------------------------- stage 2 (EJS)
@@ -273,6 +343,7 @@ class YoutubeIE(
         videoId: String,
         page: WatchPageData,
         visionosStreaming: JsonObject?,
+        playerToken: String?,
     ): Pair<MappedFormats, MappedFormats>? {
         val playerUrl = page.playerUrl ?: return null
         val playerJs = fetchPlayerJs(playerUrl)
@@ -281,6 +352,7 @@ class YoutubeIE(
             visitorData = page.visitorData,
             client = PlayerClient.WEB,
             signatureTimestamp = page.signatureTimestamp,
+            playerToken = playerToken,
         )
         checkPlayability(webPlayer)
         val webStreaming = webPlayer["streamingData"] as? JsonObject
@@ -472,15 +544,14 @@ class YoutubeIE(
         }
     }
 
-    private fun checkNotLive(videoDetails: JsonObject?) {
-        val isLive = videoDetails?.booleanOrNull("isLiveContent") == true ||
-            videoDetails?.booleanOrNull("isLive") == true
-        if (isLive) throw ExtractionError.Unavailable("Live streams are not supported in this phase.")
-    }
-
     // --------------------------------------------------------------- formats
 
-    private data class MappedFormats(val formats: List<MediaFormat>, val droppedNeedingRuntime: Int)
+    private data class MappedFormats(
+        val formats: List<MediaFormat>,
+        val droppedNeedingRuntime: Int,
+        /** Web-client rows kept out because no GVS PO token was configured. */
+        val droppedNeedingPoToken: Int = 0,
+    )
 
     private fun mapFormats(streamingData: JsonObject?): MappedFormats {
         if (streamingData == null) return MappedFormats(emptyList(), 0)
@@ -632,6 +703,80 @@ class YoutubeIE(
         )
     }
 
+    // ---------------------------------------------------- subtitles/chapters
+
+    /**
+     * Upstream `_extract_formats_and_subtitles` caption handling: manual
+     * (`kind != 'asr'`) tracks become `subtitles`, ASR tracks become
+     * `automatic_captions`. Each track keeps the upstream format URLs
+     * (`json3`, `srv1..3`, `ttml`, `vtt`); file writing is D13.
+     */
+    private fun subtitleTracks(player: JsonObject): Pair<List<SubtitleTrack>, List<SubtitleTrack>> {
+        val pctr = player.path("captions", "playerCaptionsTracklistRenderer") as? JsonObject
+            ?: return emptyList<SubtitleTrack>() to emptyList()
+        val tracks = pctr["captionTracks"] as? JsonArray ?: return emptyList<SubtitleTrack>() to emptyList()
+        val manual = mutableListOf<SubtitleTrack>()
+        val automatic = mutableListOf<SubtitleTrack>()
+        for (element in tracks) {
+            val track = element as? JsonObject ?: continue
+            val baseUrl = track.stringOrNull("baseUrl") ?: continue
+            val language = track.stringOrNull("languageCode") ?: continue
+            val name = track.path("name", "simpleText").stringOrNull()
+                ?: (track.path("name", "runs") as? JsonArray)
+                    ?.mapNotNull { (it as? JsonObject)?.stringOrNull("text") }
+                    ?.joinToString("")
+                    ?.takeIf { it.isNotEmpty() }
+            val isAsr = track.stringOrNull("kind") == "asr"
+            val formats = SUBTITLE_FORMATS.map { format ->
+                SubtitleFormat(ext = format, url = updateQueryParam(baseUrl, "fmt", format))
+            }
+            val entry = SubtitleTrack(
+                language = language,
+                name = name,
+                automatic = isAsr,
+                needsPoToken = subtitleNeedsPoToken(baseUrl),
+                formats = formats,
+            )
+            if (isAsr) automatic += entry else manual += entry
+        }
+        return manual to automatic
+    }
+
+    /**
+     * Upstream flags a caption URL with `exp=xpe`/`xpv` when a PO token is
+     * needed. A SUBS token provider is not wired in this slice, so the flag is
+     * recorded on the track instead of dropping it.
+     */
+    private fun subtitleNeedsPoToken(baseUrl: String): Boolean {
+        val query = baseUrl.substringAfter('?', "").substringBefore('#')
+        return query.split('&').any { part ->
+            val name = part.substringBefore('=')
+            name == "exp" && listOf("xpe", "xpv").any { it in part.substringAfter('=', "") }
+        }
+    }
+
+    /**
+     * `playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer...`
+     * `chapteredPlayerBarRenderer.chapters`: the pin reads start milliseconds
+     * and a simple title; an end time is filled from the next chapter (or the
+     * duration). The engagement-panel fallback is not translated.
+     */
+    private fun extractChapters(player: JsonObject, duration: Double?): List<Chapter> {
+        val list = player.path(
+            "playerOverlays", "playerOverlayRenderer", "decoratedPlayerBarRenderer",
+            "decoratedPlayerBarRenderer", "playerBar", "chapteredPlayerBarRenderer", "chapters",
+        ) as? JsonArray ?: return emptyList()
+        val starts = list.mapNotNull { element ->
+            val renderer = (element as? JsonObject)?.path("chapterRenderer") as? JsonObject
+                ?: return@mapNotNull null
+            val startMillis = renderer.numberOrNull("timeRangeStartMillis") ?: return@mapNotNull null
+            Chapter(startTime = startMillis / 1000.0, title = renderer.path("title", "simpleText").stringOrNull())
+        }.sortedBy { it.startTime }
+        return starts.mapIndexed { index, chapter ->
+            chapter.copy(endTime = starts.getOrNull(index + 1)?.startTime ?: duration)
+        }
+    }
+
     companion object {
         const val IE_KEY: String = "Youtube"
 
@@ -664,6 +809,9 @@ class YoutubeIE(
         /** The watch page needs more than the extractor default to hold ytcfg. */
         const val VISITOR_PAGE_MAX_BYTES: Int = 2 * 1024 * 1024
 
+        /** Upstream `_SUBTITLE_FORMATS` read at the pin; D13 converts one to SRT/VTT/TTML/TXT. */
+        val SUBTITLE_FORMATS: List<String> = listOf("json3", "srv1", "srv2", "srv3", "ttml", "vtt")
+
         private val AGE_STATUSES = setOf("AGE_CHECK_REQUIRED", "AGE_VERIFICATION_REQUIRED")
         private val AGE_REASONS = listOf(
             "confirm your age", "age-restricted", "age restricted", "inappropriate",
@@ -695,6 +843,9 @@ private fun JsonObject.booleanOrNull(key: String): Boolean? =
     (this[key] as? JsonPrimitive)?.booleanOrNull
 
 private fun JsonObject.objectOrNull(key: String): JsonObject? = this[key] as? JsonObject
+
+private fun JsonElement?.stringOrNull(): String? =
+    (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
 private fun JsonElement.path(vararg keys: String): JsonElement? {
     var current: JsonElement? = this

@@ -12,6 +12,7 @@
  */
 package com.anydownlod.core.download
 
+import com.anydownlod.core.cookies.withActiveCookie
 import com.anydownlod.core.extract.MediaFragment
 import com.anydownlod.core.platform.HttpMethods
 import com.anydownlod.core.platform.HttpRequest
@@ -20,6 +21,7 @@ import com.anydownlod.core.platform.HttpTransfer
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 
 sealed interface FragmentOutcome {
     /** [skipped] lists the 0-based media-fragment indexes that were unavailable. */
@@ -42,6 +44,8 @@ class FragmentDownloader(
      * true for VOD). Engine callers pass the upstream default explicitly.
      */
     private val skipUnavailableFragments: Boolean = true,
+    /** T-017: waits this long before each fragment hop; 0 = off. */
+    private val requestDelayMillis: Long = 0,
 ) {
 
     companion object {
@@ -174,7 +178,9 @@ class FragmentDownloader(
     private suspend fun fetch(url: String, range: LongRange?): FetchResult {
         var current = url
         for (hop in 0..5) {
-            when (val response = transfer.execute(HttpRequest(current, method = HttpMethods.GET, range = range))) {
+            if (requestDelayMillis > 0) delay(requestDelayMillis)
+            val request = HttpRequest(current, method = HttpMethods.GET, range = range).withActiveCookie()
+            when (val response = transfer.execute(request)) {
                 is HttpResponse.Redirect -> current = response.location
                 is HttpResponse.Final -> {
                     if (response.statusCode !in 200..299) {

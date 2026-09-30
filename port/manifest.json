@@ -32,12 +32,13 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
       ],
       "status": "partial",
-      "scope": "Single video via the JS-less visionos client and, with the runtime, the web client: watch?v=, youtu.be/, /shorts/, /embed/, /live/, youtube-nocookie.com/embed/, music.youtube.com/watch?v=; metadata and streamingData formats; signatureCipher and n resolved through the bundled solver and merged visionos-first. No playlists, channels, live streams, comments, subtitles, cookies, PO tokens, or other clients.",
+      "scope": "Single video via the JS-less visionos client and, with the runtime, the web client: watch?v=, youtu.be/, /shorts/, /embed/, /live/, youtube-nocookie.com/embed/, music.youtube.com/watch?v=; metadata and streamingData formats; signatureCipher and n resolved through the bundled solver and merged visionos-first. T-124 adds the E-13 PO-token provider hook (`serviceIntegrityDimensions`), drops web-client formats until a GVS token is configured, and fills subtitle tracks and chapter markers on the info dict. Live streams, playlists, channels, comments, and the remaining innertube clients stay partial.",
       "tasks": [
         "T-060",
-        "T-070"
+        "T-070",
+        "T-124"
       ],
-      "portedAt": "2026-09-24"
+      "portedAt": "2026-09-30"
     },
     {
       "id": "YoutubeSearchIE",
@@ -47,11 +48,12 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeSearch.kt"
       ],
       "status": "partial",
-      "scope": "Innertube search subset for the D6 matcher: WEB_REMIX songs/videos and WEB video results parsed to video id, title, channel/artists, album, duration, views, and the verified song flag, with the request context/headers from `_tab.py`'s `_search_results`. No continuations, playlist/channel/album result sections, filters beyond songs/videos, other clients, or download.",
+      "scope": "Innertube search subset for the D6 matcher: WEB_REMIX songs/videos and WEB video results parsed to video id, title, channel/artists, album, duration, views, and the verified song flag, with the request context/headers from `_tab.py`'s `_search_results`. T-124 accounts for `YoutubeSearchURLIE`/`YoutubeMusicSearchURLIE`: the search-URL extractors and continuations are not registered; only the matcher call exists.",
       "tasks": [
-        "T-085"
+        "T-085",
+        "T-124"
       ],
-      "portedAt": "2026-09-25"
+      "portedAt": "2026-09-30"
     },
     {
       "id": "YoutubeTabIE",
@@ -61,11 +63,12 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeTabIE.kt"
       ],
       "status": "partial",
-      "scope": "Playlist URL subset: youtube.com/playlist?list= and music.youtube.com/playlist?list= (www/m forms) only; one innertube `browse` request with the web client context; flat playlistVideoRenderer video id and title pairs in document order, first page only, hard cap 50. No channels, mixes (list=RD...), watch-page list parameters, continuations, cookies, live, other clients, or download.",
+      "scope": "Tab URL subset: /playlist?list=, /watch?...&list= (including RD... mixes), /channel/<UC id>, and /@handle (with an optional tab). One innertube `browse` request with the web client context; flat playlistVideoRenderer/playlistPanelVideoRenderer/videoRenderer/gridVideoRenderer/reelItemRenderer video id and title pairs in document order; T-124 follows continuation pages in order (bounded at 10) up to the hard cap of 50 and applies the T-124 `--playlist-items` selection (1-based ranges, negatives, steps) before the cap. `/c/` and `/user/` match the URL but fail typed because `navigation/resolve_url` is not translated; feeds and cookies stay partial.",
       "tasks": [
-        "T-108"
+        "T-108",
+        "T-124"
       ],
-      "portedAt": "2026-09-29"
+      "portedAt": "2026-09-30"
     },
     {
       "id": "TwitterIE",
@@ -75,11 +78,1036 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterIE.kt"
       ],
       "status": "partial",
-      "scope": "Single public status through the public syndication guest lookup: x.com, twitter.com, mobile.x.com, mobile.twitter.com /user/status/<id> (plus www/m and i/web forms); tweet metadata; media grouped by stable media id; MP4 and HLS variants; photo-only, protected, and deleted fail typed. No GraphQL or legacy API, no cookies, no stored guest token, no photos, quoted tweets, cards, Spaces, broadcasts, Amplify, or shortener, and no download.",
+      "scope": "Single public status through the public syndication guest lookup: x.com, twitter.com, mobile.x.com, mobile.twitter.com /user/status/<id> (plus www/m and i/web forms); tweet metadata; media grouped by stable media id; MP4 and HLS variants; photo-only, protected, and deleted fail typed. No GraphQL or legacy API, no cookies, no stored guest token, no photos, quoted tweets, or download; T-125 puts cards, Amplify, broadcasts, Spaces, and the shortener in the sibling `TwitterRemainder.kt` modules.",
       "tasks": [
-        "T-094"
+        "T-094",
+        "T-125"
       ],
       "portedAt": "2026-09-25"
+    },
+    {
+      "id": "TwitterCardIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterRemainder.kt"
+      ],
+      "status": "partial",
+      "scope": "`/i/cards/tfw/v1/<id>` and `/i/videos/tweet/<id>` match and delegate to the status extractor through the registry `redirectUrl` seam, mirroring upstream `url_result(TwitterIE)`. The card page itself is not scraped.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitterAmplifyIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterRemainder.kt"
+      ],
+      "status": "partial",
+      "scope": "`amp.twimg.com/v/<uuid>`: the `twitter:amplify:vmap` meta is read and the VMAP `videoVariant`/`MediaFile` subset is parsed into formats (URL-decoded variant URLs, bitrate, URL dimensions, player-meta dimensions on the first format) plus the `twitter:image:src` thumbnail. The m3u8 manifest is not expanded at extraction time; subtitles from the VMAP are not mapped.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitterBroadcastIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterRemainder.kt"
+      ],
+      "status": "partial",
+      "scope": "`/i/broadcasts/<id>` and `/i/events/<id>` match and fail typed: extraction needs `broadcasts/show.json` and `live_video_stream/status/<media_key>` with the Twitter API bearer and guest tokens, which are not committed.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitterSpacesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterRemainder.kt"
+      ],
+      "status": "partial",
+      "scope": "`/i/spaces/<13-char id>` matches and fails typed: extraction needs the `AudioSpaceById` GraphQL query and `live_video_stream/status/<media_key>` with the Twitter API bearer token, which is not committed.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitterShortenerIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitter.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterRemainder.kt"
+      ],
+      "status": "partial",
+      "scope": "`t.co/<code>` and the `tco:<code>` keyword resolve a bounded redirect chain with the `curl` user agent, strip the safety-warning prefix, and re-enter the registry through `redirectUrl` (upstream `url_result`).",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "BiliBiliIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/bilibili/BilibiliIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Single-video subset: `/video/BV...`, `/video/av...`, and the festival `?bvid=` form; page `window.__INITIAL_STATE__` metadata; anthology `?p=` handling through registry entries; WBI-signed `/x/player/wbi/playurl` with dash audio/video and legacy `durl` format mapping. Bangumi, cheese, intl, space, lists, search, category, audio, dynamic, and live classes are planned and named below. Interactive chapters, danmaku/CC subtitles, comments, tags, and the multi-FLV workaround are not translated.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "BiliBiliPlayerIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/bilibili/BilibiliIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`player.bilibili.com/player.html?aid=<id>` canonicalizes to the `av` watch URL and re-enters the registry through `redirectUrl` (upstream `url_result(BiliBiliIE)`); the player page itself is not scraped.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "BiliBiliBangumiIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`/bangumi/play/ep<id>` and `/bangumi/play/ss<id>` need the PGC season API; not translated. The URL does not match a registered extractor and falls through to the desktop CLI or Android Chaquopy.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliBiliBangumiMediaIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`/bangumi/media/md<id>` needs the PGC media API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliBiliBangumiSeasonIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`/bangumi/play/ss<id>` season resolution needs the PGC season API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliBiliDynamicIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`t.bilibili.com/<id>` dynamic API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliBiliSearchIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`search.bilibili.com` result pages; the app has no search extractor; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliIntlIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`bilibili.tv` international video API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliIntlSeriesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`bilibili.tv` international series API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BiliLiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`live.bilibili.com/<room>` live API and stream protocols; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliAudioAlbumIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`audio.bilibili.com` album API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliAudioIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`audio.bilibili.com` track API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliCategoryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`www.bilibili.com/v/<category>` category pages; full-site crawl is not supported; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliCheeseIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`cheese` course API and paywall handling; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliCheeseSeasonIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`cheese/play/ss<id>` season API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliCollectionListIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "User collection lists need the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliFavoritesListIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "Favorites need the account API and are a login wall; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "`medialist/play` URLs need the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliSeriesListIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "Series lists need the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliSpaceAudioIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "Space audio tab needs the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliSpaceVideoIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "Space video tab and continuation need the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BilibiliWatchlaterIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bilibili.py",
+      "status": "planned",
+      "scope": "Watch-later needs the account API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/vimeo/VimeoIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Public single-video subset: `vimeo.com/<id>`, `www.vimeo.com/<id>`, the 10-hex unlisted suffix, `channels/<channel>/<id>`, and `player.vimeo.com/video/<id>`. The watch page's `vimeo.clip_page_config` / `vimeo.vod_title_page_config` points at the player config JSON; the player page carries `playerConfig` inline. Progressive files, HLS/DASH CDN manifests (recorded as `m3u8_native`/`http_dash_segments` and parsed by the engine at download), text tracks, thumbs, chapters, owner, live flags, description, date, view count, and license map onto the info dict. Password-protected videos fail typed; the private API path (`_extract_from_api`, unlisted-hash API, OAuth clients, original/source formats) and logged-in-only formats are not translated. The other ten classes are planned and named below.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "VimeoOndemandIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/ondemand/<slug>` needs the on-demand rental/purchase flow and the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoChannelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/channels/<id>` channel listings and pagination need the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/<user>` user video listings need the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoAlbumIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/album|showcase/<id>` albums need the album API and its password flow; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoGroupsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/groups/<id>` group listings need the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoReviewIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/<user>/review/<id>/<hash>` review pages need the review API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoWatchLaterIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`:vimeowatchlater` and `vimeo.com/watchlater` need cookies and the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoLikesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/<user>/likes` needs the private user API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoProIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeopro.com/<user>/<slug>` portfolio sites need the private API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VimeoEventIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vimeo.py",
+      "status": "planned",
+      "scope": "`vimeo.com/event/<id>` event pages need the event API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "PeerTubeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/peertube.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/peertube/PeerTubeIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Public video subset for the two UUID shapes: `/api/v1/videos/<id>`, `/videos/watch/<id>`, `/videos/embed/<id>`, `/w/<id>`, and `peertube:<host>:<id>`. The API maps progressive `files`, `streamingPlaylists` HLS manifests and their files, captions, the long-description call, account/channel names, views, duration, publish date, NSFW age limit, and thumbnails. The upstream `_INSTANCES_RE` known-instance allowlist is not copied; the URL shape is the match and extraction trusts the API response. No cookie or token is stored.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "PeerTubePlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/peertube.py",
+      "status": "planned",
+      "scope": "Account (`/a/<name>`), channel (`/c/<name>`), and video-playlist (`/w/p/<id>`) listings need the paginated API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BBCCoUkIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/bbc/BBCCoUkIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Programme and iPlayer subset: `bbc.co.uk/programmes/<pid>` and `bbc.co.uk/iplayer/[<channel>/](episode|playlist)/<pid>`. The page is read for a `vpid` (`mediator.bind` or the `vpid` field), then the public media selector is called for `iptv-all` and `pc`. Direct HTTP, HLS (`m3u8_native`), DASH (`http_dash_segments`), and English TTML captions map onto the info dict. HDS, RTMP, ASX, and the legacy programme-playlist fallback are not translated; a page without a vpid fails typed. iPlayer TV playback is geo- and licence-restricted: `geolocation`/`notukerror` fail typed as geo-restricted when no media set returns a format. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "BBCIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "status": "planned",
+      "scope": "The `bbc.com` article/news scraper branches (SIMORGH JSON, media meta, embedded playlists, `__PWA_PRELOADED_STATE__`) are not translated; the `bbc.co.uk` programme/iPlayer media-selector path is in `BBCCoUkIE`. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BBCCoUkArticleIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "status": "planned",
+      "scope": "`bbc.co.uk/programmes/articles/<id>` article pages are not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BBCCoUkIPlayerEpisodesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "status": "planned",
+      "scope": "`bbc.co.uk/iplayer/episodes/<id>` episode listings need the playlist API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BBCCoUkIPlayerGroupIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "status": "planned",
+      "scope": "`bbc.co.uk/iplayer/group/<id>` group listings need the playlist API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "BBCCoUkPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/bbc.py",
+      "status": "planned",
+      "scope": "`bbc.co.uk/programmes/<id>/(episodes|broadcasts|clips)` listings need the programme playlist API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/tiktok/TikTokIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Webpage subset: `www.tiktok.com/@<user>/video/<id>`, `/embed/<id>`, `/share/video/<id>`, and `www.tiktokv.com` forms. The `__UNIVERSAL_DATA_FOR_REHYDRATION__` `webapp.video-detail` item maps bitrateInfo UrlKeys, play/download addresses, the music track, captions, thumbnails, author and stats metadata, and the private/blocked status codes. The app API (device registration, mobile endpoints), the challenge-cookie/impersonation path, and logged-in-only access are not translated; a page without universal data fails typed. A login wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TikTokVMIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/tiktok/TikTokIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`vm.tiktok.com`, `vt.tiktok.com`, and `www.tiktok.com/t/<code>` resolve one redirect hop with the `facebookexternalhit` user agent and re-enter the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TikTokUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "`tiktok.com/@<user>` profile listings need the web API and its signed query; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokSoundIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "`tiktok.com/music/<slug>-<id>` sound listings need the web API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokEffectIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "`tiktok.com/sticker/<slug>-<id>` effect listings need the web API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokTagIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "`tiktok.com/tag/<name>` tag listings need the web API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokCollectionIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "`tiktok.com/@<user>/collection/<title>-<id>` listings need the web API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TikTokLiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/tiktok.py",
+      "status": "planned",
+      "scope": "TikTok live rooms need the live API and stream keys; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudEmbedIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/soundcloud/SoundcloudIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`w|player|p.soundcloud.com/player?...url=` decodes the target URL and one query secret token and re-enters the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "SoundcloudIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/soundcloud/SoundcloudIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Track subset: `soundcloud.com/<uploader>/<title>[/<token>]` and the `api.soundcloud.com`/`api-v2` track URLs. The API client id is discovered at runtime from the main page's script assets, never stored or committed, and refreshed once on an auth failure. `media.transcodings` map progressive and `m3u8_native` audio formats with codec and abr metadata; DRM protocols are dropped and a DRM-only track fails typed. Artwork size families, secret tokens, and metadata map onto the info dict. The original download format, OAuth login, sets/playlists, users, stations, related, search, and comments are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "SoundcloudPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`api.soundcloud.com/playlists/<id>` playlist listings need the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudRelatedIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`soundcloud.com/<user>/<track>/(albums|sets|recommended)` related listings need the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudSearchIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`scsearch` search needs the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudSetIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`soundcloud.com/<uploader>/sets/<slug>` set listings and pagination need the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudTrackStationIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`soundcloud.com/stations/track/<name>/<id>` stations need the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`soundcloud.com/<user>` and tab listings need the API pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "SoundcloudUserPermalinkIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/soundcloud.py",
+      "status": "planned",
+      "scope": "`api.soundcloud.com/users/<id>` user listings need the API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "FacebookAdsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/facebook.py",
+      "status": "planned",
+      "scope": "`facebook.com/ads/library/?id=<id>` ads need a sign-in and the ads API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "FacebookIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/facebook.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/facebook/FacebookIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Classic server-JS subset: `facebook.com/<page>/videos/<id>`, `video.php?v=`, `video/embed?v=`, `watch/?v=`, `posts/`, `events/`, `groups/`, `watchparty/`, and the `facebook:<id>` keyword. The `handleServerJS`/`s.handle` `VideoConfig` instances carry `sd_src`/`hd_src`/`sd_src_no_ratelimit`/`hd_src_no_ratelimit` and the `dash_manifest` XML (parsed through the shared MPD parser); `og:` metadata, `ownerName`, `data-utime`, and view counts map onto the info dict; formats carry the `facebookexternalhit/1.1` user agent and the 250 MiB chunk hint. The `data-sjs` relay/GraphQL paths, the tahoe fallback, watch parties, ads, and photos are not translated; a page without the classic data fails typed as a sign-in wall. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "FacebookPluginsVideoIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/facebook.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/facebook/FacebookIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`facebook.com/plugins/video.php?...href=` decodes the target and re-enters the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "FacebookRedirectURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/facebook.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/facebook/FacebookIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`facebook.com/flx/warn/?u=` decodes the safety redirect target and re-enters the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "FacebookReelIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/facebook.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/facebook/FacebookIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`facebook.com/reel/<id>` canonicalizes to `m.facebook.com/watch/?v=<id>` and re-enters the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitchClipsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "status": "planned",
+      "scope": "Clip slugs need the clip GraphQL and a clip playback token; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TwitchCollectionIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "status": "planned",
+      "scope": "`twitch.tv/collections/<id>` listings need the GraphQL pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TwitchStreamIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitch/TwitchIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Live channel subset: `twitch.tv/<channel>` (listing paths excluded), `go|m.twitch.tv`, and `player.twitch.tv/?channel=`. The public GraphQL stream metadata and `streamPlaybackAccessToken` mint a runtime usher HLS URL recorded as one `m3u8_native` format; an offline channel fails typed. The `CLIENT_ID` constant is Twitch's public web GraphQL identifier, not a credential; no OAuth token, cookie, guest token, or signed media URL is stored. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "TwitchVideosClipsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "status": "planned",
+      "scope": "`/<channel>/clips` listings need the GraphQL pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TwitchVideosCollectionsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "status": "planned",
+      "scope": "`/<channel>/videos?filter=collections` listings need the GraphQL pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TwitchVideosIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "status": "planned",
+      "scope": "`/<channel>/videos` listings need the GraphQL pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "TwitchVodIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/twitch.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitch/TwitchIE.kt"
+      ],
+      "status": "partial",
+      "scope": "VOD subset: `twitch.tv/<channel>/v|video/<id>`, `twitch.tv/videos/<id>`, the player and schedule forms. The public GraphQL `VideoMetadata` persisted query and the `videoPlaybackAccessToken` mint a runtime usher HLS URL recorded as one `m3u8_native` format; the engine resolves the variants at download time. Title, description, duration, owner, date, and views map onto the info dict. Storyboards and chapter moments are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "InstagramIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/instagram.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/instagram/InstagramIE.kt"
+      ],
+      "status": "partial",
+      "scope": "Logged-out post subset: `/p/`, `/tv/`, `/reel/`, and `/reels/` URLs (optionally behind one profile segment). The `data-sjs` RelayPrefetchedStreamCache data is searched for `xig_polaris_media.if_not_gated_logged_out` (or the older `xdt_api__v1__media__shortcode__web_info.items`); video versions, the DASH manifest, image candidates, caption, user, date, and views map onto the info dict, and carousels become bounded media items. A page without that data falls back to the `og:video` meta pair, then fails typed as a sign-in wall. The API `media/<id>/info/` path, comments, and the logged-in product path are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "InstagramIOSIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/instagram.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/instagram/InstagramIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`instagram://media?id=<pk>` converts the numeric pk to its shortcode and re-enters the registry.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "InstagramStoryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/instagram.py",
+      "status": "planned",
+      "scope": "`instagram.com/stories/<user>/<id>` needs the story API and usually a sign-in; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "InstagramTagIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/instagram.py",
+      "status": "planned",
+      "scope": "`instagram.com/explore/tags/<tag>` listings need the API pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "InstagramUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/instagram.py",
+      "status": "planned",
+      "scope": "Profile and tab listings need the API pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "DailymotionIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dailymotion.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/dailymotion/DailymotionIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`dai.ly/<id>`, `dailymotion.<tld>/video|embed/video|swf/video/<id>`, `player.html?video=<id>`, and the `lequipe.fr` host forms. The public `player/metadata/video/<xid>` JSON maps the quality list (HTTP plus `m3u8_native` HLS), subtitles, posters/thumbnails, duration, date, owner, explicit flag, and the `is_live` flag; `DM007` fails typed as geo-restricted. The authenticated GraphQL media call and its hardcoded OAuth client credentials are deliberately not copied, so description, like, and view counts stay out. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "DailymotionPlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dailymotion.py",
+      "status": "planned",
+      "scope": "`dailymotion.<tld>/playlist/<id>` listings need the API pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "DailymotionSearchIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dailymotion.py",
+      "status": "planned",
+      "scope": "`dailymotion.<tld>/search/<term>/videos` needs the search API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "DailymotionUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/dailymotion.py",
+      "status": "planned",
+      "scope": "User and tab listings need the API pagination; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VKIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vk.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/vk/VKIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`vk.com/video_ext.php?oid=…&id=…` (and the `daxab.com` forms) read the public embed page's `playerParams`; `vk.com/video<oid>_<id>` and `vk.com/clip<oid>_<id>` post to the public `al_video.php` AJAX endpoint. Both map the `url<cache>` progressive formats, HLS (`m3u8_native`), DASH (`http_dash_segments`), RTMP, subtitle entries, title, author, duration, thumbnail, date, live flag, and view count. Login code 3, error code 8, region blocks, and removal messages fail typed. User-video listings, wall posts, VK Play, chapters, and the YouTube/RuTube/Dailymotion/OK/Sibnet embed re-dispatch are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "VKUserVideosIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vk.py",
+      "status": "planned",
+      "scope": "User video listings need the paginated AJAX; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VKWallPostIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vk.py",
+      "status": "planned",
+      "scope": "Wall post videos need the wall AJAX and attachment parsing; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VKPlayIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vk.py",
+      "status": "planned",
+      "scope": "`vkplay.live/<user>/record/<id>` records need the VK Play API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "VKPlayLiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/vk.py",
+      "status": "planned",
+      "scope": "`vkplay.live/<channel>` live channels need the VK Play API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "PatreonIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/patreon.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/patreon/PatreonIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`patreon.com/posts/<id>` and `creation?hid=<id>`. The public `api/posts/<id>` JSON:API response maps the title, cleaned content, thumbnail, publish date, user include, campaign include, the `post_file` download, and `media` includes with a `download_url` + `size_bytes` (mimetype extension). One attachment becomes `formats`; several become bounded media items. An embed-only post re-dispatches its Vimeo player URL or the raw embed URL. `current_user_can_view = false` fails typed as a patron wall. The campaign/search classes, comments, the media API for inlined content, and the Vids.io/YouTube embed classification are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "PatreonCampaignIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/patreon.py",
+      "status": "planned",
+      "scope": "`patreon.com/<vanity>` and `api/campaigns/<id>/posts` listings need the paginated campaign API; not translated.",
+      "tasks": [
+        "T-125"
+      ]
+    },
+    {
+      "id": "ArchiveOrgIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/archiveorg.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/archiveorg/ArchiveOrgIE.kt"
+      ],
+      "status": "partial",
+      "scope": "`archive.org/details|embed/<identifier>[/<entry>]`. The embeddable player's `<play-av playlist=…>` JSON demarks the playlist entries and subtitle tracks; the public `metadata/<identifier>` API supplies item metadata, files, thumbnails, and formats. A single entry becomes the main info dict with `formats`; a multi-entry item becomes bounded child-job entries addressed by `/details/<identifier>/<entry>` URLs. Unknown extensions and private files (no archive.org sign-in) are skipped. `YoutubeWebArchiveIE` is planned under T-124; reviews and the Mixch host are not translated. A login wall or DRM wall is Partial.",
+      "tasks": [
+        "T-125"
+      ],
+      "portedAt": "2026-09-30"
     },
     {
       "id": "common.py",
@@ -122,10 +1150,11 @@
       "upstreamPath": "yt_dlp/utils/_utils.py",
       "kotlinFiles": [
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/ExtractorUtils.kt",
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/Md5.kt",
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSorter.kt"
       ],
       "status": "partial",
-      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), jsToJson (`js_to_json` subset: comments, single/backtick quotes, unquoted keys, trailing commas, undefined/void 0, hex/octal, new Date/new X, parseInt; no vars, templates, or new Map), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, determineExt (`determine_ext` with the `KNOWN_EXTENSIONS` subset the HLS/DASH slice needs), parseIso8601, unifiedStrdate, parseFilesize, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
+      "scope": "searchRegex (`_search_regex`), htmlSearchMeta (`_html_search_meta`), parseJson (`_parse_json`), jsToJson (`js_to_json` subset: comments, single/backtick quotes, unquoted keys, trailing commas, undefined/void 0, hex/octal, new Date/new X, parseInt; no vars, templates, or new Map), traverse (`traverse_obj` subset), urlOrNone, intOrNone, floatOrNone, strOrNone, unescapeHtml, parseCodecs, mimetype2ext, determineExt (`determine_ext` with the `KNOWN_EXTENSIONS` subset the HLS/DASH slice needs), parseIso8601, unifiedStrdate, parseFilesize, the RFC 1321 `md5Hex` the Bilibili WBI signature needs, and the `FormatSorter` field tables and preference tuple logic. Everything else stays unported.",
       "tasks": [
         "T-057",
         "T-058",
@@ -141,11 +1170,12 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
       ],
       "status": "partial",
-      "scope": "The visionos INNERTUBE_CLIENTS entry, `_extract_context` language/UTC handling, `generate_api_headers` (client name/version, origin, visitor id, user agent), and the `youtubei/v1/player` call shape. All other clients, cookies, PO tokens, and the initial webpage/ytcfg extraction beyond visitor data are not translated. The `web` client context (client name 1, version 2.20260708.00.00) and its player request are translated for the stage-2 path; cookies, PO tokens, and other clients stay out.",
+      "scope": "The visionos INNERTUBE_CLIENTS entry, `_extract_context` language/UTC handling, `generate_api_headers` (client name/version, origin, visitor id, user agent), the `youtubei/v1/player` call shape, and T-124's optional player PO-token field. The remaining pin clients the authed path uses (web_embedded, tv_downgraded) and the android/ios/mweb/tv/web_music/web_creator tables are not translated; cookies ride the shared T-018 jar instead.",
       "tasks": [
-        "T-060"
+        "T-060",
+        "T-124"
       ],
-      "portedAt": "2026-09-24"
+      "portedAt": "2026-09-30"
     },
     {
       "id": "youtube/_video.py",
@@ -155,11 +1185,12 @@
         "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
       ],
       "status": "partial",
-      "scope": "Single-video URL subset, visionos player request, `_get_checkok_params`, playbackContext, playability-status error mapping, streamingData to format fields, http_chunk_size, and single-video metadata. No playlists, channels, live, comments, subtitles, cookies, PO tokens, signature/n solving, storyboards, or storyboard/MULTIFEED paths. Stage 2 adds the `web` client query, the watch-page player JS URL/STS extraction, the player JS fetch and session cache, `signatureCipher`/`n` resolution through the bundled solver, and the visionos-first dedupe merge. No playlists, channels, live, comments, subtitles, cookies, PO tokens, storyboards, or non-web clients.",
+      "scope": "Single-video URL subset, visionos player request, `_get_checkok_params`, playbackContext, playability-status error mapping, streamingData to format fields, http_chunk_size, single-video metadata, subtitle tracks, chapter markers, and GVS/player PO-token gating. T-124 adds live recognition: an on-air video exposes its HLS manifest as a `m3u8_native` format and `isLive`; a was-live video keeps its recorded formats. `--live-from-start`, storyboards, comments, and the auth/player clients stay partial.",
       "tasks": [
-        "T-060"
+        "T-060",
+        "T-124"
       ],
-      "portedAt": "2026-09-24"
+      "portedAt": "2026-09-30"
     },
     {
       "id": "jsc/provider.py",
@@ -197,8 +1228,7 @@
       "kotlinFiles": [
         "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/ExtractorTestHarness.kt",
         "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/FixtureHttpTransfer.kt",
-        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/FixtureRedactor.kt",
-        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/Md5.kt"
+        "shared/core/src/commonTest/kotlin/com/anydownlod/core/extract/harness/FixtureRedactor.kt"
       ],
       "status": "partial",
       "scope": "expect_info_dict/expect_value matcher semantics from test/test_download.py and test/helpers.py: exact values, md5:, int/str/float, re:, count:, startswith:, mincount:, maxcount:, nested dicts; the fixture-store transfer and the redactor. The Python test runner is not translated.",
@@ -250,6 +1280,234 @@
         "T-073"
       ],
       "portedAt": "2026-09-24"
+    },
+    {
+      "id": "YoutubeClipIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_clip.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "Clip URL `/clip/<id>` and clip section extraction are not translated; the base watch URL is handled by YoutubeIE.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeConsentRedirectIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `consent.youtube.com/m?continue=` redirect form is not translated; the decoded watch URL is matched directly by YoutubeIE.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeFavouritesIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `:ytfav` keyword maps to `playlist?list=LL` and needs cookies; keyword forms are not HTTP URLs the UI accepts and are not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeHistoryIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `:ythis` keyword maps to `feed/history` and needs cookies; the feed endpoint and keyword are not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeLivestreamEmbedIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "`/embed/live_stream?channel=` maps to `/channel/<id>/live`; channel and live tab extraction are not translated yet.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeMusicSearchURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_search.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeSearch.kt"
+      ],
+      "status": "partial",
+      "scope": "The innertube search call used by the D6 matcher exists; the `music.youtube.com/search?q=` URL extractor, its `sp` sections, and continuations are not registered.",
+      "tasks": [
+        "T-085",
+        "T-124"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "YoutubeNotificationsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_notifications.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The notification menu endpoint and `:ytnotif` keyword are not translated; they require cookies.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubePlaylistIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_tab.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeTabIE.kt"
+      ],
+      "status": "partial",
+      "scope": "The `/playlist?list=` URL form with continuations is translated by YoutubeTabIE; the bare playlist-id and embedded `?list=` forms are not.",
+      "tasks": [
+        "T-108",
+        "T-124"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "YoutubeRecommendedIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `:ytrec` keyword and bare `youtube.com` map to `feed/recommended`; the feed endpoint and keyword are not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeSearchURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_search.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeSearch.kt"
+      ],
+      "status": "partial",
+      "scope": "The innertube search call used by the D6 matcher exists; the `youtube.com/results?search_query=` URL extractor and continuations are not registered.",
+      "tasks": [
+        "T-085",
+        "T-124"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "YoutubeShortsAudioPivotIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "`/source/<id>/shorts` maps to the `sfv_audio_pivot` feed with a generated browse param; not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeSubscriptionsIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `:ytsubs` keyword maps to `feed/subscriptions` and needs cookies; not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeTruncatedIDIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_mistakes.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The truncated 1-10 character watch id hint is not translated; the URL matches no extractor and fails typed.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeTruncatedURLIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_mistakes.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The quoted-shell watch URL hint is not translated; the URL matches no extractor and fails typed.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeWatchLaterIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `:ytwatchlater` keyword maps to `playlist?list=WL` and needs cookies; not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeWebArchiveIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/archiveorg.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The web.archive.org saved-YouTube URL form and `ytarchive:` keyword are an archive.org extractor, not part of the youtube package; not translated in D12.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "YoutubeYtBeIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/YoutubeIE.kt"
+      ],
+      "status": "partial",
+      "scope": "youtu.be video URLs (with and without a time parameter) are matched by YoutubeIE; the `list=` playlist hop from a youtu.be URL is not translated.",
+      "tasks": [
+        "T-060",
+        "T-124"
+      ],
+      "portedAt": "2026-09-30"
+    },
+    {
+      "id": "YoutubeYtUserIE",
+      "kind": "extractor",
+      "upstreamPath": "yt_dlp/extractor/youtube/_redirect.py",
+      "kotlinFiles": [],
+      "status": "planned",
+      "scope": "The `ytuser:` prefix maps to `/user/<name>`; the prefix and channel tabs are not translated.",
+      "tasks": [
+        "T-124"
+      ]
+    },
+    {
+      "id": "youtube/pot/provider.py",
+      "kind": "jsc",
+      "upstreamPath": "yt_dlp/extractor/youtube/pot/provider.py",
+      "kotlinFiles": [
+        "shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/youtube/PoTokenProvider.kt"
+      ],
+      "status": "partial",
+      "scope": "The `PoTokenProvider` request/response interface (video id, client, PLAYER/GVS/SUBS context, visitor data) and the default no-token provider. The plugin director, per-client policy table, and token minting are not translated; without a provider, GVS-gated formats stay dropped (E-13).",
+      "tasks": [
+        "T-124"
+      ],
+      "portedAt": "2026-09-30"
     }
   ]
 }

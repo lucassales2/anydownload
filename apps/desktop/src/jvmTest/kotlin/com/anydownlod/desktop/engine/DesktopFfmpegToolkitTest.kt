@@ -2,6 +2,7 @@ package com.anydownlod.desktop.engine
 
 import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.postprocess.MediaFilePath
+import com.anydownlod.core.postprocess.SponsorSegment
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.core.postprocess.ToolkitError
 import java.nio.file.Files
@@ -159,6 +160,9 @@ class DesktopFfmpegToolkitTest {
                 ),
                 canEmbedTags = true,
                 canEmbedArtwork = true,
+                canEmbedSubtitles = true,
+                canClip = true,
+                canRemoveSegments = true,
                 lyricsContainers = setOf(
                     AudioContainer.M4A,
                     AudioContainer.MP3,
@@ -272,6 +276,70 @@ class DesktopFfmpegToolkitTest {
             val tags = FfmpegFixtures.probeTags(ffprobe, audio)
             assertEquals("Fixture Song", tags["title"])
             assertEquals("[00:01.00] line one\n[00:02.00] line two", tags["lyrics"])
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun embedSubtitlesMuxesAnSrtTrackIntoTheMedia() = runBlocking {
+        val (ffmpeg, ffprobe) = FfmpegFixtures.assumeTools()
+        val directory = tempDir()
+        try {
+            val video = directory.resolve("clip.mp4")
+            FfmpegFixtures.generateVideoOnly(ffmpeg, video)
+            val subtitles = directory.resolve("subs.srt")
+            Files.writeString(subtitles, "1\n00:00:00,000 --> 00:00:01,000\nHello\n")
+            val toolkit = DesktopFfmpegToolkit()
+
+            toolkit.embedSubtitles(path(video), path(subtitles), "eng")
+
+            val streams = FfmpegFixtures.probeStreams(ffprobe, video)
+            assertTrue(streams.any { it.first == "subtitle" }, "the subtitle stream is present: $streams")
+            assertTrue(streams.any { it.first == "video" }, "the video stream is kept: $streams")
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun clipCopiesTheRequestedRange() = runBlocking {
+        val (ffmpeg, ffprobe) = FfmpegFixtures.assumeTools()
+        val directory = tempDir()
+        try {
+            val video = directory.resolve("clip.mp4")
+            FfmpegFixtures.generateVideoOnly(ffmpeg, video)
+            val destination = directory.resolve("cut.mp4")
+            Files.createFile(destination)
+            val toolkit = DesktopFfmpegToolkit()
+
+            toolkit.clip(path(video), startMillis = 0, endMillis = 500, destination = path(destination))
+
+            val streams = FfmpegFixtures.probeStreams(ffprobe, destination)
+            assertTrue(streams.any { it.first == "video" }, "the clip keeps the video stream: $streams")
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun removeSegmentsReencodesWithoutTheCutRange() = runBlocking {
+        val (ffmpeg, ffprobe) = FfmpegFixtures.assumeTools()
+        val directory = tempDir()
+        try {
+            val video = directory.resolve("source.mp4")
+            FfmpegFixtures.generateVideoOnly(ffmpeg, video)
+            val destination = directory.resolve("trimmed.mp4")
+            Files.createFile(destination)
+
+            DesktopFfmpegToolkit().removeSegments(
+                path(video),
+                listOf(SponsorSegment("sponsor", 0, 400)),
+                path(destination),
+            )
+
+            val streams = FfmpegFixtures.probeStreams(ffprobe, destination)
+            assertTrue(streams.any { it.first == "video" }, "the trimmed file keeps a video stream: $streams")
         } finally {
             directory.toFile().deleteRecursively()
         }

@@ -38,6 +38,7 @@ internal fun fallbackViewModelFactory(graph: AppGraph): AnyDownloadViewModelFact
                 repository = graph.settings,
                 toolProbe = graph.toolProbe,
                 cookieStore = graph.cookieStore,
+                browserCookieImport = graph.browserCookieImport,
                 spotifyAuth = graph.spotifyAuth,
                 pickFolder = FolderPicker { graph.pickFolder() },
                 pickCookieFile = CookieFilePicker { graph.pickCookieFile() },
@@ -50,7 +51,9 @@ internal fun fallbackViewModelFactory(graph: AppGraph): AnyDownloadViewModelFact
                 revealFile = FileRevealer { graph.revealFile(it) },
             )
         },
-        SubscriptionsViewModel::class to { SubscriptionsViewModel(graph.subscriptions) },
+        SubscriptionsViewModel::class to {
+            SubscriptionsViewModel(graph.subscriptions, graph.subscriptionsPauseOnSuspend)
+        },
         QueueViewModel::class to {
             QueueViewModel(graph.engine, UrlOpener { graph.openUrl(it) })
         },

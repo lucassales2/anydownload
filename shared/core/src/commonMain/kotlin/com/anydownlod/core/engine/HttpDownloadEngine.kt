@@ -3,9 +3,15 @@ package com.anydownlod.core.engine
 import com.anydownlod.core.ArtifactDeletionResult
 import com.anydownlod.core.DownloadEngine
 import com.anydownlod.core.SettingsRepository
+import com.anydownlod.core.cookies.ActiveCookieJar
+import com.anydownlod.core.cookies.CookieJar
+import com.anydownlod.core.cookies.CookieJarSource
+import com.anydownlod.core.cookies.CookieJarState
+import com.anydownlod.core.cookies.withActiveCookie
 import com.anydownlod.core.domain.Artifact
 import com.anydownlod.core.domain.ArtifactKind
 import com.anydownlod.core.domain.AudioContainer
+import com.anydownlod.core.domain.CaptionFormat
 import com.anydownlod.core.domain.DownloadJob
 import com.anydownlod.core.domain.DownloadOptions
 import com.anydownlod.core.domain.DownloadRequest
@@ -17,8 +23,10 @@ import com.anydownlod.core.domain.JobState
 import com.anydownlod.core.domain.MediaTags
 import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.OverwriteMode
+import com.anydownlod.core.domain.SponsorBlockOutcome
 import com.anydownlod.core.domain.StartPolicy
 import com.anydownlod.core.extract.ExtractionError
+import com.anydownlod.core.extract.ExtractorHttp
 import com.anydownlod.core.download.FragmentDownloader
 import com.anydownlod.core.download.FragmentOutcome
 import com.anydownlod.core.download.M3u8
@@ -36,6 +44,7 @@ import com.anydownlod.core.extract.MediaFormat
 import com.anydownlod.core.format.CompiledSpec
 import com.anydownlod.core.format.FormatSelector
 import com.anydownlod.core.format.OptionsToSpec
+import com.anydownlod.core.format.PresetOverlay
 import com.anydownlod.core.format.Selection
 import com.anydownlod.core.platform.ContentRange
 import com.anydownlod.core.platform.FileHandle
@@ -47,7 +56,11 @@ import com.anydownlod.core.platform.HttpRequest
 import com.anydownlod.core.platform.HttpResponse
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.engineCriticalSection
+import com.anydownlod.core.postprocess.CaptionConverter
+import com.anydownlod.core.postprocess.CaptionSelector
 import com.anydownlod.core.postprocess.MediaFilePath
+import com.anydownlod.core.postprocess.SponsorBlockClient
+import com.anydownlod.core.postprocess.SponsorBlockResult
 import com.anydownlod.core.postprocess.MediaToolkit
 import com.anydownlod.core.postprocess.ToolkitError
 import com.anydownlod.core.postprocess.UnavailableToolkit
@@ -57,6 +70,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,6 +79,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
+import kotlinx.serialization.json.Json
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -103,6 +118,20 @@ class HttpDownloadEngine(
      */
     private val registry: ExtractorRegistry? = null,
     /**
+     * Loads the stored cookie file for a job whose options set
+     * `useCookies`. Null (web and the explicit tests) makes such a job fail
+     * typed instead of sending a request without the user's jar. The engine
+     * loads one snapshot per job; extractor, media, and fragment requests
+     * read that same snapshot.
+     */
+    private val cookieJarSource: CookieJarSource? = null,
+    /**
+     * T-017 download archive. A source whose extractor key and media id are
+     * already present completes as archived without a request; a completed
+     * download records its entry. The default archives nothing.
+     */
+    private val archive: DownloadArchive = NoDownloadArchive,
+    /**
      * The host media toolkit. The web host and tests keep the default
      * [UnavailableToolkit]: the compiler then never emits a merge.
      */
@@ -129,14 +158,26 @@ class HttpDownloadEngine(
         /** Largest artwork image the engine will fetch for tag embedding. */
         const val ARTWORK_MAX_BYTES = 5 * 1024 * 1024
 
+        /** Largest caption body the engine will fetch for a sidecar (T-015). */
+        const val CAPTION_MAX_BYTES = 5 * 1024 * 1024
+
+        /** T-015 info sidecar encoder; no secrets are added, only the info dict. */
+        private val infoJson = Json {
+            prettyPrint = true
+            encodeDefaults = false
+        }
+
         /**
          * The container a D5 merge writes. A codec pair this container cannot
          * hold fails typed instead of being silently saved as one stream.
          */
         const val MERGE_CONTAINER_EXT = "mp4"
 
-        /** ADR-012: playlist expansion hard-stops at 50 entries. */
+        /** ADR-012: playlist expansion defaults to 50; an explicit user limit may be higher. */
         const val PLAYLIST_ITEM_CAP = 50
+
+        /** T-124: bounded live-HLS polls so a stuck stream cannot loop forever. */
+        const val MAX_LIVE_POLLS = 10_000
 
         /**
          * T-134: how many mid-body continuations one attempt may make before
@@ -153,6 +194,8 @@ class HttpDownloadEngine(
     private val idempotency = mutableMapOf<String, String>()
     private val running = mutableMapOf<String, Job>()
     private val cancelRequested = mutableMapOf<String, Boolean>()
+    /** T-015: the last extraction per job, used for caption/thumbnail sidecars. */
+    private val extractedInfo = mutableMapOf<String, InfoDict>()
     private var activeWorkers = 0
 
     /**
@@ -244,6 +287,7 @@ class HttpDownloadEngine(
             running.remove(jobId)?.cancel()
             _jobs.value = _jobs.value.filterNot { it.id == job.id }
             idempotency.filterValues { it == job.id }.keys.toList().forEach { idempotency.remove(it) }
+            extractedInfo.remove(job.id)
             persist(_jobs.value)
         }
         return true
@@ -332,18 +376,18 @@ class HttpDownloadEngine(
                 confirmCancelled(jobId)
                 return
             }
+            // T-017: the per-attempt sleep interval (0 = off) is read once.
+            val sleepIntervalSeconds = settings.settings.value.sleepIntervalSeconds
+            if (sleepIntervalSeconds > 0) delay(sleepIntervalSeconds * 1000L)
             val url = findJob(jobId)?.request?.sourceUrl ?: return
-            val options = findJob(jobId)?.request?.options ?: DownloadOptions()
+            // T-017: presets overlay once per attempt and the effective set is
+            // immutable for that attempt; the safety pass runs after merging.
+            val options = effectiveOptions(request)
             try {
                 if (handleExistingArtifact(jobId, request)) return
-                val extractor = registry?.suitableFor(url)
-                if (extractor != null) {
-                    extractAndDownload(jobId, url, options, extractor)
-                } else {
-                    update(jobId, persistNow = false) {
-                        it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
-                    }
-                    downloadDirectFile(jobId, url, options, extractHtml = true)
+                dispatchJob(jobId, url, options)
+                if (findJob(jobId)?.state == JobState.COMPLETED) {
+                    publishSidecars(jobId, options)
                 }
             } catch (cancelled: CancellationException) {
                 if (isCancelRequested(jobId)) confirmCancelled(jobId) else throw cancelled
@@ -356,6 +400,99 @@ class HttpDownloadEngine(
             }
         } finally {
             releaseWorkerSlot()
+        }
+    }
+
+    /**
+     * T-017: the effective options for one attempt. The selected presets
+     * overlay in Settings order, the explicit form values win, and the safety
+     * pass runs after every layer. Computed once per attempt, never mutated
+     * while the attempt runs.
+     */
+    private fun effectiveOptions(request: DownloadRequest): DownloadOptions {
+        val selected = settings.settings.value.presets.filter { it.id in request.options.presetIds }
+        return if (selected.isEmpty()) {
+            PresetOverlay.enforceSafety(request.options)
+        } else {
+            PresetOverlay.apply(request.options, selected)
+        }
+    }
+
+    /**
+     * Runs the registry or direct-file route under the job's cookie snapshot.
+     * When `useCookies` is set the snapshot is resolved once (T-018); a
+     * missing, empty, or fully expired file fails typed before any request,
+     * and every extractor, media, and fragment request in the job reads the
+     * same jar.
+     */
+    private suspend fun dispatchJob(jobId: String, url: String, options: DownloadOptions) {
+        val jar = prepareCookieJar(jobId, options)
+        if (options.useCookies && jar == null) return
+        val work: suspend () -> Unit = {
+            val extractor = registry?.suitableFor(url)
+            if (extractor != null) {
+                extractAndDownload(jobId, url, options, extractor)
+            } else {
+                update(jobId, persistNow = false) {
+                    it.copy(state = JobState.DOWNLOADING, progress = JobProgress(phase = "downloading"))
+                }
+                downloadDirectFile(jobId, url, options, extractHtml = true)
+            }
+        }
+        if (jar != null) {
+            withContext(ActiveCookieJar(jar, now() / 1000L)) { work() }
+        } else {
+            work()
+        }
+    }
+
+    /**
+     * The T-018 cookie gate: null when the job did not opt in; the job's jar
+     * snapshot when it did; a typed failure when the jar is missing, empty, or
+     * fully expired. Error messages name no cookie names, values, or paths.
+     */
+    private suspend fun prepareCookieJar(jobId: String, options: DownloadOptions): CookieJar? {
+        if (!options.useCookies) return null
+        val source = cookieJarSource
+        if (source == null) {
+            fail(
+                jobId,
+                JobErrorCode.INVALID_URL_OPTIONS,
+                "Cookie use is not available on this device.",
+                retryable = false,
+            )
+            return null
+        }
+        val jar = source.currentJar()
+        if (jar == null) {
+            fail(
+                jobId,
+                JobErrorCode.INVALID_URL_OPTIONS,
+                "No cookie file is configured. Add one in Settings.",
+                retryable = false,
+            )
+            return null
+        }
+        return when (jar.stateAt(now() / 1000L)) {
+            CookieJarState.READY -> jar
+            CookieJarState.ALL_EXPIRED -> {
+                fail(
+                    jobId,
+                    JobErrorCode.INVALID_URL_OPTIONS,
+                    "The saved cookie file has no unexpired cookies. Replace it in Settings.",
+                    retryable = false,
+                )
+                null
+            }
+            CookieJarState.EMPTY -> {
+                fail(
+                    jobId,
+                    JobErrorCode.INVALID_URL_OPTIONS,
+                    "The saved cookie file has no cookies. Replace it in Settings.",
+                    retryable = false,
+                )
+                null
+            }
         }
     }
 
@@ -412,6 +549,22 @@ class HttpDownloadEngine(
             }
             val mapped = extractionJobError(error)
             fail(jobId, mapped.code, mapped.message, mapped.retryable)
+            return
+        }
+        val extracted = if (info.extractorKey == null) info.copy(extractorKey = extractor.ieKey) else info
+        engineCriticalSection(lock) { extractedInfo[jobId] = extracted }
+        // T-017 archive: an already-downloaded media completes without a
+        // request. Only the extractor key and media id are recorded.
+        val archiveEntry = ArchiveEntry.of(extracted.extractorKey, extracted.id)
+        if (archiveEntry != null && archive.contains(archiveEntry)) {
+            update(jobId) {
+                it.copy(
+                    state = JobState.COMPLETED,
+                    progress = JobProgress(phase = "archived"),
+                    error = null,
+                    finishedAtEpochMillis = now(),
+                )
+            }
             return
         }
         update(jobId) {
@@ -505,7 +658,9 @@ class HttpDownloadEngine(
         val parent = findJob(parentJobId) ?: return
         val batchId = parent.request.parentBatchId ?: parent.id
         val cap = if (options.playlistItemLimit > 0) {
-            minOf(options.playlistItemLimit, PLAYLIST_ITEM_CAP)
+            // T-124: an explicit user limit is honored even above the default
+            // cap; the default stays 50 when no limit is set.
+            options.playlistItemLimit
         } else {
             PLAYLIST_ITEM_CAP
         }
@@ -513,7 +668,23 @@ class HttpDownloadEngine(
         val seen = mutableSetOf<String>()
         var created = 0
 
-        for ((index, entry) in info.entries.withIndex()) {
+        val entries = if (options.playlistItems.isBlank()) {
+            info.entries
+        } else {
+            try {
+                PlaylistItemSelection.select(info.entries, options.playlistItems)
+            } catch (invalid: IllegalArgumentException) {
+                fail(
+                    parentJobId,
+                    JobErrorCode.INVALID_URL_OPTIONS,
+                    "The playlist item selection is invalid.",
+                    retryable = false,
+                )
+                return
+            }
+        }
+
+        for ((index, entry) in entries.withIndex()) {
             if (created >= cap) break
             if (isCancelRequested(parentJobId)) break
             val entryId = entry.id?.takeIf { it.isNotBlank() } ?: "entry-$index"
@@ -970,6 +1141,238 @@ class HttpDownloadEngine(
             runCatching { temp.handle.discard() }
             return null
         }
+        // T-016 clip: an explicit range wins over a URL timestamp. A host
+        // without the cut capability fails typed instead of publishing the
+        // whole file as if the clip had applied.
+        val clip = when (
+            val parsed = ClipRangeParser.parse(
+                options.clipStart,
+                options.clipEnd,
+                // The original request URL carries the timestamp; the media URL
+                // passed here may not.
+                findJob(jobId)?.request?.sourceUrl ?: sourceUrl,
+            )
+        ) {
+            is ClipRangeParser.Result.Invalid -> {
+                fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, parsed.reason, retryable = false)
+                runCatching { temp.handle.discard() }
+                return null
+            }
+
+            is ClipRangeParser.Result.Ok -> parsed.range
+        }
+        // T-016 SponsorBlock: opt-in external lookup. A removal cannot be
+        // combined with a clip or chapter split in this phase (defined
+        // interaction). No segments, an unreachable service, or no video id
+        // keep the media and record the outcome on the job.
+        if (options.sponsorBlockRemove) {
+            if (clip != null || options.splitByChapters) {
+                fail(
+                    jobId,
+                    JobErrorCode.INVALID_URL_OPTIONS,
+                    "SponsorBlock removal cannot be combined with a clip or chapter split in this phase.",
+                    retryable = false,
+                )
+                runCatching { temp.handle.discard() }
+                return null
+            }
+            val info = engineCriticalSection(lock) { extractedInfo[jobId] }
+            val client = SponsorBlockClient(ExtractorHttp(transfer))
+            when (val outcome = client.fetch(info?.id.orEmpty())) {
+                is SponsorBlockResult.Segments -> {
+                    if (!toolkit.capabilities().canRemoveSegments) {
+                        fail(
+                            jobId,
+                            JobErrorCode.UNSUPPORTED_FORMAT,
+                            "This host cannot remove SponsorBlock segments.",
+                            retryable = false,
+                        )
+                        runCatching { temp.handle.discard() }
+                        return null
+                    }
+                    val destination = runCatching {
+                        fileStore.createTempFile(artifactExt ?: temp.suggestedExt ?: "mp4")
+                    }.getOrNull()
+                    if (destination == null) {
+                        fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+                        runCatching { temp.handle.discard() }
+                        return null
+                    }
+                    var published = false
+                    try {
+                        destination.close()
+                        try {
+                            toolkit.removeSegments(
+                                source = fileStore.mediaFilePath(temp.handle),
+                                segments = outcome.segments,
+                                destination = fileStore.mediaFilePath(destination),
+                            )
+                        } catch (error: ToolkitError) {
+                            val mapped = toolkitJobError(error)
+                            fail(jobId, mapped.code, mapped.message, mapped.retryable)
+                            return null
+                        }
+                        val relativePath = artifactPath(
+                            options,
+                            sourceUrl,
+                            artifactTitle ?: temp.suggestedTitle,
+                            artifactExt ?: temp.suggestedExt,
+                            requestedPath(jobId),
+                        ) ?: run {
+                            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                            return null
+                        }
+                        published = publishAndComplete(
+                            jobId = jobId,
+                            handle = destination,
+                            downloaded = temp.bytes,
+                            totalBytes = temp.totalBytes,
+                            options = options,
+                            relativePath = relativePath,
+                            tagsEmbedded = tagsEmbeddedOf(tags),
+                            lyricsEmbedded = lyricsEmbeddedOf(tags),
+                        )
+                        if (published) {
+                            update(jobId) { it.copy(sponsorBlock = SponsorBlockOutcome.REMOVED) }
+                        }
+                    } finally {
+                        if (!published) runCatching { destination.discard() }
+                        runCatching { temp.handle.discard() }
+                    }
+                    return null
+                }
+
+                SponsorBlockResult.NoSegments ->
+                    update(jobId) { it.copy(sponsorBlock = SponsorBlockOutcome.NO_SEGMENTS) }
+
+                SponsorBlockResult.NotApplicable, is SponsorBlockResult.Unavailable ->
+                    update(jobId) { it.copy(sponsorBlock = SponsorBlockOutcome.UNAVAILABLE) }
+            }
+        }
+        if (clip != null) {
+            if (!toolkit.capabilities().canClip) {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "This host cannot cut a clip.",
+                    retryable = false,
+                )
+                runCatching { temp.handle.discard() }
+                return null
+            }
+            val destination = runCatching {
+                fileStore.createTempFile(artifactExt ?: temp.suggestedExt ?: "mp4")
+            }.getOrNull()
+            if (destination == null) {
+                fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+                runCatching { temp.handle.discard() }
+                return null
+            }
+            var published = false
+            try {
+                destination.close()
+                try {
+                    toolkit.clip(
+                        source = fileStore.mediaFilePath(temp.handle),
+                        startMillis = clip.startMillis,
+                        endMillis = clip.endMillis,
+                        destination = fileStore.mediaFilePath(destination),
+                    )
+                } catch (error: ToolkitError) {
+                    val mapped = toolkitJobError(error)
+                    fail(jobId, mapped.code, mapped.message, mapped.retryable)
+                    return null
+                }
+                val relativePath = artifactPath(
+                    options,
+                    sourceUrl,
+                    artifactTitle ?: temp.suggestedTitle,
+                    artifactExt ?: temp.suggestedExt,
+                    requestedPath(jobId),
+                ) ?: run {
+                    fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The output path is unsafe.")
+                    return null
+                }
+                published = publishAndComplete(
+                    jobId = jobId,
+                    handle = destination,
+                    downloaded = temp.bytes,
+                    totalBytes = temp.totalBytes,
+                    options = options,
+                    relativePath = relativePath,
+                    tagsEmbedded = tagsEmbeddedOf(tags),
+                    lyricsEmbedded = lyricsEmbeddedOf(tags),
+                )
+            } finally {
+                if (!published) runCatching { destination.discard() }
+                runCatching { temp.handle.discard() }
+            }
+            return null
+        }
+        // T-016 chapter split: only when chapters exist and the host can cut.
+        // An explicit clip and a split cannot be combined (defined interaction).
+        val info = engineCriticalSection(lock) { extractedInfo[jobId] }
+        val chapters = info?.chapters.orEmpty()
+        if (options.splitByChapters && chapters.isNotEmpty()) {
+            if (!toolkit.capabilities().canClip) {
+                fail(
+                    jobId,
+                    JobErrorCode.UNSUPPORTED_FORMAT,
+                    "This host cannot split chapters.",
+                    retryable = false,
+                )
+                runCatching { temp.handle.discard() }
+                return null
+            }
+            val template = settings.settings.value.chapterTemplate
+            val ext = artifactExt ?: temp.suggestedExt
+            var publishedCount = 0
+            try {
+                for ((index, chapter) in chapters.withIndex()) {
+                    val start = chapter.startTime?.let { (it * 1000.0).toLong() } ?: continue
+                    val end = chapter.endTime?.let { (it * 1000.0).toLong() }
+                    val name = ChapterTemplate.render(
+                        template = template,
+                        mediaTitle = info?.title ?: artifactTitle ?: temp.suggestedTitle,
+                        chapter = chapter,
+                        sectionNumber = index + 1,
+                        ext = ext,
+                    ) ?: run {
+                        fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The chapter output name is unsafe.")
+                        return null
+                    }
+                    val chapterTemp = clipToTemp(jobId, temp, start, end) ?: return null
+                    if (!publishChapter(jobId, chapterTemp, name)) return null
+                    publishedCount++
+                }
+                if (publishedCount == 0) {
+                    fail(
+                        jobId,
+                        JobErrorCode.UNSUPPORTED_FORMAT,
+                        "No chapter has a usable start time.",
+                        retryable = false,
+                    )
+                    return null
+                }
+                recordArchive(jobId)
+                update(jobId) {
+                    it.copy(
+                        state = JobState.COMPLETED,
+                        progress = JobProgress(
+                            phase = "completed",
+                            percent = 100.0,
+                            downloadedBytes = temp.bytes,
+                            totalBytes = temp.totalBytes,
+                        ),
+                        error = null,
+                        finishedAtEpochMillis = now(),
+                    )
+                }
+            } finally {
+                runCatching { temp.handle.discard() }
+            }
+            return null
+        }
         val relativePath = artifactPath(
             options,
             sourceUrl,
@@ -995,6 +1398,79 @@ class HttpDownloadEngine(
             runCatching { temp.handle.discard() }
         }
         return null
+    }
+
+    /** Cuts one range of [source] into a new temp; the caller publishes it. */
+    private suspend fun clipToTemp(
+        jobId: String,
+        source: TempDownload,
+        startMillis: Long,
+        endMillis: Long?,
+    ): TempDownload? {
+        val destination = runCatching { fileStore.createTempFile(source.suggestedExt ?: "mp4") }.getOrNull()
+        if (destination == null) {
+            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+            return null
+        }
+        return try {
+            destination.close()
+            try {
+                toolkit.clip(
+                    source = fileStore.mediaFilePath(source.handle),
+                    startMillis = startMillis,
+                    endMillis = endMillis,
+                    destination = fileStore.mediaFilePath(destination),
+                )
+            } catch (error: ToolkitError) {
+                val mapped = toolkitJobError(error)
+                fail(jobId, mapped.code, mapped.message, mapped.retryable)
+                runCatching { destination.discard() }
+                return null
+            }
+            TempDownload(
+                handle = destination,
+                bytes = source.bytes,
+                totalBytes = source.totalBytes,
+                suggestedTitle = source.suggestedTitle,
+                suggestedExt = source.suggestedExt,
+            )
+        } catch (failure: Throwable) {
+            runCatching { destination.discard() }
+            null
+        }
+    }
+
+    /** Publishes one chapter temp and appends its artifact without completing the job. */
+    private suspend fun publishChapter(jobId: String, temp: TempDownload, relativePath: String): Boolean {
+        temp.handle.close()
+        val published = try {
+            fileStore.publish(temp.handle, relativePath)
+        } catch (failure: Throwable) {
+            fail(jobId, JobErrorCode.INVALID_URL_OPTIONS, "The chapter output path is unsafe.")
+            runCatching { temp.handle.discard() }
+            return false
+        }
+        val size = runCatching { fileStore.size(published) }.getOrNull() ?: temp.bytes
+        update(jobId) {
+            it.copy(
+                artifacts = it.artifacts + Artifact(
+                    id = "artifact-${idGenerator()}",
+                    jobId = jobId,
+                    kind = ArtifactKind.CHAPTER,
+                    fileName = published.substringAfterLast('/'),
+                    relativePath = published,
+                    sizeBytes = size,
+                ),
+            )
+        }
+        return true
+    }
+
+    /** Records the completed media in the host archive when it has an id. */
+    private fun recordArchive(jobId: String) {
+        val info = engineCriticalSection(lock) { extractedInfo[jobId] } ?: return
+        val entry = ArchiveEntry.of(info.extractorKey, info.id) ?: return
+        runCatching { archive.add(entry) }
     }
 
     /** Whether the request's Spotify tags could be written on this host. */
@@ -1156,8 +1632,16 @@ class HttpDownloadEngine(
     private fun requestedPath(jobId: String): String? = findJob(jobId)?.request?.relativePath
 
     /** One bounded artwork fetch; any failure or redirect means no artwork. */
-    private suspend fun fetchArtwork(url: String?): ByteArray? {
-        if (url.isNullOrBlank()) return null
+    /** One bounded artwork fetch; any failure or redirect means no artwork. */
+    private suspend fun fetchArtwork(url: String?): ByteArray? =
+        if (url.isNullOrBlank()) null else fetchBounded(url, ARTWORK_MAX_BYTES)
+
+    /**
+     * One bounded GET outside the media path (artwork, captions, thumbnails).
+     * Policy-checked; any failure or redirect means null, never a thrown job
+     * failure, so a sidecar can be skipped without failing the media.
+     */
+    private suspend fun fetchBounded(url: String, cap: Int): ByteArray? {
         if (urlCheck(url) !is UrlCheck.Allowed) return null
         return try {
             when (val response = transfer.execute(HttpRequest(url = url))) {
@@ -1167,7 +1651,7 @@ class HttpDownloadEngine(
                         runCatching { body?.close() }
                         null
                     } else {
-                        readBoundedBytes(body, ARTWORK_MAX_BYTES)
+                        readBoundedBytes(body, cap)
                     }
                 }
 
@@ -1201,6 +1685,218 @@ class HttpDownloadEngine(
         return out.copyOf(total)
     }
 
+    /** T-017: waits the settings' sleep-requests seconds before a media hop. */
+    private suspend fun sleepBeforeRequest() {
+        val seconds = settings.settings.value.sleepRequestsSeconds
+        if (seconds > 0) delay(seconds * 1000L)
+    }
+
+    /** T-017: keeps the average media read rate at or below the settings limit. */
+    private suspend fun throttleChunk(bytes: Int) {
+        val kib = settings.settings.value.rateLimitKibPerSecond
+        if (kib <= 0) return
+        val millis = bytes.toLong() * 1000L / (kib.toLong() * 1024L)
+        if (millis > 0) delay(millis)
+    }
+
+    /**
+     * T-015 sidecars and embedding after a completed media download: caption
+     * files converted from the extracted tracks, a thumbnail sidecar, and
+     * audio tags when the host toolkit can write them. Sidecars are
+     * best-effort: a missing track or a failed sidecar fetch never fails the
+     * completed media job.
+     */
+    private suspend fun publishSidecars(jobId: String, options: DownloadOptions) {
+        val info = engineCriticalSection(lock) { extractedInfo[jobId] } ?: return
+        val job = findJob(jobId) ?: return
+        val media = job.artifacts.lastOrNull { it.kind == ArtifactKind.VIDEO || it.kind == ArtifactKind.AUDIO }
+            ?: return
+        val directory = media.relativePath.substringBeforeLast('/', "")
+        val baseName = media.fileName.substringBeforeLast('.')
+        val prefix = if (directory.isEmpty()) baseName else "$directory/$baseName"
+
+        if (options.embedSubtitles && toolkit.capabilities().canEmbedSubtitles) {
+            if (!embedCaptionIntoMedia(jobId, info, options, media)) {
+                publishCaptionSidecar(jobId, info, options, prefix)
+            }
+        } else if (options.captionFormat != null || options.embedSubtitles) {
+            publishCaptionSidecar(jobId, info, options, prefix)
+        }
+        if (options.writeThumbnail) {
+            publishThumbnailSidecar(jobId, info, prefix)
+        }
+        if (options.writeMetadata) {
+            publishInfoSidecar(jobId, info, prefix)
+            if (media.kind == ArtifactKind.AUDIO) {
+                embedInfoTags(jobId, info, media)
+            }
+        }
+    }
+
+    /**
+     * T-015 embedding: converts the selected track to SRT and asks the toolkit
+     * to mux it into the media file. Returns false when the track is missing
+     * or the toolkit cannot embed, so the caller writes the sidecar instead.
+     */
+    private suspend fun embedCaptionIntoMedia(
+        jobId: String,
+        info: InfoDict,
+        options: DownloadOptions,
+        media: Artifact,
+    ): Boolean {
+        val selection = CaptionSelector.select(
+            subtitles = info.subtitles,
+            automaticCaptions = info.automaticCaptions,
+            language = options.captionLanguage,
+            preference = options.captionPreference,
+        ) ?: return false
+        val source = selection.track.formats.firstOrNull { it.ext.equals("srt", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("vtt", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("json3", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("ttml", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull()
+            ?: return false
+        val bytes = fetchBounded(source.url, CAPTION_MAX_BYTES) ?: return false
+        val body = bytes.decodeToString()
+        val srt = if (source.ext.equals("srt", ignoreCase = true)) {
+            body
+        } else {
+            CaptionConverter.convert(source.ext, CaptionFormat.SRT, body) ?: return false
+        }
+        val handle = runCatching { fileStore.createTempFile("srt") }.getOrNull() ?: return false
+        val result = runCatching {
+            val encoded = srt.encodeToByteArray()
+            handle.write(encoded, encoded.size)
+            handle.close()
+            toolkit.embedSubtitles(
+                file = fileStore.mediaFilePath(media.relativePath),
+                subtitles = fileStore.mediaFilePath(handle),
+                language = selection.track.language,
+            )
+        }
+        runCatching { handle.discard() }
+        return result.isSuccess
+    }
+
+    /**
+     * Writes one converted caption sidecar. The source format is the requested
+     * one when present, then `vtt`, `json3`, and `ttml`; a body the converter
+     * cannot parse writes nothing (the media job stays complete).
+     */
+    private suspend fun publishCaptionSidecar(
+        jobId: String,
+        info: InfoDict,
+        options: DownloadOptions,
+        prefix: String,
+    ) {
+        val selection = CaptionSelector.select(
+            subtitles = info.subtitles,
+            automaticCaptions = info.automaticCaptions,
+            language = options.captionLanguage,
+            preference = options.captionPreference,
+        ) ?: return
+        val target = options.captionFormat ?: CaptionFormat.SRT
+        val source = selection.track.formats.firstOrNull { it.ext.equals(target.wireName, ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("vtt", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("json3", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull { it.ext.equals("ttml", ignoreCase = true) }
+            ?: selection.track.formats.firstOrNull()
+            ?: return
+        val bytes = fetchBounded(source.url, CAPTION_MAX_BYTES) ?: return
+        val body = bytes.decodeToString()
+        val rendered = if (source.ext.equals(target.wireName, ignoreCase = true)) {
+            body
+        } else {
+            CaptionConverter.convert(source.ext, target, body) ?: return
+        }
+        val language = selection.track.language.replace(Regex("[^A-Za-z0-9_-]"), "-").ifEmpty { "und" }
+        publishSidecar(jobId, "$prefix.$language.${target.wireName}", rendered.encodeToByteArray(), ArtifactKind.CAPTIONS)
+    }
+
+    /** Writes the largest available thumbnail next to the media as a sidecar. */
+    private suspend fun publishThumbnailSidecar(jobId: String, info: InfoDict, prefix: String) {
+        // Prefer a JPG/JPEG URL so the sidecar is a JPG when the source has
+        // one; otherwise keep the largest available image and its extension.
+        val thumbnails = info.thumbnails
+        val thumbnail = thumbnails
+            .filter { it.url.substringBefore('?').substringBefore('#').lowercase().let { url -> url.endsWith(".jpg") || url.endsWith(".jpeg") } }
+            .maxByOrNull { (it.width ?: 0L) * (it.height ?: 0L) }
+            ?: thumbnails.maxByOrNull { (it.width ?: 0L) * (it.height ?: 0L) }
+            ?: return
+        val bytes = fetchBounded(thumbnail.url, ARTWORK_MAX_BYTES) ?: return
+        val ext = thumbnail.url.substringAfterLast('/').substringAfterLast('.', "jpg")
+            .substringBefore('?').substringBefore('#').lowercase()
+            .takeIf { it in setOf("jpg", "jpeg", "png", "webp") } ?: "jpg"
+        publishSidecar(jobId, "$prefix.$ext", bytes, ArtifactKind.THUMBNAIL)
+    }
+
+    /**
+     * T-015 media-info sidecar: the extracted info dict next to the media when
+     * `writeMetadata` is set. The document is metadata only and carries no
+     * cookie, token, or signed URL beyond what the extractor already exposes.
+     */
+    private suspend fun publishInfoSidecar(jobId: String, info: InfoDict, prefix: String) {
+        val json = runCatching { infoJson.encodeToString(InfoDict.serializer(), info) }.getOrNull() ?: return
+        publishSidecar(jobId, "$prefix.info.json", json.encodeToByteArray(), ArtifactKind.METADATA)
+    }
+
+    /**
+     * T-015 metadata: audio tags built from the info dict, embedded when the
+     * host toolkit can. A host without the capability keeps the audio and
+     * records `tagsEmbedded = false`.
+     */
+    private suspend fun embedInfoTags(jobId: String, info: InfoDict, media: Artifact) {
+        val capabilities = toolkit.capabilities()
+        if (!capabilities.canEmbedTags) {
+            update(jobId) { it.copy(tagsEmbedded = false) }
+            return
+        }
+        val tags = infoTags(info) ?: return
+        val artwork = if (capabilities.canEmbedArtwork) {
+            info.thumbnails.maxByOrNull { (it.width ?: 0L) * (it.height ?: 0L) }?.let { fetchArtwork(it.url) }
+        } else {
+            null
+        }
+        val result = runCatching { toolkit.embedTags(fileStore.mediaFilePath(media.relativePath), tags, artwork) }
+        update(jobId) { it.copy(tagsEmbedded = result.isSuccess) }
+    }
+
+    /** The general-path tags: title, uploader/channel as the artist, and year. */
+    private fun infoTags(info: InfoDict): MediaTags? {
+        val title = info.title?.takeIf { it.isNotBlank() } ?: return null
+        val artist = info.uploader?.takeIf { it.isNotBlank() } ?: info.channel?.takeIf { it.isNotBlank() }
+        return MediaTags(
+            title = title,
+            artists = listOfNotNull(artist),
+            year = info.uploadDate?.take(4)?.toIntOrNull(),
+        )
+    }
+
+    /** Writes one sidecar temp and appends its artifact; failure writes nothing. */
+    private suspend fun publishSidecar(jobId: String, relativePath: String, bytes: ByteArray, kind: ArtifactKind) {
+        val handle = runCatching { fileStore.createTempFile(kind.wireName) }.getOrNull() ?: return
+        val published = try {
+            handle.write(bytes, bytes.size)
+            handle.close()
+            fileStore.publish(handle, relativePath)
+        } catch (failure: Throwable) {
+            runCatching { handle.discard() }
+            return
+        }
+        val size = runCatching { fileStore.size(published) }.getOrNull() ?: bytes.size.toLong()
+        update(jobId) {
+            it.copy(
+                artifacts = it.artifacts + Artifact(
+                    id = "artifact-${idGenerator()}",
+                    jobId = jobId,
+                    kind = kind,
+                    fileName = published.substringAfterLast('/'),
+                    relativePath = published,
+                    sizeBytes = size,
+                ),
+            )
+        }
+    }
 
     private suspend fun downloadDirectFile(
         jobId: String,
@@ -1215,7 +1911,7 @@ class HttpDownloadEngine(
         publishResult: Boolean = true,
     ): TempDownload? {
         val initialRange = chunkSize?.takeIf { it > 0 }?.let { 0L..(it - 1) }
-        var current = HttpRequest(url = url, headers = headers, range = initialRange)
+        var current = HttpRequest(url = url, headers = headers, range = initialRange).withActiveCookie()
         var hops = 0
         var body: HttpBody? = null
         try {
@@ -1229,6 +1925,7 @@ class HttpDownloadEngine(
                     is UrlCheck.Allowed -> Unit
                 }
 
+                sleepBeforeRequest()
                 val response = withContext(ioDispatcher) { transfer.execute(current) }
                 when (response) {
                     is HttpResponse.Unavailable -> {
@@ -1271,7 +1968,7 @@ class HttpDownloadEngine(
                             fail(jobId, JobErrorCode.NETWORK_FAILURE, "Too many redirects.")
                             return null
                         }
-                        current = current.copy(url = response.location)
+                        current = current.copy(url = response.location).withActiveCookie()
                         currentCoroutineContext().ensureActive()
                     }
 
@@ -1466,6 +2163,8 @@ class HttpDownloadEngine(
         var initSegment: MediaFragment? = null
         var key: com.anydownlod.core.download.Aes128KeyInfo? = null
         var artifactExt = "ts"
+        var livePlaylist: ManifestResult.Media? = null
+        var livePlaylistUrl: String? = null
         if (isDash) {
             when (val result = Mpd.parse(sourceUrl, manifestText)) {
                 is MpdResult.Failed -> {
@@ -1507,6 +2206,10 @@ class HttpDownloadEngine(
                             fragments = second.fragments
                             initSegment = second.initSegment
                             key = second.key
+                            if (second.isLive) {
+                                livePlaylist = second
+                                livePlaylistUrl = variantUrl
+                            }
                         }
 
                         is ManifestResult.Master -> {
@@ -1525,8 +2228,22 @@ class HttpDownloadEngine(
                     fragments = first.fragments
                     initSegment = first.initSegment
                     key = first.key
+                    if (first.isLive) {
+                        livePlaylist = first
+                        livePlaylistUrl = sourceUrl
+                    }
                 }
             }
+        }
+        val live = livePlaylist
+        if (live != null) {
+            return downloadLiveHls(
+                jobId = jobId,
+                playlistUrl = livePlaylistUrl ?: sourceUrl,
+                first = live,
+                artifactExt = artifactExt,
+                sourceUrl = sourceUrl,
+            )
         }
         if (fragments.isEmpty()) {
             fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, "The manifest declared no fragments.", retryable = false)
@@ -1542,7 +2259,11 @@ class HttpDownloadEngine(
         try {
             // Upstream VOD default (`fragment.py`): skip an unavailable
             // fragment. Live playlists fail typed before this path (T-135).
-            val outcome = FragmentDownloader(transfer, skipUnavailableFragments = true).download(
+            val outcome = FragmentDownloader(
+                transfer,
+                skipUnavailableFragments = true,
+                requestDelayMillis = settings.settings.value.sleepRequestsSeconds * 1000L,
+            ).download(
                 fragments = fragments,
                 initSegment = initSegment,
                 key = key,
@@ -1577,6 +2298,142 @@ class HttpDownloadEngine(
                 }
 
                 is FragmentOutcome.Completed -> Unit
+            }
+            if (isCancelRequested(jobId)) {
+                confirmCancelled(jobId)
+                return null
+            }
+            val manifestTitle = sourceUrl.substringAfterLast('/').substringBefore('?').substringBefore('#')
+                .substringBeforeLast('.', missingDelimiterValue = "")
+                .ifBlank { "media" }
+            handle.close()
+            finished = true
+            return TempDownload(
+                handle = handle,
+                bytes = written,
+                totalBytes = null,
+                suggestedTitle = manifestTitle,
+                suggestedExt = artifactExt,
+            )
+        } catch (failure: DiskWriteFailure) {
+            // writeChunk already stored DISK_EXHAUSTED; the finally discards the temp.
+            return null
+        } finally {
+            if (!finished) {
+                runCatching { handle.discard() }
+            }
+        }
+    }
+
+    /**
+     * T-124 live HLS: follows a media playlist until `#EXT-X-ENDLIST` or the
+     * user cancels. Each poll appends only fragments whose media sequence is
+     * newer than the last written one, so a sliding window never duplicates
+     * bytes. A poll with no new fragments waits one target duration (bounded
+     * 1..60 s) before refetching. The init segment is written once.
+     */
+    private suspend fun downloadLiveHls(
+        jobId: String,
+        playlistUrl: String,
+        first: ManifestResult.Media,
+        artifactExt: String,
+        sourceUrl: String,
+    ): TempDownload? {
+        val handle = runCatching { fileStore.createTempFile() }.getOrNull()
+        if (handle == null) {
+            fail(jobId, JobErrorCode.DISK_EXHAUSTED, "The download folder could not be created.")
+            return null
+        }
+        var finished = false
+        var written = 0L
+        var live = first
+        var lastSequence = Long.MIN_VALUE
+        var firstBatch = true
+        var polls = 0
+        try {
+            while (polls < MAX_LIVE_POLLS) {
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return null
+                }
+                val fresh = live.fragments.filter { (it.sequence ?: 0L) > lastSequence }
+                if (fresh.isNotEmpty()) {
+                    lastSequence = fresh.last().sequence ?: lastSequence
+                    val outcome = FragmentDownloader(
+                        transfer,
+                        skipUnavailableFragments = true,
+                        requestDelayMillis = settings.settings.value.sleepRequestsSeconds * 1000L,
+                    ).download(
+                        fragments = fresh,
+                        initSegment = if (firstBatch) live.initSegment else null,
+                        key = live.key,
+                        onChunk = { chunk ->
+                            if (!writeChunk(jobId, handle, chunk, chunk.size)) throw DiskWriteFailure()
+                            written += chunk.size
+                        },
+                        onProgress = { completed, total, bytes ->
+                            update(jobId, persistNow = false) {
+                                it.copy(
+                                    progress = JobProgress(
+                                        phase = "live fragments $completed/$total (estimated)",
+                                        downloadedBytes = bytes,
+                                        totalBytes = null,
+                                    ),
+                                )
+                            }
+                        },
+                        isCancelled = { isCancelRequested(jobId) },
+                    )
+                    currentCoroutineContext().ensureActive()
+                    when (outcome) {
+                        is FragmentOutcome.Cancelled -> {
+                            confirmCancelled(jobId)
+                            return null
+                        }
+
+                        is FragmentOutcome.Failed -> {
+                            fail(jobId, JobErrorCode.NETWORK_FAILURE, outcome.reason)
+                            return null
+                        }
+
+                        is FragmentOutcome.Completed -> Unit
+                    }
+                    firstBatch = false
+                }
+                if (!live.isLive) break
+                if (isCancelRequested(jobId)) {
+                    confirmCancelled(jobId)
+                    return null
+                }
+                if (fresh.isEmpty()) {
+                    delay((live.targetDurationSeconds ?: 2L).coerceIn(1L, 60L) * 1000L)
+                }
+                val text = fetchManifestText(playlistUrl) ?: run {
+                    fail(jobId, JobErrorCode.NETWORK_FAILURE, "The live playlist could not be fetched.")
+                    return null
+                }
+                when (val parsed = M3u8.parse(playlistUrl, text)) {
+                    is ManifestResult.Media -> live = parsed
+                    is ManifestResult.Master -> {
+                        fail(
+                            jobId,
+                            JobErrorCode.UNSUPPORTED_FORMAT,
+                            "The live playlist nested another master playlist.",
+                            retryable = false,
+                        )
+                        return null
+                    }
+
+                    is ManifestResult.Failed -> {
+                        fail(jobId, JobErrorCode.UNSUPPORTED_FORMAT, parsed.reason, retryable = false)
+                        return null
+                    }
+                }
+                polls++
+            }
+            if (polls >= MAX_LIVE_POLLS) {
+                fail(jobId, JobErrorCode.NETWORK_FAILURE, "The live stream did not end within the poll limit.")
+                return null
             }
             if (isCancelRequested(jobId)) {
                 confirmCancelled(jobId)
@@ -1640,7 +2497,7 @@ class HttpDownloadEngine(
     private suspend fun fetchManifestText(url: String): String? {
         var current = url
         for (hop in 0..maxRedirects) {
-            when (val response = withContext(ioDispatcher) { transfer.execute(HttpRequest(current)) }) {
+            when (val response = withContext(ioDispatcher) { transfer.execute(HttpRequest(current).withActiveCookie()) }) {
                 is HttpResponse.Redirect -> current = response.location
                 is HttpResponse.Final -> {
                     if (response.statusCode !in 200..299) return null
@@ -1882,6 +2739,7 @@ class HttpDownloadEngine(
                 if (count == -1) break
                 if (count == 0) continue
                 if (!writeChunk(jobId, handle, buffer, count)) return null
+                throttleChunk(count)
                 read += count
                 reportProgress(jobId, start + read, total)
                 currentCoroutineContext().ensureActive()
@@ -1918,7 +2776,7 @@ class HttpDownloadEngine(
             HttpRequest(url = sourceUrl, headers = headers + (HeaderNames.RANGE to "bytes=$start-"))
         }
         val response = try {
-            withContext(ioDispatcher) { transfer.execute(request) }
+            withContext(ioDispatcher) { transfer.execute(request.withActiveCookie()) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -2058,6 +2916,7 @@ class HttpDownloadEngine(
         tagsEmbedded: Boolean? = null,
         lyricsEmbedded: Boolean? = null,
     ) {
+        recordArchive(jobId)
         val sizeBytes = runCatching { fileStore.size(publishedPath) }.getOrNull() ?: downloaded
         val artifact = Artifact(
             id = "artifact-${idGenerator()}",

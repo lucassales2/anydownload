@@ -1,7 +1,9 @@
 package com.anydownlod.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -10,7 +12,11 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import com.anydownlod.core.AppGraph
+import com.anydownlod.core.BrowserChoice
+import com.anydownlod.core.BrowserCookieImport
+import com.anydownlod.core.CookieErrorReason
 import com.anydownlod.core.CookieOperationResult
+import com.anydownlod.core.CookieStatus
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.domain.AppSettings
 import com.anydownlod.core.domain.AppSettingsDefaults
@@ -20,6 +26,7 @@ import com.anydownlod.core.fake.InMemorySettingsRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -44,6 +51,7 @@ class SettingsUiTest {
         }
         onNodeWithTag("settings-tool-ytdlp").assertExists()
         onNodeWithTag("settings-tool-ffmpeg").assertExists()
+        onNodeWithTag("settings-tool-kotlin").assertTextContains("2026.08.19", substring = true)
 
         // A bad template stays inline and is not written.
         onNodeWithTag("settings-template-output").performScrollTo()
@@ -78,21 +86,31 @@ class SettingsUiTest {
         val settingsRepository = InMemorySettingsRepository()
         var importedPath: String? = null
         var deleted = false
+        var hostStatus: CookieStatus = CookieStatus.NotConfigured
         val base = InMemoryAppGraph(settings = settingsRepository)
         val graph = object : AppGraph by base {
-            override val pickCookieFile: () -> String? = { "/tmp/fixture-cookies.txt" }
+            override val pickCookieFile: suspend () -> String? = { "/tmp/fixture-cookies.txt" }
             override val cookieStore: CookieStore = object : CookieStore {
                 override fun import(sourcePath: String): CookieOperationResult {
                     importedPath = sourcePath
+                    hostStatus = CookieStatus.Configured
+                    return CookieOperationResult(success = true)
+                }
+
+                override fun importText(text: String): CookieOperationResult {
+                    hostStatus = CookieStatus.Configured
                     return CookieOperationResult(success = true)
                 }
 
                 override fun delete(): CookieOperationResult {
                     deleted = true
+                    hostStatus = CookieStatus.NotConfigured
                     return CookieOperationResult(success = true)
                 }
 
                 override fun storedFilePath(): String? = null
+
+                override fun status(): CookieStatus = hostStatus
             }
         }
         setContent { App(graph) }
@@ -101,6 +119,7 @@ class SettingsUiTest {
         onNodeWithText("Status: Not configured").assertExists()
 
         onNodeWithTag("settings-cookies-import").performScrollTo().performClick()
+        waitForIdle()
         assertEquals("/tmp/fixture-cookies.txt", importedPath)
         assertTrue(settingsRepository.settings.value.cookiesConfigured)
         onNodeWithText("Cookie file imported.").assertExists()
@@ -111,6 +130,81 @@ class SettingsUiTest {
         assertTrue(deleted)
         assertFalse(settingsRepository.settings.value.cookiesConfigured)
         onNodeWithText("Status: Not configured").assertExists()
+    }
+
+    @Test
+    fun anErrorStatusShowsTheReasonAndEnablesDelete() = runComposeUiTest {
+        val settingsRepository = InMemorySettingsRepository(AppSettings(cookiesConfigured = true))
+        val base = InMemoryAppGraph(settings = settingsRepository)
+        val graph = object : AppGraph by base {
+            override val cookieStore: CookieStore = object : CookieStore {
+                override fun import(sourcePath: String): CookieOperationResult =
+                    CookieOperationResult(success = true)
+
+                override fun importText(text: String): CookieOperationResult =
+                    CookieOperationResult(success = true)
+
+                override fun delete(): CookieOperationResult = CookieOperationResult(success = true)
+
+                override fun storedFilePath(): String? = null
+
+                override fun status(): CookieStatus = CookieStatus.Error(CookieErrorReason.ALL_EXPIRED)
+            }
+        }
+        setContent { App(graph) }
+
+        onNodeWithText("Settings").performClick()
+        onNodeWithText(
+            "Status: Error: the stored file has no unexpired cookies. Replace or delete it.",
+        ).assertExists()
+        onNodeWithTag("settings-cookies-delete").performScrollTo().assertIsEnabled()
+        assertFalse(settingsRepository.settings.value.cookiesConfigured)
+    }
+
+    @Test
+    fun browserImportNeedsTheConsentStepAndUsesTheChosenBrowser() = runComposeUiTest {
+        val settingsRepository = InMemorySettingsRepository()
+        var chosen: BrowserChoice? = null
+        var hostStatus: CookieStatus = CookieStatus.NotConfigured
+        val base = InMemoryAppGraph(settings = settingsRepository)
+        val graph = object : AppGraph by base {
+            override val cookieStore: CookieStore = object : CookieStore {
+                override fun import(sourcePath: String): CookieOperationResult =
+                    CookieOperationResult(success = true)
+
+                override fun importText(text: String): CookieOperationResult {
+                    hostStatus = CookieStatus.Configured
+                    return CookieOperationResult(success = true)
+                }
+
+                override fun delete(): CookieOperationResult = CookieOperationResult(success = true)
+
+                override fun storedFilePath(): String? = null
+
+                override fun status(): CookieStatus = hostStatus
+            }
+            override val browserCookieImport: BrowserCookieImport = BrowserCookieImport { browser ->
+                chosen = browser
+                hostStatus = CookieStatus.Configured
+                CookieOperationResult(success = true)
+            }
+        }
+        setContent { App(graph) }
+
+        onNodeWithText("Settings").performClick()
+        onNodeWithTag("settings-cookies-browser").performScrollTo().performClick()
+
+        // Consent comes first: nothing is read before the user chooses.
+        assertNull(chosen)
+        onNodeWithText("Copy cookies from a browser?").assertExists()
+
+        onNodeWithTag("settings-browser-firefox").performClick()
+        waitForIdle()
+
+        assertEquals(BrowserChoice.FIREFOX, chosen)
+        assertTrue(settingsRepository.settings.value.cookiesConfigured)
+        onNodeWithText("Cookie file imported.").assertExists()
+        onNodeWithText("Status: Configured").assertExists()
     }
 
     @Test
@@ -146,7 +240,24 @@ class SettingsUiTest {
             AppSettings(downloadRoot = "/tmp/keep-me", cookiesConfigured = true),
         )
         settingsRepository.addPreset("Keep")
-        setContent { App(InMemoryAppGraph(settings = settingsRepository)) }
+        val base = InMemoryAppGraph(settings = settingsRepository)
+        // A configured host file: Settings syncs the flag from this status.
+        val graph = object : AppGraph by base {
+            override val cookieStore: CookieStore = object : CookieStore {
+                override fun import(sourcePath: String): CookieOperationResult =
+                    CookieOperationResult(success = true)
+
+                override fun importText(text: String): CookieOperationResult =
+                    CookieOperationResult(success = true)
+
+                override fun delete(): CookieOperationResult = CookieOperationResult(success = true)
+
+                override fun storedFilePath(): String? = null
+
+                override fun status(): CookieStatus = CookieStatus.Configured
+            }
+        }
+        setContent { App(graph) }
 
         onNodeWithText("Settings").performClick()
         onNodeWithTag("settings-restore-defaults").performScrollTo().performClick()

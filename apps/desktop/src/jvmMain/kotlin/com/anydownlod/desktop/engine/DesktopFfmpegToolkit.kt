@@ -4,6 +4,7 @@ import com.anydownlod.core.domain.AudioContainer
 import com.anydownlod.core.domain.MediaTags
 import com.anydownlod.core.postprocess.MediaFilePath
 import com.anydownlod.core.postprocess.MediaToolkit
+import com.anydownlod.core.postprocess.SponsorSegment
 import com.anydownlod.core.postprocess.ToolkitCapabilities
 import com.anydownlod.core.postprocess.ToolkitError
 import java.nio.file.Files
@@ -52,6 +53,9 @@ class DesktopFfmpegToolkit(
             ),
             canEmbedTags = true,
             canEmbedArtwork = true,
+            canEmbedSubtitles = true,
+            canClip = true,
+            canRemoveSegments = true,
             // WAV has no standard lyrics tag; the other containers do.
             lyricsContainers = setOf(
                 AudioContainer.M4A,
@@ -181,6 +185,122 @@ class DesktopFfmpegToolkit(
             artworkPath?.let(::deleteQuietly)
         }
     }
+
+    override suspend fun embedSubtitles(file: MediaFilePath, subtitles: MediaFilePath, language: String?) {
+        val ffmpeg = requireTool("ffmpeg", ffmpegPath)
+        val sourcePath = Path.of(file.token)
+        val parent = sourcePath.parent ?: throw ToolkitError.Io("The media file has no folder.")
+        val extension = sourcePath.fileName.toString().substringAfterLast('.', "").lowercase()
+        val subtitleCodec = when (extension) {
+            "mp4", "m4v", "mov", "m4a" -> "mov_text"
+            "mkv", "webm" -> "srt"
+            else -> throw ToolkitError.IncompatibleStreams("This container cannot carry a subtitle track.")
+        }
+        val token = System.nanoTime().toString(16)
+        val outputPath = parent.resolve(".anydownload-subs-$token.$extension")
+        try {
+            val arguments = mutableListOf(
+                "-hide_banner", "-nostdin", "-y",
+                "-i", file.token,
+                "-i", subtitles.token,
+                "-map", "0",
+                "-map", "1:0",
+                "-c", "copy",
+                "-c:s", subtitleCodec,
+            )
+            language?.takeIf { it.isNotBlank() }?.let { arguments += listOf("-metadata:s:s:0", "language=$it") }
+            arguments += outputPath.toString()
+            runTool(
+                executable = ffmpeg,
+                arguments = arguments,
+                failure = { ToolkitError.Io("The subtitles could not be embedded.") },
+            )
+            Files.move(outputPath, sourcePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } catch (cancelled: CancellationException) {
+            deleteQuietly(outputPath)
+            throw cancelled
+        } catch (error: ToolkitError) {
+            deleteQuietly(outputPath)
+            throw error
+        }
+    }
+
+    override suspend fun clip(source: MediaFilePath, startMillis: Long, endMillis: Long?, destination: MediaFilePath) {
+        val ffmpeg = requireTool("ffmpeg", ffmpegPath)
+        val ffprobe = requireTool("ffprobe", ffprobePath)
+        val destinationPath = Path.of(destination.token)
+        try {
+            val arguments = mutableListOf(
+                "-hide_banner", "-nostdin", "-y",
+                "-ss", formatSeconds(startMillis),
+                "-i", source.token,
+            )
+            if (endMillis != null) {
+                arguments += listOf("-t", formatSeconds((endMillis - startMillis).coerceAtLeast(0)))
+            }
+            arguments += listOf("-c", "copy", destination.token)
+            runTool(
+                executable = ffmpeg,
+                arguments = arguments,
+                failure = { ToolkitError.Io("The clip could not be written.") },
+            )
+            val probed = probe(ffprobe, destinationPath)
+            if (probed.videoStreams == 0 && probed.audioStreams == 0) {
+                throw ToolkitError.Io("The clip has no media stream.")
+            }
+        } catch (cancelled: CancellationException) {
+            deleteQuietly(destinationPath)
+            throw cancelled
+        } catch (error: ToolkitError) {
+            deleteQuietly(destinationPath)
+            throw error
+        }
+    }
+
+    override suspend fun removeSegments(source: MediaFilePath, segments: List<SponsorSegment>, destination: MediaFilePath) {
+        val ffmpeg = requireTool("ffmpeg", ffmpegPath)
+        val ffprobe = requireTool("ffprobe", ffprobePath)
+        val destinationPath = Path.of(destination.token)
+        val keep = buildString {
+            append("not(")
+            segments.forEachIndexed { index, segment ->
+                if (index > 0) append("+")
+                append("between(t,")
+                append(formatSeconds(segment.startMillis))
+                append(",")
+                append(formatSeconds(segment.endMillis))
+                append(")")
+            }
+            append(")")
+        }
+        try {
+            runTool(
+                executable = ffmpeg,
+                arguments = listOf(
+                    "-hide_banner", "-nostdin", "-y",
+                    "-i", source.token,
+                    "-vf", "select='$keep',setpts=N/FRAME_RATE/TB",
+                    "-af", "aselect='$keep',asetpts=N/SR/TB",
+                    "-c:v", "libx264", "-c:a", "aac",
+                    destination.token,
+                ),
+                failure = { ToolkitError.Io("The SponsorBlock segments could not be removed.") },
+            )
+            val probed = probe(ffprobe, destinationPath)
+            if (probed.videoStreams == 0 && probed.audioStreams == 0) {
+                throw ToolkitError.Io("The trimmed file has no media stream.")
+            }
+        } catch (cancelled: CancellationException) {
+            deleteQuietly(destinationPath)
+            throw cancelled
+        } catch (error: ToolkitError) {
+            deleteQuietly(destinationPath)
+            throw error
+        }
+    }
+
+    private fun formatSeconds(millis: Long): String =
+        "${millis / 1000}.${(millis % 1000).toString().padStart(3, '0')}"
 
     /** One ffmpeg tag rewrite into [outputPath]; artwork is optional. */
     private suspend fun runTagRewrite(

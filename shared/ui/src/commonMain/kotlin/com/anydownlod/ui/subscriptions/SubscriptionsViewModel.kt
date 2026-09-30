@@ -27,6 +27,8 @@ data class SubscriptionsUiState(
     val selectedIds: Set<String> = emptySet(),
     val editingId: String? = null,
     val deletingId: String? = null,
+    /** T-019: show the suspension-stops-a-scan note (iOS and web). */
+    val pauseOnSuspend: Boolean = false,
 )
 
 @Inject
@@ -34,6 +36,7 @@ data class SubscriptionsUiState(
 @ContributesIntoMap(AppScope::class)
 class SubscriptionsViewModel(
     private val repository: SubscriptionRepository,
+    private val pauseOnSuspend: Boolean = false,
 ) : ViewModel() {
 
     private val selectedIds = MutableStateFlow<Set<String>>(emptySet())
@@ -53,8 +56,13 @@ class SubscriptionsViewModel(
             selectedIds = selected.intersect(ids),
             editingId = editing?.takeIf { it in ids },
             deletingId = deleting?.takeIf { it in ids },
+            pauseOnSuspend = pauseOnSuspend,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SubscriptionsUiState())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        SubscriptionsUiState(pauseOnSuspend = pauseOnSuspend),
+    )
 
     fun toggle(id: String) {
         selectedIds.update { if (id in it) it - id else it + id }
@@ -100,6 +108,12 @@ class SubscriptionsViewModel(
     }
 
     fun delete(id: String): Boolean = repository.delete(id)
+
+    /** T-019: bulk delete of the selected rows. */
+    fun deleteSelected(ids: Set<String> = selectedIds.value) {
+        ids.forEach { repository.delete(it) }
+        selectedIds.value = emptySet()
+    }
 
     /**
      * Validates the editable fields and calls the repository. Returns an error

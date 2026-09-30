@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,7 +23,10 @@ import com.anydownlod.ui.settings.SettingsViewModel
 import com.anydownlod.ui.theme.AnyDownloadTheme
 import com.anydownlod.ui.theme.LocalThemeChanger
 import com.anydownlod.ui.theme.LocalThemePreference
+import com.anydownlod.core.validation.SharedLink
+import com.anydownlod.core.validation.SharedLinkResult
 import com.anydownlod.ui.viewmodel.fallbackViewModelFactory
+import kotlinx.coroutines.flow.MutableStateFlow
 import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
 import dev.zacsweers.metrox.viewmodel.MetroViewModelFactory
 import dev.zacsweers.metrox.viewmodel.ViewModelGraph
@@ -49,6 +53,20 @@ fun App(
 
     var settingsOpen by remember { mutableStateOf(false) }
     var previewUrl by remember { mutableStateOf<String?>(null) }
+
+    // T-020: a shared or deep link is validated once and opens the preview;
+    // a rejection is consumed silently (the Add field stays the manual path).
+    val sharedInbox = graph.sharedLinkInbox
+    val fallbackInbox = remember { MutableStateFlow<String?>(null) }
+    val pendingSharedText by (sharedInbox?.pending ?: fallbackInbox).collectAsState()
+    LaunchedEffect(pendingSharedText) {
+        val pending = pendingSharedText ?: return@LaunchedEffect
+        when (val result = SharedLink.extract(pending)) {
+            is SharedLinkResult.Accepted -> previewUrl = result.url
+            is SharedLinkResult.Rejected -> Unit
+        }
+        sharedInbox?.consume()
+    }
 
     CompositionLocalProvider(LocalMetroViewModelFactory provides metroViewModelFactory) {
         val settingsViewModel = metroViewModel<SettingsViewModel>()

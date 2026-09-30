@@ -275,6 +275,20 @@ class DesktopStoreTest {
     }
 
     @Test
+    fun anInvalidReloadKeepsTheLastKnownGoodSettings() {
+        val dir = tempDir()
+        val store = DesktopStore(dir, now = { 1L })
+        store.load()
+        store.saveSettings(AppSettings(downloadRoot = "/tmp/keep-me"))
+        java.nio.file.Files.writeString(store.settingsFile, "{not json")
+
+        val reloaded = store.load()
+
+        assertEquals("/tmp/keep-me", reloaded.settings.downloadRoot)
+        assertTrue(store.loadWarning.orEmpty().contains("last known-good"))
+    }
+
+    @Test
     fun persistingEngineWritesAfterEveryMutation() {
         val dir = tempDir()
         val store = DesktopStore(dir, now = { 1L })

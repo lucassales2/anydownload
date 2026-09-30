@@ -43,7 +43,8 @@ class YoutubePlaylistEngineTest {
         private val mediaBytes: ByteArray,
         private val playerJsonFor: (String) -> String,
     ) : HttpTransfer {
-        val requests = mutableListOf<String>()
+        // Jobs run concurrently; the recorder must be thread-safe.
+        val requests: MutableCollection<String> = java.util.concurrent.ConcurrentLinkedQueue()
 
         override suspend fun execute(request: HttpRequest): HttpResponse {
             requests += request.url

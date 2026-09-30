@@ -11,6 +11,8 @@ serialization = "1.11.0"
 ktor = "3.6.0"
 metro = "1.4.5"
 zipline = "1.27.0"
+# Desktop-only SQLite reader for the T-018 browser snapshot (Chrome/Firefox).
+sqlite = "3.53.4.0"
 
 # Platform SDK levels. Provisional; T-004/T-006 must confirm minimums.
 androidCompileSdk = "37"
@@ -39,6 +41,7 @@ androidx-test-runner = { module = "androidx.test:runner", version = "1.6.2" }
 kotlinx-browser = { module = "org.jetbrains.kotlinx:kotlinx-browser", version = "0.5.0" }
 zipline = { module = "app.cash.zipline:zipline", version.ref = "zipline" }
 metrox-viewmodel-compose = { module = "dev.zacsweers.metro:metrox-viewmodel-compose", version.ref = "metro" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

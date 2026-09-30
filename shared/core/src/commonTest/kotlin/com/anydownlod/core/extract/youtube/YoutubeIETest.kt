@@ -193,13 +193,15 @@ class YoutubeIETest {
     }
 
     @Test
-    fun liveStreamsFailTypedInD4() = runTest {
-        assertFailsWith<ExtractionError.Unavailable> {
-            extract(
-                "https://www.youtube.com/live/$videoId",
-                playerJson(live = true),
-            )
-        }
+    fun liveStreamsExposeTheirHlsManifest() = runTest {
+        val info = extract(
+            "https://www.youtube.com/live/$videoId",
+            playerJson(live = true),
+        )
+        assertEquals(true, info.isLive)
+        val format = info.formats.single()
+        assertEquals("m3u8_native", format.protocol)
+        assertEquals("https://manifest.example/live.m3u8", format.url)
     }
 
     @Test
@@ -238,6 +240,30 @@ class YoutubeIETest {
                     method = "POST",
                     contentType = "application/json",
                     body = playerJson(),
+                ),
+            ),
+        )
+        val result = runCase(case) { http -> YoutubeIE(http) }
+        assertIs<CaseResult.Passed>(result, "case failed: $result")
+    }
+
+    @Test
+    fun liveShapeCasePassesThroughTheHarness() = runTest {
+        val case = ExtractorCase(
+            url = "https://www.youtube.com/live/$videoId",
+            infoDict = mapOf(
+                "id" to Expect.Value(videoId),
+                "is_live" to Expect.Value(true),
+                "formats" to Expect.Count(1),
+                "formats.0.protocol" to Expect.Value("m3u8_native"),
+                "formats.0.url" to Expect.Value("https://manifest.example/live.m3u8"),
+            ),
+            routes = listOf(
+                FixtureRoute(
+                    urlPattern = "https://www.youtube.com/youtubei/v1/player*",
+                    method = "POST",
+                    contentType = "application/json",
+                    body = playerJson(live = true),
                 ),
             ),
         )
@@ -365,6 +391,7 @@ class YoutubeIETest {
         } else {
             ""
         }
+        val hlsField = if (live) ", \"hlsManifestUrl\": \"https://manifest.example/live.m3u8\"" else ""
         return """
             {
               "playabilityStatus": {"status": "$status"$reasonField},
@@ -384,7 +411,7 @@ class YoutubeIETest {
                   {"url": "https://i9.ytimg.example/vi/fixture/default.jpg", "width": 120, "height": 90}
                 ]}
               }$microformat,
-              "streamingData": {"formats": [$formats], "adaptiveFormats": [$adaptive]}
+              "streamingData": {"formats": [$formats], "adaptiveFormats": [$adaptive]$hlsField}
             }
         """.trimIndent()
     }

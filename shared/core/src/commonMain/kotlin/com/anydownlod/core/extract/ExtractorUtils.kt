@@ -525,6 +525,33 @@ object ExtractorUtils {
         "(?i)(\\d{1,2})\\s+([A-Za-z]{3,9})\\s+(\\d{4})",
     )
 
+    /**
+     * Upstream `datetime.utcfromtimestamp` subset: the UTC `YYYYMMDD` date
+     * for a Unix timestamp in seconds, from 1970 on.
+     */
+    fun epochSecondsToDate(epochSeconds: Long): String {
+        val days = epochSeconds / 86_400
+        var year = 1970
+        var remaining = days
+        while (true) {
+            val length = if (isLeapYear(year)) 366 else 365
+            if (remaining < length) break
+            remaining -= length
+            year++
+        }
+        val monthLengths = intArrayOf(
+            31, if (isLeapYear(year)) 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+        )
+        var month = 0
+        while (remaining >= monthLengths[month]) {
+            remaining -= monthLengths[month]
+            month++
+        }
+        return formatDate(year, month + 1, remaining.toInt() + 1) ?: "19700101"
+    }
+
+    private fun isLeapYear(year: Int): Boolean = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+
     private fun formatDate(year: Int, month: Int, day: Int): String? {
         if (year <= 0 || month !in 1..12 || day !in 1..31) return null
         return "${year.toString().padStart(4, '0')}${month.toString().padStart(2, '0')}${

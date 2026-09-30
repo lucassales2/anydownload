@@ -48,21 +48,72 @@ class YoutubeTabIE(
 ) {
     override val displayName: String = "YouTube playlist"
 
+    override fun matchId(url: String): String? {
+        val groups = VALID_URL.find(url)?.groups ?: return null
+        return listOf("playlist", "watchlist", "channel", "handle", "custom", "user")
+            .firstNotNullOfOrNull { groups[it]?.value }
+    }
+
     override suspend fun extract(url: String): InfoDict {
-        val playlistId = matchId(url) ?: throw ExtractionError.UnsupportedUrl()
-        val root = requestBrowse(playlistId)
-        val entries = playlistEntries(root).take(MAX_PLAYLIST_ENTRIES)
+        val match = VALID_URL.find(url) ?: throw ExtractionError.UnsupportedUrl()
+        val playlistId = match.groups["playlist"]?.value ?: match.groups["watchlist"]?.value
+        val channelId = match.groups["channel"]?.value
+        val handle = match.groups["handle"]?.value
+        val browseId: String
+        val displayId: String
+        when {
+            playlistId != null -> {
+                browseId = "VL$playlistId"
+                displayId = playlistId
+            }
+
+            channelId != null -> {
+                browseId = channelId
+                displayId = channelId
+            }
+
+            handle != null -> {
+                browseId = "@$handle"
+                displayId = "@$handle"
+            }
+
+            else -> throw ExtractionError.UnsupportedUrl(
+                "This YouTube channel URL needs the URL resolver, which is not translated yet.",
+            )
+        }
+        val root = requestBrowse(browseId)
+        val entries = playlistEntriesWithContinuations(root)
         if (entries.isEmpty()) {
-            throw ExtractionError.Unavailable("This playlist is private, unavailable, or empty.")
+            throw ExtractionError.Unavailable("This playlist or channel is private, unavailable, or empty.")
         }
         return InfoDict(
-            id = playlistId,
+            id = displayId,
             title = playlistTitle(root),
             entries = entries,
-            webpageUrl = "https://www.youtube.com/playlist?list=$playlistId",
+            webpageUrl = url,
             extractor = "youtube",
             extractorKey = ieKey,
         )
+    }
+
+    private suspend fun requestBrowse(playlistId: String): JsonObject =
+        requestBrowse(browseBody(browseId = playlistId))
+
+    /** Follows at most [MAX_CONTINUATION_PAGES] continuations, stopping at the cap. */
+    private suspend fun playlistEntriesWithContinuations(first: JsonObject): List<InfoEntry> {
+        val entries = mutableListOf<InfoEntry>()
+        val seen = mutableSetOf<String>()
+        var root = first
+        var pages = 0
+        while (entries.size < MAX_PLAYLIST_ENTRIES && pages <= MAX_CONTINUATION_PAGES) {
+            collectPlaylistEntries(root, entries, seen)
+            if (entries.size >= MAX_PLAYLIST_ENTRIES) break
+            val token = continuationToken(root) ?: break
+            if (pages == MAX_CONTINUATION_PAGES) break
+            root = requestBrowse(browseBody(continuation = token))
+            pages++
+        }
+        return entries.take(MAX_PLAYLIST_ENTRIES)
     }
 
     /**
@@ -70,25 +121,7 @@ class YoutubeTabIE(
      * mirroring the request shape `YoutubeSearch` uses. No visitor id, cookie,
      * or PO token is sent.
      */
-    private suspend fun requestBrowse(playlistId: String): JsonObject {
-        val body = buildJsonObject {
-            put(
-                "context",
-                buildJsonObject {
-                    put(
-                        "client",
-                        buildJsonObject {
-                            put("clientName", YoutubeSearch.YOUTUBE_CLIENT_CONTEXT_NAME)
-                            put("clientVersion", YoutubeIE.WEB_CLIENT_VERSION)
-                            put("hl", "en")
-                            put("timeZone", "UTC")
-                            put("utcOffsetMinutes", 0)
-                        },
-                    )
-                },
-            )
-            put("browseId", "VL$playlistId")
-        }
+    private suspend fun requestBrowse(body: JsonObject): JsonObject {
         val response = http.downloadJson(
             url = BROWSE_URL,
             method = HttpMethods.POST,
@@ -105,28 +138,73 @@ class YoutubeTabIE(
             ?: throw ExtractionError.Malformed("The playlist response was not an object.")
     }
 
-    /** Flat id/title/url rows in document order, first occurrence per id. */
-    private fun playlistEntries(root: JsonObject): List<InfoEntry> {
-        val entries = mutableListOf<InfoEntry>()
-        val seen = mutableSetOf<String>()
-        collect(root, "playlistVideoRenderer").forEach { renderer ->
-            val videoId = renderer.stringOrNull("videoId")
-                ?: renderer.path("navigationEndpoint", "watchEndpoint", "videoId").stringOrNull()
-                ?: return@forEach
-            if (!seen.add(videoId)) return@forEach
-            val title = renderer.path("title", "runs").asArray().texts().joinToString("").trim()
-                .ifEmpty { renderer.path("title", "simpleText").stringOrNull() ?: videoId }
-            entries += InfoEntry(
-                id = videoId,
-                title = title,
-                url = "https://www.youtube.com/watch?v=$videoId",
-            )
-        }
-        return entries
+    private fun browseBody(browseId: String? = null, continuation: String? = null): JsonObject = buildJsonObject {
+        put(
+            "context",
+            buildJsonObject {
+                put(
+                    "client",
+                    buildJsonObject {
+                        put("clientName", YoutubeSearch.YOUTUBE_CLIENT_CONTEXT_NAME)
+                        put("clientVersion", YoutubeIE.WEB_CLIENT_VERSION)
+                        put("hl", "en")
+                        put("timeZone", "UTC")
+                        put("utcOffsetMinutes", 0)
+                    },
+                )
+            },
+        )
+        browseId?.let { put("browseId", it) }
+        continuation?.let { put("continuation", it) }
     }
+
+    /** The first `continuationItemRenderer` token in document order. */
+    private fun continuationToken(root: JsonObject): String? =
+        collect(root, "continuationItemRenderer").firstNotNullOfOrNull { renderer ->
+            renderer.path("continuationEndpoint", "continuationCommand", "token").stringOrNull()
+        }
+
+    /**
+     * Flat id/title/url rows in document order, first occurrence per id. The
+     * playlist, channel grid, and mix renderers the pin's tab endpoint returns
+     * are all read; the id set dedupes nested renderers.
+     */
+    private fun collectPlaylistEntries(
+        root: JsonObject,
+        entries: MutableList<InfoEntry>,
+        seen: MutableSet<String>,
+    ) {
+        for (key in listOf(
+            "playlistVideoRenderer",
+            "playlistPanelVideoRenderer",
+            "videoRenderer",
+            "gridVideoRenderer",
+            "reelItemRenderer",
+        )) {
+            collect(root, key).forEach { renderer ->
+                val videoId = renderer.stringOrNull("videoId")
+                    ?: renderer.path("navigationEndpoint", "watchEndpoint", "videoId").stringOrNull()
+                    ?: return@forEach
+                if (!seen.add(videoId)) return@forEach
+                val title = rendererTitle(renderer) ?: videoId
+                entries += InfoEntry(
+                    id = videoId,
+                    title = title,
+                    url = "https://www.youtube.com/watch?v=$videoId",
+                )
+            }
+        }
+    }
+
+    /** `title.runs[].text`, `title.simpleText`, or `headline.simpleText`. */
+    private fun rendererTitle(renderer: JsonObject): String? =
+        renderer.path("title", "runs").asArray().texts().joinToString("").trim().takeIf { it.isNotEmpty() }
+            ?: renderer.path("title", "simpleText").stringOrNull()
+            ?: renderer.path("headline", "simpleText").stringOrNull()
 
     private fun playlistTitle(root: JsonObject): String? {
         collect(root, "playlistMetadataRenderer").firstOrNull()?.stringOrNull("title")?.let { return it }
+        collect(root, "channelMetadataRenderer").firstOrNull()?.stringOrNull("title")?.let { return it }
         val header = collect(root, "playlistHeaderRenderer").firstOrNull() ?: return null
         return header.path("title", "simpleText").stringOrNull()
             ?: header.path("title", "runs").asArray().texts().joinToString("").trim().takeIf { it.isNotEmpty() }
@@ -156,16 +234,28 @@ class YoutubeTabIE(
         /** Same hard cap as the engine expander; never read past 50 entries. */
         const val MAX_PLAYLIST_ENTRIES: Int = 50
 
+        /** Bound on continuation pages so a malformed token cannot loop forever. */
+        const val MAX_CONTINUATION_PAGES: Int = 10
+
         const val BROWSE_URL: String = "https://www.youtube.com/youtubei/v1/browse?prettyPrint=false"
 
         /**
-         * `/playlist?list=` only, on the plain, `www`, `m`, or `music` host.
-         * A watch URL with `list=` does not match, and mixes (`RD...`) are
-         * refused so they stay unhandled.
+         * `/playlist?list=`, `/watch?...&list=` (including `RD...` mixes),
+         * `/channel/<UC id>`, and `/@handle` with an optional tab. `/c/` and
+         * `/user/` need the `navigation/resolve_url` call and fail typed.
          */
         val VALID_URL: Regex = Regex(
-            "^https?://(?:www\\.|m\\.|music\\.)?youtube\\.com/playlist" +
-                "\\?(?:[^#]*?&)?list=(?<id>(?!RD)[0-9A-Za-z_-]+)(?:[&#].*)?$",
+            "^https?://(?:www\\.|m\\.|music\\.)?youtube\\.com/" +
+                "(?:" +
+                "playlist\\?(?:[^#]*?&)?list=(?<playlist>[0-9A-Za-z_-]+)" +
+                "|watch\\?(?:[^#]*?&)?list=(?<watchlist>[0-9A-Za-z_-]+)" +
+                "|channel/(?<channel>UC[0-9A-Za-z_-]{22})" +
+                "|@(?<handle>[^/?#]+)" +
+                "|c/(?<custom>[^/?#]+)" +
+                "|user/(?<user>[^/?#]+)" +
+                ")" +
+                "(?:/(?:videos|streams|shorts|playlists|live))?" +
+                "(?:[?#&].*)?$",
         )
     }
 }

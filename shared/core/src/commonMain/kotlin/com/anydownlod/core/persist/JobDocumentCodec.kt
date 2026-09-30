@@ -18,6 +18,7 @@ import com.anydownlod.core.domain.MediaType
 import com.anydownlod.core.domain.OverwriteMode
 import com.anydownlod.core.domain.QualityPreference
 import com.anydownlod.core.domain.StartPolicy
+import com.anydownlod.core.domain.SponsorBlockOutcome
 import com.anydownlod.core.domain.VideoCodec
 import com.anydownlod.core.domain.VideoContainerProfile
 import kotlinx.serialization.Serializable
@@ -80,6 +81,7 @@ internal data class JobDto(
     val formatsNeedingJs: Int = 0,
     val tagsEmbedded: Boolean? = null,
     val lyricsEmbedded: Boolean? = null,
+    val sponsorBlock: String? = null,
     val parentBatchId: String? = null,
     val subscriptionId: String? = null,
     val scheduledAtEpochMillis: Long? = null,
@@ -137,6 +139,7 @@ internal data class OptionsDto(
     val filenamePrefix: String? = null,
     val destinationFolder: String? = null,
     val playlistItemLimit: Int = 0,
+    val playlistItems: String = "",
     val overwrite: String = OverwriteMode.SKIP.wireName,
     val clipStart: String? = null,
     val clipEnd: String? = null,
@@ -200,6 +203,7 @@ internal fun DownloadJob.toDto(): JobDto = JobDto(
     formatsNeedingJs = formatsNeedingJs,
     tagsEmbedded = tagsEmbedded,
     lyricsEmbedded = lyricsEmbedded,
+    sponsorBlock = sponsorBlock?.wireName,
     parentBatchId = parentBatchId,
     subscriptionId = subscriptionId,
     scheduledAtEpochMillis = scheduledAtEpochMillis,
@@ -224,6 +228,7 @@ internal fun JobDto.toDomain(): DownloadJob = DownloadJob(
     formatsNeedingJs = formatsNeedingJs,
     tagsEmbedded = tagsEmbedded,
     lyricsEmbedded = lyricsEmbedded,
+    sponsorBlock = SponsorBlockOutcome.fromWire(sponsorBlock),
     parentBatchId = parentBatchId,
     subscriptionId = subscriptionId,
     scheduledAtEpochMillis = scheduledAtEpochMillis,
@@ -298,6 +303,7 @@ internal fun DownloadOptions.toDto(): OptionsDto = OptionsDto(
     filenamePrefix = filenamePrefix,
     destinationFolder = destinationFolder,
     playlistItemLimit = playlistItemLimit,
+    playlistItems = playlistItems,
     overwrite = overwrite.wireName,
     clipStart = clipStart,
     clipEnd = clipEnd,
@@ -324,6 +330,7 @@ internal fun OptionsDto.toDomain(): DownloadOptions = DownloadOptions(
     filenamePrefix = filenamePrefix,
     destinationFolder = destinationFolder,
     playlistItemLimit = playlistItemLimit,
+    playlistItems = playlistItems,
     overwrite = OverwriteMode.fromWire(overwrite) ?: OverwriteMode.SKIP,
     clipStart = clipStart,
     clipEnd = clipEnd,

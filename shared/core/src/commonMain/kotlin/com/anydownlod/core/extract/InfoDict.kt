@@ -130,6 +130,40 @@ data class InfoEntry(
     @Transient val failure: ExtractionError? = null,
 )
 
+/** One subtitle-track format URL on the info dict (T-124). Writing files is D13. */
+@Serializable
+data class SubtitleFormat(
+    val ext: String,
+    val url: String,
+)
+
+/**
+ * One subtitle or caption track on the info dict. Upstream models the same
+ * data as `subtitles[lang] = [{ext, url, ...}]`; the Kotlin shape keeps the
+ * language once and lists the format URLs under it. Writing SRT/VTT/TTML/TXT
+ * files is T-015 (D13); extraction only records the tracks here.
+ */
+@Serializable
+data class SubtitleTrack(
+    val language: String,
+    val name: String? = null,
+    /** True for an automatic/ASR track (upstream `kind == 'asr'`). */
+    val automatic: Boolean = false,
+    /** True when the track URL needs a PO token that is not configured (E-13). */
+    val needsPoToken: Boolean = false,
+    val formats: List<SubtitleFormat> = emptyList(),
+)
+
+/** One chapter marker on the info dict (T-124). Splitting files is T-016. */
+@Serializable
+data class Chapter(
+    /** Seconds from the start. */
+    val startTime: Double? = null,
+    /** Seconds from the start; null means the next chapter or the end. */
+    val endTime: Double? = null,
+    val title: String? = null,
+)
+
 /**
  * Upstream info dict. Fields not filled stay null or empty; the extractor key
  * and display name come from the owning [InfoExtractor].
@@ -166,10 +200,28 @@ data class InfoDict(
     val ageLimit: Int? = null,
     val isLive: Boolean? = null,
     val availability: String? = null,
+    /** Manual caption tracks (upstream `subtitles`). */
+    val subtitles: List<SubtitleTrack> = emptyList(),
+    /** Automatic/ASR caption tracks (upstream `automatic_captions`). */
+    val automaticCaptions: List<SubtitleTrack> = emptyList(),
+    /** Chapter markers when the player response carries them. */
+    val chapters: List<Chapter> = emptyList(),
     /**
      * Port-only (not an upstream field): how many formats were dropped
      * because they need the JavaScript runtime (signature cipher or an `n`
      * transform). The engine reports this as an honest limitation.
      */
     val formatsNeedingJs: Int = 0,
+    /**
+     * Port-only: how many formats were dropped because the client's PO-token
+     * policy requires a GVS token and no provider supplied one (E-13).
+     */
+    val formatsNeedingPoToken: Int = 0,
+    /**
+     * Port-only (not an upstream field): the `url_result` delegation target.
+     * When set, [ExtractorRegistry] re-dispatches the URL once per hop
+     * (bounded) so a thin extractor can hand off to the site extractor that
+     * owns the resolved URL, exactly like upstream `self.url_result(...)`.
+     */
+    val redirectUrl: String? = null,
 )

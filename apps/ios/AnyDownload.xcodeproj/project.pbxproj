@@ -8,14 +8,43 @@
 
 /* Begin PBXBuildFile section */
 		1E435DD8B0BF284B8346207A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495DF79F70F90611E98BE86 /* ContentView.swift */; };
+		BACA02E050F293B94C33F2A9 /* AnyDownloadShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD6A58604DF825DA92FB6D98 /* AnyDownloadShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E1744EEC2CFAE3871FC2735F /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F89D0EC248139EB2341E2B67 /* ShareViewController.swift */; };
 		FDB678B0D96CCD2A000D3EBD /* AnyDownloadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B327E14C6D6B7E8D563B15E /* AnyDownloadApp.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		50404319CEBA3747987CCF70 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2CF3B97DDB8DD8CD35272E56 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D93631B28D32913F40DB8729;
+			remoteInfo = AnyDownloadShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B993BE5E9C472F83B4A894AD /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BACA02E050F293B94C33F2A9 /* AnyDownloadShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2495DF79F70F90611E98BE86 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2B327E14C6D6B7E8D563B15E /* AnyDownloadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyDownloadApp.swift; sourceTree = "<group>"; };
 		5AFB14D24956AA7CFA9ED4D6 /* AnyDownload.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AnyDownload.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		65133E7D691B4EFD42BE9227 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		BB4079C9962AED4B5B69B021 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F89D0EC248139EB2341E2B67 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		FD6A58604DF825DA92FB6D98 /* AnyDownloadShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AnyDownloadShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -23,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				DF086A4B9B1102FA9BB012AE /* AnyDownload */,
+				8A10FC9C29F19FAD0FED6C97 /* AnyDownloadShare */,
 				3C231C4CBF2C2B1FC8E871E5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -31,8 +61,18 @@
 			isa = PBXGroup;
 			children = (
 				5AFB14D24956AA7CFA9ED4D6 /* AnyDownload.app */,
+				FD6A58604DF825DA92FB6D98 /* AnyDownloadShare.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8A10FC9C29F19FAD0FED6C97 /* AnyDownloadShare */ = {
+			isa = PBXGroup;
+			children = (
+				BB4079C9962AED4B5B69B021 /* Info.plist */,
+				F89D0EC248139EB2341E2B67 /* ShareViewController.swift */,
+			);
+			path = AnyDownloadShare;
 			sourceTree = "<group>";
 		};
 		DF086A4B9B1102FA9BB012AE /* AnyDownload */ = {
@@ -54,10 +94,12 @@
 			buildPhases = (
 				184ADB0E7516C5E53E4659A0 /* Build shared Kotlin framework */,
 				59E05EF22FCA5165E3284697 /* Sources */,
+				B993BE5E9C472F83B4A894AD /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				12C85096C2574251054CF679 /* PBXTargetDependency */,
 			);
 			name = AnyDownload;
 			packageProductDependencies = (
@@ -65,6 +107,23 @@
 			productName = AnyDownload;
 			productReference = 5AFB14D24956AA7CFA9ED4D6 /* AnyDownload.app */;
 			productType = "com.apple.product-type.application";
+		};
+		D93631B28D32913F40DB8729 /* AnyDownloadShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6607503FD8E77C833486B343 /* Build configuration list for PBXNativeTarget "AnyDownloadShare" */;
+			buildPhases = (
+				B1A0B1D601B33DD1828F6466 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AnyDownloadShare;
+			packageProductDependencies = (
+			);
+			productName = AnyDownloadShare;
+			productReference = FD6A58604DF825DA92FB6D98 /* AnyDownloadShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -92,6 +151,7 @@
 			projectRoot = "";
 			targets = (
 				16C09365EFF9AB658B4A68F7 /* AnyDownload */,
+				D93631B28D32913F40DB8729 /* AnyDownloadShare */,
 			);
 		};
 /* End PBXProject section */
@@ -114,7 +174,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/../..\"\n./gradlew :shared:ui:embedAndSignAppleFrameworkForXcode";
+			shellScript = "cd \"$SRCROOT/../..\"\n./gradlew :shared:ui:embedAndSignAppleFrameworkForXcode\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -128,7 +188,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1A0B1D601B33DD1828F6466 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1744EEC2CFAE3871FC2735F /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		12C85096C2574251054CF679 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D93631B28D32913F40DB8729 /* AnyDownloadShare */;
+			targetProxy = 50404319CEBA3747987CCF70 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		07DA4B53E76EB712C1541724 /* Release */ = {
@@ -208,6 +284,40 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		9A9D2945250B9B48F7C349AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AnyDownloadShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.anydownlod.ios.share;
+				PRODUCT_NAME = AnyDownloadShare;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A60E1432488730EFA4DEE6B1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AnyDownloadShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.anydownlod.ios.share;
+				PRODUCT_NAME = AnyDownloadShare;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -315,6 +425,15 @@
 			buildConfigurations = (
 				D44835AC4E7D35F699B45A2E /* Debug */,
 				28335AE429B0EBC53E5C7B8D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6607503FD8E77C833486B343 /* Build configuration list for PBXNativeTarget "AnyDownloadShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A9D2945250B9B48F7C349AC /* Debug */,
+				A60E1432488730EFA4DEE6B1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

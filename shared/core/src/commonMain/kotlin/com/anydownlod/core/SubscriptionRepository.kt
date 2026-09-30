@@ -2,6 +2,7 @@ package com.anydownlod.core
 
 import com.anydownlod.core.domain.AppSettingsDefaults
 import com.anydownlod.core.domain.DownloadOptions
+import com.anydownlod.core.domain.JobError
 import com.anydownlod.core.domain.Subscription
 import kotlinx.coroutines.flow.StateFlow
 
@@ -48,4 +49,19 @@ interface SubscriptionRepository {
 
     /** Checks unpaused subscriptions. Paused rows are skipped. */
     fun checkAll()
+
+    /** T-019: checks only the given ids; paused and unknown ids are skipped. */
+    fun checkSelected(ids: List<String>)
+
+    /**
+     * T-019: persists one scan outcome. [seenIds] is already capped by the
+     * caller; a null [error] clears the last error. The captured options and
+     * the subscription id are untouched.
+     */
+    fun recordCheck(
+        id: String,
+        seenIds: List<String>,
+        error: JobError?,
+        nextCheckAtEpochMillis: Long,
+    ): Boolean
 }

@@ -41,7 +41,12 @@ import com.anydownlod.core.music.SpotifyMetadataClients
 import com.anydownlod.core.persist.JobDocumentRestore
 import com.anydownlod.core.persist.JobDocumentStorageError
 import com.anydownlod.core.persist.JobDocumentStore
+import com.anydownlod.core.persist.PersistedSubscriptionRepository
 import com.anydownlod.core.persist.PersistingDownloadEngine
+import com.anydownlod.core.subscriptions.RegistrySubscriptionEntrySource
+import com.anydownlod.core.subscriptions.ScanningSubscriptionRepository
+import com.anydownlod.core.subscriptions.SubscriptionScanner
+import com.anydownlod.core.subscriptions.enqueueSubscriptionEntry
 import com.anydownlod.core.platform.HttpTransfer
 import com.anydownlod.core.platform.WebExtensionTransfer
 import com.anydownlod.core.postprocess.ToolkitCapabilities
@@ -73,6 +78,7 @@ internal interface WebAppGraph : ViewModelGraph, AppGraph {
 
     override val previews: MediaPreviewSource get() = hostPreviews
     override val startupWarning: String? get() = hostStartupWarning
+    override val subscriptionsPauseOnSuspend: Boolean get() = true
     override val spotify: SpotifyDownloadService? get() = hostSpotify
 
     /** The page runtime the T-072 `?solverHook=1` hook installs on. */
@@ -186,7 +192,22 @@ internal interface WebAppGraph : ViewModelGraph, AppGraph {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun subscriptions(): SubscriptionRepository = InMemorySubscriptionRepository()
+    fun subscriptions(
+        registry: ExtractorRegistry,
+        scope: CoroutineScope,
+        engine: Provider<DownloadEngine>,
+    ): SubscriptionRepository {
+        val storage = WebSubscriptionDocumentStorage()
+        val delegate = InMemorySubscriptionRepository(
+            seedSubscriptions = PersistedSubscriptionRepository.restore(storage),
+        )
+        val persisted = PersistedSubscriptionRepository(delegate, storage)
+        val scanner = SubscriptionScanner(
+            repository = persisted,
+            entrySource = RegistrySubscriptionEntrySource(registry),
+        ) { subscription, entry -> enqueueSubscriptionEntry(engine(), subscription, entry) }
+        return ScanningSubscriptionRepository(persisted, scope, scanner)
+    }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -232,6 +253,9 @@ internal interface WebAppGraph : ViewModelGraph, AppGraph {
     @SingleIn(AppScope::class)
     fun folderPicker(): FolderPicker = FolderPicker { null }
 
+    // T-018 recorded web gap: the extension does not store or apply a
+    // Netscape cookie file yet, and MV3 fetch cannot set Cookie. The page
+    // sees only Not configured and never receives cookie bytes.
     @Provides
     @SingleIn(AppScope::class)
     fun cookieFilePicker(): CookieFilePicker = CookieFilePicker { null }

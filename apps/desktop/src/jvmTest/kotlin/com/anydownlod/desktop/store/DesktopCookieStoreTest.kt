@@ -1,6 +1,8 @@
 package com.anydownlod.desktop.store
 
 import java.nio.file.Files
+import com.anydownlod.core.CookieErrorReason
+import com.anydownlod.core.CookieStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -75,5 +77,53 @@ class DesktopCookieStoreTest {
         val cookieStore = DesktopCookieStore(DesktopStore(stateDirectory, now = { 1L }))
 
         assertTrue(cookieStore.import(source.toString()).success)
+    }
+
+    @Test
+    fun statusTracksNotConfiguredConfiguredAndError() {
+        val stateDirectory = tempDir()
+        val source = stateDirectory.resolve("exported.txt")
+        Files.writeString(source, fixture)
+        val store = DesktopStore(stateDirectory, now = { 1L }).also { it.load() }
+        val cookieStore = DesktopCookieStore(store)
+
+        assertEquals(CookieStatus.NotConfigured, cookieStore.status())
+        assertTrue(cookieStore.import(source.toString()).success)
+        assertEquals(CookieStatus.Configured, cookieStore.status())
+        cookieStore.delete()
+        assertEquals(CookieStatus.NotConfigured, cookieStore.status())
+    }
+
+    @Test
+    fun restartLoadsTheFrozenPathAndShowsConfigured() {
+        val stateDirectory = tempDir()
+        val source = stateDirectory.resolve("exported.txt")
+        Files.writeString(source, fixture)
+        val first = DesktopStore(stateDirectory, now = { 1L }).also { it.load() }
+        assertTrue(DesktopCookieStore(first).import(source.toString()).success)
+
+        // A fresh store over the same state directory, as after a restart.
+        val reloaded = DesktopStore(stateDirectory, now = { 1L }).also { it.load() }
+
+        assertEquals(CookieStatus.Configured, DesktopCookieStore(reloaded).status())
+        assertTrue(reloaded.cookieFilePath().orEmpty().endsWith("cookies.txt"))
+    }
+
+    @Test
+    fun anExpiredStoredFileIsErrorWithoutSecrets() {
+        val stateDirectory = tempDir()
+        val source = stateDirectory.resolve("expired.txt")
+        Files.writeString(
+            source,
+            "# Netscape HTTP Cookie File\n.example.com\tTRUE\t/\tFALSE\t1\tfake_session\tfake_value\n",
+        )
+        val cookieStore = DesktopCookieStore(DesktopStore(stateDirectory, now = { 1L }))
+        assertTrue(cookieStore.import(source.toString()).success)
+
+        val status = cookieStore.status()
+
+        assertEquals(CookieStatus.Error(CookieErrorReason.ALL_EXPIRED), status)
+        assertFalse(status.toString().contains("fake_session"))
+        assertFalse(status.toString().contains("fake_value"))
     }
 }

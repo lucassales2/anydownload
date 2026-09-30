@@ -6,14 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #D11 #P0
-- [ ] [T-124 — YouTube done at the pin](06-tasks/T-124-Youtube-done.md) #D12 #P0
-- [ ] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #D13 #P1
-- [ ] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #D13 #P1
-- [ ] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #D14 #P1
-- [ ] [T-019 — Channel and playlist subscriptions](06-tasks/T-019-Subscriptions.md) #D15 #P1
-- [ ] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #D15 #P1
-- [ ] [T-125 — Priority sites](06-tasks/T-125-Priority-sites.md) #D16 #P0
 - [ ] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
 - [ ] [T-127 — Medium extractors, first half](06-tasks/T-127-Medium-extractors-a.md) #D18 #P1
 - [ ] [T-128 — Medium extractors, second half](06-tasks/T-128-Medium-extractors-b.md) #D19 #P1
@@ -30,6 +22,7 @@ tags: [project, board]
 ## In progress
 
 
+
 ## Blocked
 
 
@@ -42,6 +35,14 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-125 — Priority sites](06-tasks/T-125-Priority-sites.md) #D16 #P0
+- [x] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #D15 #P1
+- [x] [T-019 — Channel and playlist subscriptions](06-tasks/T-019-Subscriptions.md) #D15 #P1
+- [x] [T-017 — Global options, presets and safe overrides](06-tasks/T-017-Options-and-presets.md) #D14 #P1
+- [x] [T-016 — Clips, chapters and SponsorBlock](06-tasks/T-016-Clips-chapters-SponsorBlock.md) #D13 #P1
+- [x] [T-015 — Captions, thumbnails and metadata](06-tasks/T-015-Captions-thumbnails-metadata.md) #D13 #P1
+- [x] [T-124 — YouTube done at the pin](06-tasks/T-124-Youtube-done.md) #D12 #P0
+- [x] [T-018 — Local cookie lifecycle](06-tasks/T-018-Cookie-lifecycle.md) #D11 #P0
 - [x] [T-139 — Phase 10 verification](06-tasks/T-139-Phase-10-verification.md) #D10 #P0
 - [x] [T-123 — Finish the shared downloader](06-tasks/T-123-Shared-downloader.md) #D10 #P0
 - [x] [T-138 — Generic HLS and DASH discovery](06-tasks/T-138-Generic-hls-dash.md) #D10 #P0

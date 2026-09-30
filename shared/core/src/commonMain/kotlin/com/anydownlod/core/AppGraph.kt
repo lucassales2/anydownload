@@ -28,7 +28,7 @@ fun interface FolderPicker {
 
 /** Opens the host file chooser for a cookie file. Returns the chosen path, or null. */
 fun interface CookieFilePicker {
-    operator fun invoke(): String?
+    suspend fun pick(): String?
 }
 
 /**
@@ -81,10 +81,11 @@ interface AppGraph {
 
     /**
      * Opens the host file chooser for a cookie file. Returns the chosen path,
-     * or null when unavailable. T-035 wires the desktop implementation; shared
-     * code never reads the file.
+     * or null when unavailable. Android and iOS use an async system picker;
+     * the store validates and copies the file, and shared code never reads it.
      */
-    val pickCookieFile: () -> String? get() = { null }
+    val pickCookieFile: suspend () -> String?
+        get() = { null }
 
     /**
      * A load-time explanation to show in the shell (for example a corrupt
@@ -94,6 +95,24 @@ interface AppGraph {
 
     /** Local cookie-file management; desktop replaces the unavailable default. */
     val cookieStore: CookieStore get() = CookieStore.Unavailable
+
+    /**
+     * T-019: true on hosts where the OS or browser stops the app after
+     * suspension, so the Subscriptions screen says scans stop too.
+     */
+    val subscriptionsPauseOnSuspend: Boolean get() = false
+
+    /**
+     * T-020: the host's incoming share/deep-link inbox; null when the host has
+     * no share path. The UI consumes a pending link once.
+     */
+    val sharedLinkInbox: SharedLinkInbox? get() = null
+
+    /**
+     * Desktop-only browser-store snapshot; null on Android, iOS, and web,
+     * which never read a browser database.
+     */
+    val browserCookieImport: BrowserCookieImport? get() = null
 
     /**
      * What the running host's media toolkit can do. Empty on web and in tests;

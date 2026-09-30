@@ -21,9 +21,11 @@ Local execution is the product, not a later optional track. T-024 and T-025 fold
 
 ## Current priorities
 
-Phase **D9** (Metro graphs and ViewModels) is in progress. It changes construction, not download behavior. Spec: [ADR-013](../03-decisions/ADR-013-Metro-graphs-and-viewmodels.md). Tasks T-113–T-122. T-113 and T-114 are done.
+Phases **D11**–**D15** are Done 2026-09-30 with their phase notes marked done. Phase **D16** ([T-125](../06-tasks/T-125-Priority-sites.md), priority sites) is next and is the last phase in this span. The session prompt for that span is [Phase 11–16 loop](Phase-11-16-Loop-prompt.md).
 
-The full Kotlin engine is scheduled and not started. **D10–D22, 614 engineer-days, about 28 months** for one person. YouTube without the CLI is 39 days. Priority sites are 90 days. Spec: [Full engine schedule](Full-engine-schedule.md). Decision: [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md), accepted 2026-09-29 as the plan of record. D10 starts after T-120. M3 cards T-015–T-020 and M4 card T-023 are retargeted onto D11–D22. New cards are T-123–T-131.
+Phase **D9** (Metro, T-113–T-122, including T-120) and phase **D10** (shared downloader, T-133–T-139, and the phase card T-123) are Done. D9 changed construction, not download behavior. Spec: [ADR-013](../03-decisions/ADR-013-Metro-graphs-and-viewmodels.md).
+
+The rest of the Kotlin engine is scheduled and not started beyond D15. **D11–D22 remain inside the 614 engineer-day estimate, about 28 months** for one person from D10. YouTube without the CLI is 39 days through D13. Priority sites are 90 days through D16. Spec: [Full engine schedule](Full-engine-schedule.md). Decision: [ADR-014](../03-decisions/ADR-014-Full-kotlin-engine-schedule.md), accepted 2026-09-29 as the plan of record. M3 cards T-015–T-020 and M4 card T-023 are retargeted onto D11–D22. New cards are T-123–T-131.
 
 Phase **D8** is verified (2026-09-29): the remaining M1 and M2 work. A shared job document, restore on Android, iOS, and web, bounded playlist expansion, and history actions, all on the existing engine. Spec: [Phase 8 — On-device core](Phase-8-On-device-core.md). Decision: [ADR-012](../03-decisions/ADR-012-On-device-core-phase.md), accepted. Tasks T-101–T-112 are done; T-011, T-012, T-013, and T-014 are closed with the M3 gaps noted.
 

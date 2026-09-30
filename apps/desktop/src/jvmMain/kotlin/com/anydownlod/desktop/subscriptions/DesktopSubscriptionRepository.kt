@@ -98,6 +98,10 @@ class DesktopSubscriptionRepository(
         delegate.subscriptions.value.filterNot { it.paused }.forEach { checkNow(it.id) }
     }
 
+    override fun checkSelected(ids: List<String>) {
+        ids.forEach { checkNow(it) }
+    }
+
     /** Runs one flat scan. Exposed for tests and for the scheduler. */
     suspend fun runCheck(subscriptionId: String) {
         val subscription = delegate.subscriptions.value.firstOrNull { it.id == subscriptionId } ?: return

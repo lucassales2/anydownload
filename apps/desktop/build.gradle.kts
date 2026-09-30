@@ -33,6 +33,9 @@ dependencies {
     implementation(project(":shared:ui"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.serialization.json)
+    // T-018 desktop-only: reads Chrome/Firefox cookie SQLite databases. The
+    // Android/iOS/web hosts never use it.
+    implementation(libs.sqlite.jdbc)
     // The desktop ViewModel's Dispatchers.Main comes from the Swing dispatcher.
     implementation(libs.kotlinx.coroutines.swing)
 

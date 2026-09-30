@@ -134,6 +134,32 @@ class HttpRequestTest {
     }
 
     @Test
+    fun explicitCookieFieldLeavesTheDeviceAndTheHeaderMapCannot() {
+        val sanitized = HttpRequest(
+            url = "https://fixtures.example.com/files/tiny.bin",
+            headers = mapOf("cookie" to "fake_from_map=fake_map_value", "accept" to "*/*"),
+            cookie = "fake_session=fake_value",
+        ).sanitized()
+        assertEquals("fake_session=fake_value", sanitized.request.headers["cookie"])
+        assertEquals("*/*", sanitized.request.headers["accept"])
+        // The map-declared name is still refused by name only; the trusted
+        // field value is the only cookie that leaves the device.
+        assertEquals(listOf("cookie"), sanitized.droppedHeaders)
+        assertEquals(null, sanitized.request.cookie)
+        assertFalse(HttpHeaders.isAllowedRequestHeader("cookie"))
+    }
+
+    @Test
+    fun blankCookieFieldAddsNoHeader() {
+        val sanitized = HttpRequest(
+            url = "https://fixtures.example.com/files/tiny.bin",
+            cookie = "   ",
+        ).sanitized()
+        assertFalse(sanitized.request.headers.containsKey("cookie"))
+        assertTrue(sanitized.droppedHeaders.isEmpty())
+    }
+
+    @Test
     fun contentRangeTotalParsesAndRejectsWildcards() {
         assertEquals(100L, ContentRange.totalBytes("bytes 0-9/100"))
         assertEquals(100L, ContentRange.totalBytes("bytes 0-9/100"))

@@ -40,6 +40,12 @@ data class ToolkitCapabilities(
     val audioContainers: Set<AudioContainer> = emptySet(),
     val canEmbedTags: Boolean = false,
     val canEmbedArtwork: Boolean = false,
+    /** True only when the host can mux a subtitle track into the media file (T-015). */
+    val canEmbedSubtitles: Boolean = false,
+    /** True only when the host can cut a time range from the media (T-016). */
+    val canClip: Boolean = false,
+    /** True only when the host can remove SponsorBlock segments (T-016). */
+    val canRemoveSegments: Boolean = false,
     /** Containers whose tags can carry lyrics; WAV is not one of them. */
     val lyricsContainers: Set<AudioContainer> = emptySet(),
 ) {
@@ -113,6 +119,39 @@ interface MediaToolkit {
      * embed it or the fetch failed.
      */
     suspend fun embedTags(file: MediaFilePath, tags: MediaTags, artwork: ByteArray? = null)
+
+    /**
+     * T-015: muxes [subtitles] (an SRT file) into [file] in place, tagged
+     * with [language] when given. Called only when
+     * [ToolkitCapabilities.canEmbedSubtitles] is true. Implementations keep
+     * the media streams untouched, replace the file atomically, and delete a
+     * partial rewrite before throwing. The default fails typed.
+     */
+    suspend fun embedSubtitles(file: MediaFilePath, subtitles: MediaFilePath, language: String? = null) {
+        throw ToolkitError.ToolUnavailable()
+    }
+
+    /**
+     * T-016: writes the [startMillis, endMillis) range of [source] into
+     * [destination] by stream copy (the nearest keyframe at or before the
+     * start is kept). [endMillis] null means to the end of the file. Called
+     * only when [ToolkitCapabilities.canClip] is true; the default fails
+     * typed. Implementations delete a partial destination before throwing.
+     */
+    suspend fun clip(source: MediaFilePath, startMillis: Long, endMillis: Long?, destination: MediaFilePath) {
+        throw ToolkitError.ToolUnavailable()
+    }
+
+    /**
+     * T-016: writes [source] with [segments] removed into [destination]. The
+     * host may re-encode (segment removal cannot always be a stream copy).
+     * Called only when [ToolkitCapabilities.canRemoveSegments] is true; the
+     * default fails typed. Implementations delete a partial destination
+     * before throwing.
+     */
+    suspend fun removeSegments(source: MediaFilePath, segments: List<SponsorSegment>, destination: MediaFilePath) {
+        throw ToolkitError.ToolUnavailable()
+    }
 }
 
 /**

@@ -40,5 +40,6 @@ Done on 2026-09-23:
 
 - Local-engine threat notes (pasted URLs, option injection, paths, cookies, logs) written into [Security and licensing](../04-delivery/Security-and-licensing.md).
 - On-device cookie decision recorded: consent on import, on-device storage, redaction, deletion/expiry, encryption-at-rest deferred to M3/T-018.
+- T-018 owner update (2026-09-30): the cookie file stays app-private with no Keystore, Keychain, or desktop cipher. It is excluded from Android Auto Backup and iOS backup where the platform allows. A manual copy of app data includes the cookie file; the Settings copy says so. Mobile and web read no browser database.
 - License inventory rows present: yt-dlp Unlicense vs release-binary GPL, FFmpeg build-dependent LGPL/GPL, yt-dlp-ejs + JS runtime, Chaquopy MIT + embedded CPython (new row), and spotDL MIT.
 - No Chaquopy adapter and no extractor files were added; T-041 may add Chaquopy after referencing these rows.

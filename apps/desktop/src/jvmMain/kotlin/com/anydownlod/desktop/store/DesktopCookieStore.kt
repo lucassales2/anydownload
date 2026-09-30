@@ -1,7 +1,13 @@
 package com.anydownlod.desktop.store
 
 import com.anydownlod.core.CookieOperationResult
+import com.anydownlod.core.CookieErrorReason
+import com.anydownlod.core.CookieStatus
 import com.anydownlod.core.CookieStore
+import com.anydownlod.core.cookies.CookieJar
+import com.anydownlod.core.cookies.CookieJarState
+import com.anydownlod.core.cookies.NetscapeCookieFile
+import com.anydownlod.core.cookies.NetscapeCookieFileError
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -21,15 +27,29 @@ class DesktopCookieStore(private val store: DesktopStore) : CookieStore {
             return failure("The cookie file could not be read.")
         }
         if (size == 0L) return failure("The cookie file is empty.")
-        if (size > MAX_BYTES) return failure("The cookie file is larger than 1 MiB.")
+        if (size > NetscapeCookieFile.MAX_BYTES) return failure("The cookie file is larger than 1 MiB.")
 
         val text = runCatching { Files.readString(source) }.getOrElse {
             return failure("The cookie file could not be read.")
         }
-        if (!looksLikeNetscape(text)) {
-            return failure("That file does not look like a Netscape cookie file.")
-        }
+        val validation = NetscapeCookieFile.validate(text)
+        if (validation != null) return failure(messageFor(validation))
 
+        return storeText(text)
+    }
+
+    override fun importText(text: String): CookieOperationResult {
+        val bytes = text.encodeToByteArray()
+        if (bytes.isEmpty()) return failure("The cookie file is empty.")
+        if (bytes.size.toLong() > NetscapeCookieFile.MAX_BYTES) {
+            return failure("The cookie file is larger than 1 MiB.")
+        }
+        val validation = NetscapeCookieFile.validate(text)
+        if (validation != null) return failure(messageFor(validation))
+        return storeText(text)
+    }
+
+    private fun storeText(text: String): CookieOperationResult {
         val target = storedFile()
         return runCatching {
             Files.createDirectories(store.stateDirectory)
@@ -58,23 +78,33 @@ class DesktopCookieStore(private val store: DesktopStore) : CookieStore {
 
     override fun storedFilePath(): String? = store.cookieFilePath()
 
+    override fun status(): CookieStatus {
+        val path = store.cookieFilePath() ?: return CookieStatus.NotConfigured
+        val file = runCatching { Path.of(path) }.getOrNull() ?: return CookieStatus.NotConfigured
+        if (!Files.isRegularFile(file)) return CookieStatus.NotConfigured
+        val text = runCatching { Files.readString(file) }.getOrNull()
+            ?: return CookieStatus.Error(CookieErrorReason.UNREADABLE)
+        if (NetscapeCookieFile.validate(text) != null) {
+            return CookieStatus.Error(CookieErrorReason.UNREADABLE)
+        }
+        return when (CookieJar.fromText(text).stateAt(System.currentTimeMillis() / 1000L)) {
+            CookieJarState.READY -> CookieStatus.Configured
+            CookieJarState.ALL_EXPIRED -> CookieStatus.Error(CookieErrorReason.ALL_EXPIRED)
+            CookieJarState.EMPTY -> CookieStatus.Error(CookieErrorReason.NO_COOKIES)
+        }
+    }
+
     private fun storedFile(): Path = store.stateDirectory.resolve(FILE_NAME)
 
-    private fun looksLikeNetscape(text: String): Boolean {
-        val lines = text.lineSequence().map { it.trimEnd('\r') }.filter { it.isNotBlank() }.toList()
-        val first = lines.firstOrNull().orEmpty()
-        val hasHeader = first.startsWith("# Netscape HTTP Cookie File") ||
-            first.startsWith("# HTTP Cookie File")
-        val hasTabbedRow = lines.any { line ->
-            !line.startsWith("#") && line.split('\t').size >= 7
-        }
-        return hasHeader || hasTabbedRow
+    private fun messageFor(error: NetscapeCookieFileError): String = when (error) {
+        NetscapeCookieFileError.EMPTY -> "The cookie file is empty."
+        NetscapeCookieFileError.TOO_LARGE -> "The cookie file is larger than 1 MiB."
+        NetscapeCookieFileError.NOT_A_COOKIE_FILE -> "That file does not look like a Netscape cookie file."
     }
 
     private fun failure(message: String) = CookieOperationResult(success = false, message = message)
 
     private companion object {
         const val FILE_NAME = "cookies.txt"
-        const val MAX_BYTES = 1024L * 1024L
     }
 }

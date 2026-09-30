@@ -21,6 +21,20 @@
                ReferencedContainer = "container:AnyDownload.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D93631B28D32913F40DB8729"
+               BuildableName = "AnyDownloadShare.appex"
+               BlueprintName = "AnyDownloadShare"
+               ReferencedContainer = "container:AnyDownload.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

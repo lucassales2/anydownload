@@ -49,12 +49,22 @@ class SupportedUrlValidatorTest {
     fun youtubeShapesTheExtractorsRejectAreNotSupported() {
         val urls = listOf(
             "https://www.youtube.com/channel/UCfixture",
-            "https://www.youtube.com/@fixture",
             "https://www.youtube.com/results?search_query=fixture",
             "https://www.youtube.com/watch?v=tooshort",
             "https://www.youtube.com/watch?v=YE7V zlLtp-4",
         )
         urls.forEach { assertFalse(validator.isSupported(it), "must stay unsupported: $it") }
+    }
+
+    @Test
+    fun youtubeChannelAndMixShapesAreSupported() {
+        val urls = listOf(
+            "https://www.youtube.com/@fixture",
+            "https://www.youtube.com/channel/UCfixture000000000000000",
+            "https://www.youtube.com/playlist?list=RDfixture",
+            "https://www.youtube.com/watch?v=YE7VzlLtp-4&list=PLfixture",
+        )
+        urls.forEach { assertTrue(validator.isSupported(it), "must be supported: $it") }
     }
 
     @Test
@@ -71,12 +81,26 @@ class SupportedUrlValidatorTest {
     }
 
     @Test
+    fun twitterRemainderFormsAreSupported() {
+        val urls = listOf(
+            "https://t.co/abcdef",
+            "tco:abcdef",
+            "https://x.com/i/spaces/1YqKDgLqOKqJV",
+            "https://x.com/i/broadcasts/1yNGaQLWpejGj",
+            "https://x.com/i/events/1910629646300762112",
+            "https://twitter.com/i/cards/tfw/v1/560070183650213889",
+            "https://x.com/i/videos/tweet/705235433198714880",
+            "https://amp.twimg.com/v/0ba0c3c7-0af3-4c0a-bed5-7efd1ffa2951",
+        )
+        urls.forEach { assertTrue(validator.isSupported(it), "must be supported: $it") }
+    }
+
+    @Test
     fun twitterNonStatusUrlsAreNotSupported() {
         val urls = listOf(
             "https://x.com/fixture",
-            "https://t.co/abcdef",
-            "https://x.com/i/spaces/1YqKDgLqOKqJV",
             "https://x.com/fixture/status/$statusId/photo/1",
+            "https://amp.twimg.com/v/not-a-uuid",
         )
         urls.forEach { assertFalse(validator.isSupported(it), "must stay unsupported: $it") }
     }

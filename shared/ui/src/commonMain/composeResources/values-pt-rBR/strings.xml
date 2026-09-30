@@ -67,6 +67,7 @@
 
     <string name="subscriptions_title">Fontes seguidas</string>
     <string name="subscriptions_subtitle">Canais e playlists em uma agenda.</string>
+    <string name="subscriptions_pause_on_suspend">Este host para as verificações quando o app é suspenso ou fechado. Abra o app para verificar de novo.</string>
     <string name="empty_subscriptions_title">Nenhuma inscrição</string>
     <string name="empty_subscriptions_body">Cole a URL de um canal ou playlist no formulário acima e escolha Inscrever. As verificações ocorrem enquanto o app está aberto.</string>
     <string name="kpi_running">Em execução</string>
@@ -256,7 +257,17 @@
     <string name="cookie_status">Status: %1$s</string>
     <string name="cookie_configured">Configurado</string>
     <string name="cookie_not_configured">Não configurado</string>
+    <string name="cookie_error_unreadable">Erro: o arquivo armazenado não pôde ser lido. Substitua ou apague.</string>
+    <string name="cookie_error_no_cookies">Erro: o arquivo armazenado não tem cookies. Substitua ou apague.</string>
+    <string name="cookie_error_all_expired">Erro: o arquivo armazenado não tem cookies válidos. Substitua ou apague.</string>
     <string name="cookie_warning">Um arquivo de cookies fica neste computador e pode expor uma conta. Importá-lo não garante que o site permitirá o download. O conteúdo nunca é mostrado aqui.</string>
+    <string name="cookie_browser_button">Copiar de um navegador…</string>
+    <string name="cookie_browser_title">Copiar cookies de um navegador?</string>
+    <string name="cookie_browser_body">O AnyDownload copia os cookies do navegador escolhido uma única vez para o arquivo de cookies local. O banco de dados do navegador não fica aberto e não é lido de novo a cada download. Apenas Chrome, Firefox e Safari são suportados; outros navegadores não. A cópia pode expor uma conta e não garante acesso.</string>
+    <string name="cookie_browser_chrome">Chrome</string>
+    <string name="cookie_browser_firefox">Firefox</string>
+    <string name="cookie_browser_safari">Safari</string>
+    <string name="cookie_browser_unavailable">A cópia de cookies do navegador só está disponível no desktop.</string>
     <string name="import_file">Importar</string>
     <string name="replace_file">Substituir</string>
     <string name="section_spotify">Biblioteca do Spotify</string>
@@ -278,7 +289,7 @@
     <string name="section_appearance">Aparência</string>
     <string name="section_tools">Ferramentas</string>
     <string name="tools_hint">As versões vêm da busca no PATH local. Uma página de mídia simples não precisa de yt-dlp nem ffmpeg; downloads de arquivos diretos também funcionam sem eles, e URLs de sites e outros vídeos ainda precisam.</string>
-    <string name="settings_kotlin_extractors">Extratores Kotlin: YouTube (vídeo único)</string>
+    <string name="settings_kotlin_extractors">Motor Kotlin: pin do yt-dlp %1$s · Kotlin %2$s</string>
     <string name="settings_js_runtime">Runtime de JavaScript: %1$s</string>
     <string name="tool_js_none">nenhum — alguns formatos do YouTube ficam ocultos</string>
     <string name="tool_not_checked">Não verificado</string>

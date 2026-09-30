@@ -57,12 +57,23 @@ class ExtractorRegistry(private val extractors: List<InfoExtractor>) {
 
     /** Upstream `extract_info` for one URL; unmatched URLs fail typed. */
     suspend fun extract(url: String): InfoDict {
-        val extractor = suitableFor(url) ?: throw ExtractionError.UnsupportedUrl()
-        return extractor.extract(url)
+        var current = url
+        var hops = 0
+        while (true) {
+            val extractor = suitableFor(current) ?: throw ExtractionError.UnsupportedUrl()
+            val info = extractor.extract(current)
+            val next = info.redirectUrl ?: return info
+            hops++
+            if (hops > MAX_REDIRECTS) throw ExtractionError.Malformed("Too many extractor redirects.")
+            current = next
+        }
     }
 
     companion object {
         /** The upstream generic class name; the fallback is always last. */
         const val GENERIC_KEY = "Generic"
+
+        /** Bound on `url_result` re-dispatch hops, mirroring the HTTP budget. */
+        const val MAX_REDIRECTS: Int = 5
     }
 }

@@ -145,6 +145,12 @@ data class DownloadOptions(
     val destinationFolder: String? = null,
     /** 0 means no extra cap from the app. */
     val playlistItemLimit: Int = 0,
+    /**
+     * Upstream `--playlist-items` spec (T-124): 1-based indexes and ranges,
+     * negatives from the end. Blank means every entry. The engine selects
+     * rows before the cap is applied; an invalid spec fails the job typed.
+     */
+    val playlistItems: String = "",
     /** What to do when the destination file already exists. */
     val overwrite: OverwriteMode = OverwriteMode.SKIP,
     val clipStart: String? = null,

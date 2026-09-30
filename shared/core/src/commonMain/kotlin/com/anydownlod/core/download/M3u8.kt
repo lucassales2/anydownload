@@ -30,6 +30,10 @@ sealed interface ManifestResult {
         val fragments: List<MediaFragment>,
         val initSegment: MediaFragment?,
         val key: Aes128KeyInfo?,
+        /** True when the playlist has no `#EXT-X-ENDLIST` (T-124 live). */
+        val isLive: Boolean = false,
+        /** `#EXT-X-TARGETDURATION` seconds; null when the tag is absent. */
+        val targetDurationSeconds: Long? = null,
     ) : ManifestResult
 
     data class Failed(val reason: String) : ManifestResult
@@ -104,6 +108,7 @@ object M3u8 {
     private fun parseMedia(url: String, lines: List<String>): ManifestResult {
         var ended = false
         var mediaSequence = 0L
+        var targetDuration: Long? = null
         var currentKey: Aes128KeyInfo? = null
         var pendingRange: Pair<Long, Long>? = null
         var lastRangeEnd = -1L
@@ -116,6 +121,9 @@ object M3u8 {
                 line.startsWith("#EXT-X-ENDLIST", ignoreCase = true) -> ended = true
                 line.startsWith("#EXT-X-MEDIA-SEQUENCE:", ignoreCase = true) ->
                     mediaSequence = line.substringAfter(':').trim().toLongOrNull() ?: 0L
+
+                line.startsWith("#EXT-X-TARGETDURATION:", ignoreCase = true) ->
+                    targetDuration = line.substringAfter(':').trim().toLongOrNull()
 
                 line.startsWith("#EXT-X-MAP:", ignoreCase = true) -> {
                     val attributes = attributes(line.substringAfter(':'))
@@ -166,9 +174,14 @@ object M3u8 {
                 }
             }
         }
-        if (!ended) return ManifestResult.Failed("Live HLS playlists are not supported.")
         if (fragments.isEmpty()) return ManifestResult.Failed("The media playlist declared no fragments.")
-        return ManifestResult.Media(fragments, initSegment, currentKey)
+        return ManifestResult.Media(
+            fragments = fragments,
+            initSegment = initSegment,
+            key = currentKey,
+            isLive = !ended,
+            targetDurationSeconds = targetDuration,
+        )
     }
 
     /** `n@o`, `n`, or null. */

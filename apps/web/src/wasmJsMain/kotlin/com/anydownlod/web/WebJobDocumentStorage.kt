@@ -5,14 +5,14 @@ import com.anydownlod.core.persist.JobDocumentStorageError
 import kotlinx.browser.window
 import org.w3c.dom.Storage
 
-/** The browser key-value surface the jobs document store uses. */
+/** The browser key-value surface the jobs and subscriptions stores use. */
 interface WebKeyValueStorage {
     fun getItem(key: String): String?
     fun setItem(key: String, value: String)
 }
 
 /** `localStorage` when the page has it; tests inject an in-memory fake. */
-private class BrowserLocalStorage(
+internal class BrowserLocalStorage(
     private val storage: Storage = window.localStorage,
 ) : WebKeyValueStorage {
     override fun getItem(key: String): String? = storage.getItem(key)

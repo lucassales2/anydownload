@@ -2,7 +2,11 @@ package com.anydownlod.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anydownlod.core.BrowserChoice
+import com.anydownlod.core.BrowserCookieImport
+import com.anydownlod.core.CookieErrorReason
 import com.anydownlod.core.CookieFilePicker
+import com.anydownlod.core.CookieStatus
 import com.anydownlod.core.CookieStore
 import com.anydownlod.core.FolderPicker
 import com.anydownlod.core.SettingsRepository
@@ -16,6 +20,7 @@ import com.anydownlod.core.music.SpotifyAuthService
 import com.anydownlod.ui.generated.resources.Res
 import com.anydownlod.ui.generated.resources.clear_minutes_error
 import com.anydownlod.ui.generated.resources.concurrency_error
+import com.anydownlod.ui.generated.resources.cookie_browser_unavailable
 import com.anydownlod.ui.generated.resources.cookie_cleared
 import com.anydownlod.ui.generated.resources.cookie_import_desktop_only
 import com.anydownlod.ui.generated.resources.cookie_import_failed
@@ -60,6 +65,9 @@ data class SettingsUiState(
     val notice: UiText? = null,
     val confirmRestore: Boolean = false,
     val confirmCookieDelete: Boolean = false,
+    val confirmBrowserImport: Boolean = false,
+    val browserImportAvailable: Boolean = false,
+    val cookieStatus: CookieStatus = CookieStatus.NotConfigured,
     val addingPreset: Boolean = false,
     val spotifyAuth: SpotifyAuthService? = null,
 )
@@ -73,6 +81,7 @@ class SettingsViewModel(
         override suspend fun probe() = ToolStatus()
     },
     cookieStore: CookieStore = CookieStore.Unavailable,
+    private val browserCookieImport: BrowserCookieImport? = null,
     val spotifyAuth: SpotifyAuthService? = null,
     private val pickFolder: FolderPicker = FolderPicker { null },
     private val pickCookieFile: CookieFilePicker = CookieFilePicker { null },
@@ -85,11 +94,21 @@ class SettingsViewModel(
     val state: StateFlow<SettingsUiState> = combine(
         repository.settings,
         drafts,
-    ) { settings, draft -> draft.copy(settings = settings, spotifyAuth = spotifyAuth) }
+    ) { settings, draft ->
+        draft.copy(
+            settings = settings,
+            spotifyAuth = spotifyAuth,
+            browserImportAvailable = browserCookieImport != null,
+        )
+    }
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            drafts.value.copy(settings = current, spotifyAuth = spotifyAuth),
+            drafts.value.copy(
+                settings = current,
+                spotifyAuth = spotifyAuth,
+                browserImportAvailable = browserCookieImport != null,
+            ),
         )
 
     init {
@@ -97,6 +116,19 @@ class SettingsViewModel(
             val probed = runCatching { toolProbe.probe() }.getOrNull()
             drafts.update { it.copy(tools = probed) }
         }
+        syncCookieStatus()
+    }
+
+    /**
+     * Recomputes the Not configured / Configured / Error status from the
+     * stored file (not from a cached boolean) and keeps the add-form gate in
+     * sync. The status carries no name, value, or path.
+     */
+    private fun syncCookieStatus() {
+        val status = runCatching { cookies.status() }
+            .getOrDefault(CookieStatus.Error(CookieErrorReason.UNREADABLE))
+        drafts.update { it.copy(cookieStatus = status) }
+        setCookiesConfigured(status == CookieStatus.Configured)
     }
 
     fun setNotice(message: UiText?) {
@@ -158,22 +190,59 @@ class SettingsViewModel(
     }
 
     fun importCookies() {
-        val picked = pickCookieFile()
-        if (picked == null) {
-            setNotice(UiText.of(Res.string.cookie_import_desktop_only))
-            return
-        }
-        val result = cookies.import(picked)
-        if (result.success) {
-            setCookiesConfigured(true)
-            setNotice(UiText.of(Res.string.cookie_imported))
-        } else {
-            setNotice(result.message?.let(UiText::raw) ?: UiText.of(Res.string.cookie_import_failed))
+        viewModelScope.launch {
+            val picked = pickCookieFile.pick()
+            if (picked == null) {
+                setNotice(UiText.of(Res.string.cookie_import_desktop_only))
+                return@launch
+            }
+            val result = cookies.import(picked)
+            if (result.success) {
+                syncCookieStatus()
+                setNotice(UiText.of(Res.string.cookie_imported))
+            } else {
+                setNotice(result.message?.let(UiText::raw) ?: UiText.of(Res.string.cookie_import_failed))
+            }
         }
     }
 
     fun requestCookieDelete() {
         drafts.update { it.copy(confirmCookieDelete = true) }
+    }
+
+    fun beginBrowserImport() {
+        if (browserCookieImport == null) {
+            setNotice(UiText.of(Res.string.cookie_browser_unavailable))
+            return
+        }
+        drafts.update { it.copy(confirmBrowserImport = true) }
+    }
+
+    fun dismissBrowserImport() {
+        drafts.update { it.copy(confirmBrowserImport = false) }
+    }
+
+    /**
+     * The separate consent step: the chosen browser store is copied once
+     * into the stored `cookies.txt`. Only success changes the status; the
+     * result message never carries a cookie name, value, or path.
+     */
+    fun confirmBrowserImport(browser: BrowserChoice) {
+        val capability = browserCookieImport
+        drafts.update { it.copy(confirmBrowserImport = false) }
+        if (capability == null) {
+            setNotice(UiText.of(Res.string.cookie_browser_unavailable))
+            return
+        }
+        viewModelScope.launch {
+            val result = capability.snapshot(browser)
+            if (result.success) {
+                syncCookieStatus()
+                setNotice(UiText.of(Res.string.cookie_imported))
+            } else {
+                setNotice(result.message?.let(UiText::raw) ?: UiText.of(Res.string.cookie_import_failed))
+            }
+        }
     }
 
     fun dismissCookieDelete() {
@@ -183,7 +252,13 @@ class SettingsViewModel(
     fun confirmCookieDelete() {
         cookies.delete()
         setCookiesConfigured(false)
-        drafts.update { it.copy(confirmCookieDelete = false, notice = UiText.of(Res.string.cookie_cleared)) }
+        drafts.update {
+            it.copy(
+                confirmCookieDelete = false,
+                cookieStatus = CookieStatus.NotConfigured,
+                notice = UiText.of(Res.string.cookie_cleared),
+            )
+        }
     }
 
     fun setCookiesConfigured(configured: Boolean) {

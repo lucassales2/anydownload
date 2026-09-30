@@ -177,20 +177,30 @@ class ManifestEngineDownloadTest {
                 """<html><body><script>var a = "/media.m3u8", b = "/dash/manifest.mpd";</script></body></html>""".encodeToByteArray(),
             )
         }
+        val liveFetches = java.util.concurrent.atomic.AtomicInteger(0)
         server.createContext("/live.m3u8") { exchange ->
-            respond(
-                exchange,
-                "application/vnd.apple.mpegurl",
+            val body = if (liveFetches.getAndIncrement() == 0) {
                 """
                     #EXTM3U
                     #EXT-X-TARGETDURATION:6
+                    #EXT-X-MEDIA-SEQUENCE:0
                     #EXTINF:5.0,
                     l0.ts
+                """.trimIndent()
+            } else {
+                """
+                    #EXTM3U
+                    #EXT-X-TARGETDURATION:6
+                    #EXT-X-MEDIA-SEQUENCE:1
                     #EXTINF:5.0,
                     l1.ts
-                """.trimIndent().encodeToByteArray(),
-            )
+                    #EXT-X-ENDLIST
+                """.trimIndent()
+            }
+            respond(exchange, "application/vnd.apple.mpegurl", body.encodeToByteArray())
         }
+        server.createContext("/l0.ts") { exchange -> respond(exchange, "video/mp2t", "LIVE-0".encodeToByteArray()) }
+        server.createContext("/l1.ts") { exchange -> respond(exchange, "video/mp2t", "LIVE-1".encodeToByteArray()) }
         server.createContext("/generic-live.html") { exchange ->
             respond(
                 exchange,
@@ -393,7 +403,7 @@ class ManifestEngineDownloadTest {
     }
 
     @Test
-    fun aDiscoveredLiveHlsFailsTyped() = runBlocking {
+    fun aDiscoveredLiveHlsIsFollowedUntilEndList() = runBlocking {
         val server = server()
         val root = Files.createTempDirectory("anydownlod-generic-live")
         try {
@@ -401,10 +411,9 @@ class ManifestEngineDownloadTest {
             val engine = engine(server, root)
             val job = submit(engine, "$base/generic-live.html", "generic-live-key")
             val finished = waitForTerminal(engine, job.id)
-            assertEquals(JobState.FAILED, finished.state)
-            assertEquals(com.anydownlod.core.domain.JobErrorCode.UNSUPPORTED_FORMAT, finished.error?.code)
-            assertTrue(finished.error?.message?.contains("Live") == true, finished.error?.message)
-            assertTrue(finished.artifacts.isEmpty())
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("live.ts", finished.artifacts.single().relativePath)
+            assertEquals("LIVE-0LIVE-1", Files.readAllBytes(root.resolve("live.ts")).decodeToString())
         } finally {
             server.stop(0)
             root.toFile().deleteRecursively()

@@ -15,6 +15,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.anydownlod.core.BrowserChoice
+import com.anydownlod.core.CookieErrorReason
+import com.anydownlod.core.CookieStatus
 import com.anydownlod.core.domain.*
 import com.anydownlod.core.music.SpotifyAuthService
 import com.anydownlod.ui.generated.resources.*
@@ -101,8 +104,10 @@ fun SettingsScreen(
             )
 
             CookiesSection(
-                configured = settings.cookiesConfigured,
+                status = uiState.cookieStatus,
+                browserImportAvailable = uiState.browserImportAvailable,
                 onImport = viewModel::importCookies,
+                onBrowserImport = viewModel::beginBrowserImport,
                 onDelete = viewModel::requestCookieDelete,
             )
 
@@ -169,6 +174,38 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = viewModel::dismissCookieDelete) {
                     Text(stringResource(Res.string.keep))
+                }
+            },
+        )
+    }
+
+    if (uiState.confirmBrowserImport) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissBrowserImport,
+            title = { Text(stringResource(Res.string.cookie_browser_title)) },
+            text = { Text(stringResource(Res.string.cookie_browser_body)) },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BrowserChoiceButton(
+                        label = stringResource(Res.string.cookie_browser_chrome),
+                        testTag = "settings-browser-chrome",
+                        onClick = { viewModel.confirmBrowserImport(BrowserChoice.CHROME) },
+                    )
+                    BrowserChoiceButton(
+                        label = stringResource(Res.string.cookie_browser_firefox),
+                        testTag = "settings-browser-firefox",
+                        onClick = { viewModel.confirmBrowserImport(BrowserChoice.FIREFOX) },
+                    )
+                    BrowserChoiceButton(
+                        label = stringResource(Res.string.cookie_browser_safari),
+                        testTag = "settings-browser-safari",
+                        onClick = { viewModel.confirmBrowserImport(BrowserChoice.SAFARI) },
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissBrowserImport) {
+                    Text(stringResource(Res.string.cancel))
                 }
             },
         )
@@ -377,14 +414,21 @@ private fun SpotifySection(auth: SpotifyAuthService?, onNotice: (UiText) -> Unit
 
 @Composable
 private fun CookiesSection(
-    configured: Boolean,
+    status: CookieStatus,
+    browserImportAvailable: Boolean,
     onImport: () -> Unit,
+    onBrowserImport: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val statusLabel = if (configured) {
-        stringResource(Res.string.cookie_configured)
-    } else {
-        stringResource(Res.string.cookie_not_configured)
+    val hasFile = status != CookieStatus.NotConfigured
+    val statusLabel = when (status) {
+        CookieStatus.NotConfigured -> stringResource(Res.string.cookie_not_configured)
+        CookieStatus.Configured -> stringResource(Res.string.cookie_configured)
+        is CookieStatus.Error -> when (status.reason) {
+            CookieErrorReason.UNREADABLE -> stringResource(Res.string.cookie_error_unreadable)
+            CookieErrorReason.NO_COOKIES -> stringResource(Res.string.cookie_error_no_cookies)
+            CookieErrorReason.ALL_EXPIRED -> stringResource(Res.string.cookie_error_all_expired)
+        }
     }
     SettingsSection(stringResource(Res.string.section_cookies)) {
         Text(
@@ -398,7 +442,7 @@ private fun CookiesSection(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onImport, modifier = Modifier.testTag("settings-cookies-import")) {
                 Text(
-                    if (configured) {
+                    if (hasFile) {
                         stringResource(Res.string.replace_file)
                     } else {
                         stringResource(Res.string.import_file)
@@ -408,10 +452,29 @@ private fun CookiesSection(
             DestructiveOutlinedButton(
                 text = stringResource(Res.string.delete),
                 onClick = onDelete,
-                enabled = configured,
+                enabled = hasFile,
                 modifier = Modifier.testTag("settings-cookies-delete"),
             )
         }
+        if (browserImportAvailable) {
+            OutlinedButton(
+                onClick = onBrowserImport,
+                modifier = Modifier.testTag("settings-cookies-browser"),
+            ) {
+                Text(stringResource(Res.string.cookie_browser_button))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserChoiceButton(
+    label: String,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    Button(onClick = onClick, modifier = Modifier.testTag(testTag)) {
+        Text(label)
     }
 }
 
@@ -494,7 +557,11 @@ private fun ToolsSection(tools: ToolStatus?) {
         ToolRow("ffmpeg", tools?.ffmpeg, "settings-tool-ffmpeg")
         JsRuntimeRow(tools?.jsRuntime, "settings-tool-jsruntime")
         Text(
-            text = stringResource(Res.string.settings_kotlin_extractors),
+            text = stringResource(
+                Res.string.settings_kotlin_extractors,
+                com.anydownlod.core.EngineBuild.PINNED_TAG,
+                com.anydownlod.core.EngineBuild.KOTLIN_VERSION,
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.testTag("settings-tool-kotlin"),

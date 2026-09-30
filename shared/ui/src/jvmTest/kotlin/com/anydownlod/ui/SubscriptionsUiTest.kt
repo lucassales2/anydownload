@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.runComposeUiTest
+import com.anydownlod.core.AppGraph
 import com.anydownlod.core.domain.DownloadOptions
 import com.anydownlod.core.fake.InMemoryAppGraph
 import com.anydownlod.core.fake.InMemorySubscriptionRepository
@@ -92,5 +93,43 @@ class SubscriptionsUiTest {
 
         onNodeWithText("Subscriptions").performClick()
         onNodeWithText("Checks run while the app is open.", substring = true).assertExists()
+    }
+
+    @Test
+    fun theSuspendNoteShowsOnlyOnHostsThatPause() = runComposeUiTest {
+        val base = InMemoryAppGraph()
+        val graph = object : AppGraph by base {
+            override val subscriptionsPauseOnSuspend: Boolean = true
+        }
+        setContent { ShellUiHarness(graph) }
+
+        onNodeWithText("Subscriptions").performClick()
+
+        onNodeWithTag("subscriptions-pause-note").assertExists()
+    }
+
+    @Test
+    fun bulkDeleteRemovesTheSelectedRows() = runComposeUiTest {
+        val repository = InMemorySubscriptionRepository()
+        val first = repository.add(
+            sourceUrl = "https://example.com/channel/one",
+            displayName = "One",
+            downloadOptions = DownloadOptions(),
+        )
+        val second = repository.add(
+            sourceUrl = "https://example.com/channel/two",
+            displayName = "Two",
+            downloadOptions = DownloadOptions(),
+        )
+        setContent { ShellUiHarness(InMemoryAppGraph(subscriptions = repository)) }
+
+        onNodeWithText("Subscriptions").performClick()
+        onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${first.id}"))
+        onNodeWithTag("subscriptions-select-${first.id}").performClick()
+        onNodeWithTag("subscriptions-list").performScrollToNode(hasTestTag("subscriptions-select-${second.id}"))
+        onNodeWithTag("subscriptions-select-${second.id}").performClick()
+        onNodeWithTag("subscriptions-delete-selected").performClick()
+
+        assertTrue(repository.subscriptions.value.isEmpty())
     }
 }

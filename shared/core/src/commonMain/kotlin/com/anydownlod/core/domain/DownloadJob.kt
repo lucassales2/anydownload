@@ -78,6 +78,24 @@ data class Artifact(
     val removed: Boolean = false,
 )
 
+/** What a SponsorBlock removal attempt did (T-016). */
+enum class SponsorBlockOutcome(val wireName: String) {
+    /** Segments were found and removed. */
+    REMOVED("removed"),
+
+    /** The service answered with no removable segments. */
+    NO_SEGMENTS("no-segments"),
+
+    /** The service was unreachable or answered unusably; the media is kept. */
+    UNAVAILABLE("unavailable"),
+    ;
+
+    companion object {
+        fun fromWire(value: String?): SponsorBlockOutcome? =
+            entries.firstOrNull { it.wireName == value }
+    }
+}
+
 /**
  * One run of a job. A retry appends a new attempt; an older attempt keeps its
  * own state, progress, and error, so a failed run is never rewritten as if it
@@ -126,6 +144,8 @@ data class DownloadJob(
      * container cannot carry them (the audio file is still kept).
      */
     val lyricsEmbedded: Boolean? = null,
+    /** T-016 SponsorBlock result; null when the request did not opt in. */
+    val sponsorBlock: SponsorBlockOutcome? = null,
     val parentBatchId: String? = null,
     val subscriptionId: String? = null,
     /** Due time for [JobState.SCHEDULED] rows; null when unknown. */

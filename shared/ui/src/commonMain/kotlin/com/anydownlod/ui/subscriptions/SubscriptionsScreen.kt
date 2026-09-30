@@ -59,6 +59,7 @@ import com.anydownlod.ui.generated.resources.skip_members
 import com.anydownlod.ui.generated.resources.skips_members
 import com.anydownlod.ui.generated.resources.subscription_options_locked
 import com.anydownlod.ui.generated.resources.subscription_schedule
+import com.anydownlod.ui.generated.resources.subscriptions_pause_on_suspend
 import com.anydownlod.ui.generated.resources.subscriptions_subtitle
 import com.anydownlod.ui.generated.resources.subscriptions_title
 import com.anydownlod.ui.generated.resources.title_filter
@@ -72,6 +73,7 @@ import org.jetbrains.compose.resources.stringResource
 import com.anydownlod.ui.shell.formatUtcMinute
 import com.anydownlod.ui.theme.ActionRow
 import com.anydownlod.ui.theme.AppTextField
+import com.anydownlod.ui.theme.DestructiveOutlinedButton
 import com.anydownlod.ui.theme.DestructiveTextButton
 import com.anydownlod.ui.theme.KpiTile
 import com.anydownlod.ui.theme.ObjectCard
@@ -104,6 +106,14 @@ fun SubscriptionsScreen(
                 title = stringResource(Res.string.subscriptions_title),
                 subtitle = stringResource(Res.string.subscriptions_subtitle),
             )
+            if (uiState.pauseOnSuspend) {
+                Text(
+                    text = stringResource(Res.string.subscriptions_pause_on_suspend),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("subscriptions-pause-note"),
+                )
+            }
             if (rows.isEmpty()) {
                 EmptyStatePanel(
                     title = stringResource(Res.string.empty_subscriptions_title),
@@ -142,6 +152,12 @@ fun SubscriptionsScreen(
                     ) {
                         Text(stringResource(Res.string.check_selected))
                     }
+                    DestructiveOutlinedButton(
+                        text = stringResource(Res.string.delete),
+                        onClick = { viewModel.deleteSelected(selectedIds) },
+                        enabled = selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("subscriptions-delete-selected"),
+                    )
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth().testTag("subscriptions-list"),

@@ -6,7 +6,7 @@ tags: [project, index]
 
 # AnyDownload
 
-**Phase:** D9 Metro in progress · full engine scheduled D10–D22 (614 engineer-days) · D8 verified 2026-09-29 · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
+**Phase:** D9–D15 done · D16 priority sites next (T-125) · **Targets:** iOS, Android, web (extension), desktop · **Name:** AnyDownload
 
 A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, and the product surface is MeTube's workflows. No backend and no app login. This vault is the living project plan. A draft remote-client scaffold exists and does not match this direction.
 
@@ -15,8 +15,8 @@ A local Kotlin Multiplatform downloader. The engine is a Kotlin port of yt-dlp, 
 ## Start here
 
 1. D8 is verified: the remaining M1 and M2 work is done. A queue that survives restart on all four hosts, bounded YouTube playlists (cap 50), safe names and history actions, and profile controls that follow the D5 toolkit. Spec: [Phase 8 — On-device queue, playlists, and history](00-project/Phase-8-On-device-core.md). Decision: [ADR-012](03-decisions/ADR-012-On-device-core-phase.md), accepted. Tasks [T-101](06-tasks/T-101-On-device-contract.md) through [T-112](06-tasks/T-112-Phase-8-verification.md) are done; T-011, T-012, T-013, and T-014 are closed with the M3 gaps noted.
-2. The full Kotlin engine is scheduled, not started. [ADR-014](03-decisions/ADR-014-Full-kotlin-engine-schedule.md) is the plan of record: D10–D22, **614 engineer-days** (about 28 months, one person). YouTube without the CLI is 8 weeks (through D13). Priority sites are 18 weeks (through D16). Spec: [Full engine schedule](00-project/Full-engine-schedule.md). D10 starts after Metro [T-120](06-tasks/T-120-Metro-verification.md). The [Kanban](Kanban.md) is the source of truth.
-3. [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state. Current construction work is Metro D9 ([ADR-013](03-decisions/ADR-013-Metro-graphs-and-viewmodels.md)). Do not start a D10 card while a D9 card is in progress.
+2. D9–D15 are done with Phases 11–15 marked done. The next card is [T-125](06-tasks/T-125-Priority-sites.md), Phase D16 (priority sites), the last phase in this span. A session that implements it uses [Phase 11–16 loop](00-project/Phase-11-16-Loop-prompt.md). The D11-only prompt is [Phase 11 loop](00-project/Phase-11-Loop-prompt.md); it is complete and must not be run again. The [Kanban](Kanban.md) is the source of truth.
+3. [ADR-014](03-decisions/ADR-014-Full-kotlin-engine-schedule.md) remains the plan of record for D11–D22. YouTube without the CLI is 8 weeks (through D13). Priority sites are 18 weeks (through D16). Spec: [Full engine schedule](00-project/Full-engine-schedule.md). [ADR-004](03-decisions/ADR-004-Local-kotlin-engine.md) is still the end state.
 
 ## Accepted direction — 2026-09-21
 
