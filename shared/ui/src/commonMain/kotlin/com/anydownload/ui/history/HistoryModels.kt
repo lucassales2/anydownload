@@ -1,0 +1,53 @@
+package com.anydownload.ui.history
+
+import com.anydownload.core.domain.Artifact
+import com.anydownload.core.domain.DownloadJob
+import com.anydownload.core.domain.JobState
+import com.anydownload.ui.i18n.UiText
+import com.anydownload.ui.shell.displayLabel
+
+/** One artifact line on a history row, with the original for host callbacks. */
+data class HistoryArtifact(
+    val id: String,
+    val fileName: String,
+    val sizeBytes: Long?,
+    val removed: Boolean,
+    val source: Artifact,
+)
+
+/** One row of the Completed list, already shaped for rendering. */
+data class HistoryRow(
+    val id: String,
+    val title: String,
+    val sourceUrl: String,
+    val sourceHost: String?,
+    val state: JobState,
+    val stateLabel: UiText,
+    val errorMessage: String?,
+    val canRetry: Boolean,
+    val finishedAtEpochMillis: Long?,
+    val artifacts: List<HistoryArtifact>,
+) {
+    val hasArtifact: Boolean get() = artifacts.any { !it.removed }
+}
+
+fun DownloadJob.toHistoryRow(): HistoryRow = HistoryRow(
+    id = id,
+    title = title ?: request.sourceUrl,
+    sourceUrl = request.sourceUrl,
+    sourceHost = sourceHost,
+    state = state,
+    stateLabel = state.displayLabel(),
+    errorMessage = error?.message,
+    canRetry = state == JobState.FAILED || state == JobState.CANCELLED,
+    finishedAtEpochMillis = finishedAtEpochMillis,
+    artifacts = artifacts.map { it.toHistoryArtifact() },
+)
+
+private fun Artifact.toHistoryArtifact(): HistoryArtifact = HistoryArtifact(
+    id = id,
+    fileName = fileName,
+    sizeBytes = sizeBytes,
+    removed = removed,
+    source = this,
+)

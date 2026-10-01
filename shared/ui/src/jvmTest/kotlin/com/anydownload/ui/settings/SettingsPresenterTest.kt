@@ -1,0 +1,121 @@
+package com.anydownload.ui.settings
+
+import com.anydownload.core.domain.AppSettings
+import com.anydownload.core.domain.AppSettingsDefaults
+import com.anydownload.core.domain.ThemePreference
+import com.anydownload.core.fake.InMemorySettingsRepository
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class SettingsViewModelTest {
+
+    private fun repository() = InMemorySettingsRepository()
+
+    @Test
+    fun templateValidationRejectsAbsoluteAndParentSegments() {
+        assertNotNull(SettingsViewModel.validateTemplate("/tmp/%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("..\\video\\%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("C:/videos/%(title)s.%(ext)s"))
+        assertNotNull(SettingsViewModel.validateTemplate("%(title)s//%(ext)s"))
+        assertNull(SettingsViewModel.validateTemplate("%(title)s.%(ext)s"))
+        assertNull(SettingsViewModel.validateTemplate("%(playlist_title)s/%(title)s.%(ext)s"))
+    }
+
+    @Test
+    fun templateSetterRejectsWithoutWriting() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+
+        assertNotNull(presenter.setOutputTemplate("../%(title)s.%(ext)s"))
+        assertEquals(AppSettingsDefaults.OUTPUT_TEMPLATE, repository.settings.value.outputTemplate)
+
+        assertNull(presenter.setOutputTemplate("%(title)s-%(id)s.%(ext)s"))
+        assertEquals("%(title)s-%(id)s.%(ext)s", repository.settings.value.outputTemplate)
+    }
+
+    @Test
+    fun concurrencyBelowOneIsRejected() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+
+        assertNotNull(presenter.setMaxConcurrentDownloads("0"))
+        assertNotNull(presenter.setMaxConcurrentDownloads("abc"))
+        assertEquals(3, repository.settings.value.maxConcurrentDownloads)
+
+        assertNull(presenter.setMaxConcurrentDownloads("2"))
+        assertEquals(2, repository.settings.value.maxConcurrentDownloads)
+    }
+
+    @Test
+    fun clearCompletedUsesMinutesInTheUiAndSecondsOnTheModel() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+
+        assertNull(presenter.setClearCompletedMinutes("5"))
+        assertEquals(300L, repository.settings.value.clearCompletedAfterSeconds)
+
+        assertNotNull(presenter.setClearCompletedMinutes("-1"))
+        assertEquals(300L, repository.settings.value.clearCompletedAfterSeconds)
+    }
+
+    @Test
+    fun cookieStateNeverTakesAFileBody() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+
+        presenter.setCookiesConfigured(true)
+
+        assertTrue(repository.settings.value.cookiesConfigured)
+        // The flag is the only cookie information this API can carry.
+        assertEquals(AppSettings(cookiesConfigured = true), repository.settings.value)
+
+        presenter.setCookiesConfigured(false)
+        assertFalse(repository.settings.value.cookiesConfigured)
+    }
+
+    @Test
+    fun restoreDefaultsKeepsRootCookieStateAndPresets() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+        presenter.setDownloadRoot("/tmp/downloads")
+        presenter.setCookiesConfigured(true)
+        presenter.addPreset("Keep me")
+        presenter.setOutputTemplate("%(id)s.%(ext)s")
+        presenter.setMaxConcurrentDownloads("7")
+        presenter.setTheme(ThemePreference.DARK)
+
+        presenter.restoreDefaults()
+
+        val settings = repository.settings.value
+        assertEquals(AppSettingsDefaults.OUTPUT_TEMPLATE, settings.outputTemplate)
+        assertEquals(AppSettingsDefaults.PLAYLIST_TEMPLATE, settings.playlistTemplate)
+        assertEquals(AppSettingsDefaults.MAX_CONCURRENT_DOWNLOADS, settings.maxConcurrentDownloads)
+        assertEquals(AppSettingsDefaults.CLEAR_COMPLETED_AFTER_SECONDS, settings.clearCompletedAfterSeconds)
+        assertEquals(ThemePreference.SYSTEM, settings.theme)
+        assertEquals("/tmp/downloads", settings.downloadRoot)
+        assertTrue(settings.cookiesConfigured)
+        assertEquals(listOf("Keep me"), settings.presets.map { it.name })
+    }
+
+    @Test
+    fun presetsAddMoveAndRemove() {
+        val repository = repository()
+        val presenter = SettingsViewModel(repository)
+        val first = presenter.addPreset("First", mapOf("writeMetadata" to "true"))!!
+        val second = presenter.addPreset("Second")!!
+
+        assertTrue(presenter.movePresetDown(first.id))
+        assertEquals(listOf("Second", "First"), repository.settings.value.presets.map { it.name })
+
+        assertTrue(presenter.movePresetUp(first.id))
+        assertEquals(listOf("First", "Second"), repository.settings.value.presets.map { it.name })
+        assertFalse(presenter.movePresetUp(first.id))
+
+        assertTrue(presenter.removePreset(second.id))
+        assertEquals(listOf("First"), repository.settings.value.presets.map { it.name })
+    }
+}

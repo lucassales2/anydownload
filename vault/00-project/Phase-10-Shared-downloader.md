@@ -41,7 +41,7 @@ BUILD SUCCESSFUL in 1m 1s, 0 failures: core JVM 577, core wasm 511, core iOS 522
 
 ## Touch
 
-- [FormatSelector.kt](../../shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSelector.kt) for E-05.
+- [FormatSelector.kt](../../shared/core/src/commonMain/kotlin/com/anydownload/core/format/FormatSelector.kt) for E-05.
 - The HTTP downloader for E-07 resume, left open by [T-056](../06-tasks/T-056-Http-request-port.md).
-- [FragmentDownloader.kt](../../shared/core/src/commonMain/kotlin/com/anydownlod/core/download/FragmentDownloader.kt) for E-10.
-- [GenericExtractor.kt](../../shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/GenericExtractor.kt). Upstream `generic.py` is 58 KB at the pin. `common.py` is 199 KB; translate the helpers this phase’s extractors and the generic subset call, and name each one in the manifest.
+- [FragmentDownloader.kt](../../shared/core/src/commonMain/kotlin/com/anydownload/core/download/FragmentDownloader.kt) for E-10.
+- [GenericExtractor.kt](../../shared/core/src/commonMain/kotlin/com/anydownload/core/extract/GenericExtractor.kt). Upstream `generic.py` is 58 KB at the pin. `common.py` is 199 KB; translate the helpers this phase’s extractors and the generic subset call, and name each one in the manifest.

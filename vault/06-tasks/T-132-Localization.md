@@ -14,7 +14,7 @@ tags: [task, i18n, ux]
 
 Every user-facing string in the shared Compose UI resolves for the 50 App Store languages below. The app follows the system locale on Android, iOS, desktop, and web. English (U.S.) stays the source language. Store listing copy stays out of scope; [Home](../Home.md) already keeps store publication out of scope.
 
-The catalog today is `shared/ui/src/commonMain/composeResources/values/strings.xml` (about 100 strings and 3 plurals) plus a matching `values-pt-rBR/strings.xml`. Screens already read those resources through `stringResource` and [UiText](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/i18n/UiText.kt). JVM UI tests pin `user.language=en` and `user.country=US` so a host locale cannot change assertions.
+The catalog today is `shared/ui/src/commonMain/composeResources/values/strings.xml` (about 100 strings and 3 plurals) plus a matching `values-pt-rBR/strings.xml`. Screens already read those resources through `stringResource` and [UiText](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/i18n/UiText.kt). JVM UI tests pin `user.language=en` and `user.country=US` so a host locale cannot change assertions.
 
 ## Dependencies
 

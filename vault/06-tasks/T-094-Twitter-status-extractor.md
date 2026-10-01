@@ -27,7 +27,7 @@ Upstream `yt_dlp/extractor/twitter.py` at tag `2026.08.19`, commit `3a08beaf031a
 
 ## Work
 
-- New `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterIE.kt` extending `InfoExtractor` with the URL subset above and `matchId` returning the status id.
+- New `anydownload` extending `InfoExtractor` with the URL subset above and `matchId` returning the status id.
 - Port-only model for several selectable media in one source: `InfoDict.media: List<InfoMedia> = emptyList()` and `InfoMedia(mediaId, title, duration, thumbnails, formats)` in `InfoDict.kt`. `FormatChoices.from(info)` unions `info.formats` with `info.media.flatMap { it.formats }`. Other extractors leave `media` empty and behave as before.
 - Guest lookup: `GET https://cdn.syndication.twimg.com/tweet-result` with `id` and the derived `token`. Derive `token` as upstream `_generate_syndication_token` does (JS-style base-36 of `(id / 1e15) * π` with `0` and `.` removed) in a small helper. Send `User-Agent: Googlebot` like upstream; the web extension may drop it (MV3), which is a recorded web gap and must not be required for the fixture path.
 - Parse the syndication JSON: status metadata (`id`, text/`full_text`, user name and screen name, `created_at`, `possibly_sensitive`, counts) into `InfoDict`; `mediaDetails` entries with `video_info.variants` into `InfoMedia`, one per distinct media id. Ignore photos (`type == "photo"`), quoted tweets, and cards.
@@ -59,7 +59,7 @@ Done 2026-09-25.
 
 What landed:
 
-- `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/twitter/TwitterIE.kt`: the upstream `TwitterIE` subset for `x.com`, `twitter.com`, `mobile.x.com`, `mobile.twitter.com` `/user/status/<id>` plus the `www.`/`m.`, `i/web`, and `statuses` forms; `/photo/<n>`, `/video/<n>`, profile, and `t.co` URLs do not match. The only request is the public `cdn.syndication.twimg.com/tweet-result` lookup with the Googlebot user agent and the per-request derived token. The token derives through a port of `jsinterp.js_number_to_string`, is used in memory for that request, and is never stored.
+- `anydownload`: the upstream `TwitterIE` subset for `x.com`, `twitter.com`, `mobile.x.com`, `mobile.twitter.com` `/user/status/<id>` plus the `www.`/`m.`, `i/web`, and `statuses` forms; `/photo/<n>`, `/video/<n>`, profile, and `t.co` URLs do not match. The only request is the public `cdn.syndication.twimg.com/tweet-result` lookup with the Googlebot user agent and the per-request derived token. The token derives through a port of `jsinterp.js_number_to_string`, is used in memory for that request, and is never stored.
 - Parsing: `mediaDetails` videos become `InfoMedia`, grouped by `id_str`/`id` or the `_video/(\d+)/` URL segment; photos, quoted tweets, and cards are ignored. MP4 variants carry `formatId`/`tbr`/width/height from the URL; `.m3u8` variants become one `m3u8_native` format. Metadata covers id, title, description, uploader, channel id, upload date, view count, thumbnails, and age limit.
 - Typed failures: no video media → `NoFormats`; a protected payload (or HTTP 401) → `LoginRequired`; deleted/not-found (404) → `Unavailable`; a non-object payload → `Unavailable`. No cookie or authorization is attempted.
 - `InfoDict` gains the port-only `media: List<InfoMedia>` model; `FormatChoices.from` unions `info.formats` with the listed media formats so T-095's Edit panel sees the video heights. `shared/core/NOTICE.md` gained the T-094 translation notice.

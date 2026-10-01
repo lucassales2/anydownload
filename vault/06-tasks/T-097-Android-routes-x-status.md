@@ -37,8 +37,8 @@ Done 2026-09-25. Assemble path used; no emulator/AVD exists on this machine.
 
 What landed:
 
-- `apps/android/src/main/kotlin/com/anydownlod/android/engine/AndroidExtractors.kt`: the pure-engine registry builder (YouTube then `TwitterIE`) so the JVM-equivalent suite proves the same registry the app graph builds. `AndroidAppGraph` now calls `AndroidExtractors.registry(transfer, jsRuntime)`.
-- `apps/android/src/test/kotlin/com/anydownlod/android/engine/AndroidXStatusTest.kt`: `aMatchedStatusRoutesToKotlinWithoutAProbe` (the registry contains `TwitterIE` and `AndroidRouteClassifier` returns `KOTLIN`) and `theFixturePathPreviewsAndDownloadsTwoSelectedVideosWithoutPython` (the preview lists both stable media ids; `AndroidRoutingEngine` downloads two files with the fixture bytes; the status URL stays the job source; the recording Chaquopy port received nothing).
+- `anydownload`: the pure-engine registry builder (YouTube then `TwitterIE`) so the JVM-equivalent suite proves the same registry the app graph builds. `AndroidAppGraph` now calls `AndroidExtractors.registry(transfer, jsRuntime)`.
+- `anydownload`: `aMatchedStatusRoutesToKotlinWithoutAProbe` (the registry contains `TwitterIE` and `AndroidRouteClassifier` returns `KOTLIN`) and `theFixturePathPreviewsAndDownloadsTwoSelectedVideosWithoutPython` (the preview lists both stable media ids; `AndroidRoutingEngine` downloads two files with the fixture bytes; the status URL stays the job source; the recording Chaquopy port received nothing).
 - The fixture is synthesized JSON with `*.example` media hosts; no live X/Twitter call, cookie, or token.
 
 Verification run 2026-09-25:

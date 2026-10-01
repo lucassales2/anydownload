@@ -20,7 +20,7 @@ None. This card is first in D3.
 
 ## Context the next session needs
 
-[App.kt](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/App.kt) shows [ClipboardPermissionDialog](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/clipboard/ClipboardPermissionDialog.kt) when `offerClipboardCheck` is true, then [ClipboardLinkWatcher](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/clipboard/ClipboardLinkWatcher.kt) polls after allow. Desktop and iOS pass `offerClipboardCheck = true`. [AddForm.kt](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/add/AddForm.kt) currently shows the full options form. Settings has a clipboard section that can turn the automatic check back on.
+[App.kt](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/App.kt) shows [ClipboardPermissionDialog](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/clipboard/ClipboardPermissionDialog.kt) when `offerClipboardCheck` is true, then [ClipboardLinkWatcher](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/clipboard/ClipboardLinkWatcher.kt) polls after allow. Desktop and iOS pass `offerClipboardCheck = true`. [AddForm.kt](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/add/AddForm.kt) currently shows the full options form. Settings has a clipboard section that can turn the automatic check back on.
 
 ## Work
 
@@ -40,7 +40,7 @@ None. This card is first in D3.
 
 Done 2026-09-23.
 
-- Idle screen is now `HomeScreen` (`shared/ui/src/commonMain/kotlin/com/anydownlod/ui/home/HomeScreen.kt`): header plus the link field row (field, Paste, Download). No add-form options, no queue chrome, no clipboard banner. `App` no longer composes the permission dialog or the clipboard watcher.
+- Idle screen is now `HomeScreen` (`anydownload`): header plus the link field row (field, Paste, Download). No add-form options, no queue chrome, no clipboard banner. `App` no longer composes the permission dialog or the clipboard watcher.
 - Removed `offerClipboardCheck` from every host (desktop `Main.kt`, iOS `MainViewController.kt`, web `Main.kt`, Android `MainActivity.kt`); the parameter no longer exists in `App`. A clipboard access of `UNKNOWN` opens no dialog.
 - Deleted the clipboard machinery: `ClipboardPermissionDialog.kt`, `ClipboardLinkWatcher.kt`, `ClipboardWatch.kt`, `ClipboardSection.kt`, and `ClipboardWatchTest.kt`. Stored `ClipboardAccess`/`handledClipboardUrl` values are left unmigrated. Settings no longer offers the clipboard toggle.
 - Shell click-through tests (`AppShellTest`, `QueueHistoryUiTest`, `SubscriptionsUiTest`) now render `AppShell` directly through `ShellUiHarness`, still themed and full-size like `App`. `AddFormUiTest` asserts the idle screen shows the field and no dialog, banner, or option controls.

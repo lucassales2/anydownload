@@ -22,10 +22,10 @@ The desktop window is an AnyDownload shell for MeTube's sections: header, add re
 
 Today `shared/ui/.../App.kt` loads `AnyDownloadApi` and shows a "Server" card via `HomePresenter`. `AppConfig` still has `serverBaseUrl`. These hosts call `App()` with no arguments:
 
-- `apps/desktop/src/jvmMain/kotlin/com/anydownlod/desktop/Main.kt`
-- `apps/android/src/main/kotlin/com/anydownlod/android/MainActivity.kt`
-- `apps/web/src/wasmJsMain/kotlin/com/anydownlod/web/Main.kt`
-- `shared/ui/src/iosMain/kotlin/com/anydownlod/ui/MainViewController.kt`
+- `anydownload`
+- `anydownload`
+- `anydownload`
+- `anydownload`
 
 `shared/ui/build.gradle.kts` exposes `shared/network` as an `api` dependency. After this task the shell must not call the API. If nothing else in `shared/ui` needs `shared/network`, drop that dependency. Do not delete the `shared/network` module.
 

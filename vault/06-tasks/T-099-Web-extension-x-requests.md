@@ -40,7 +40,7 @@ Done 2026-09-25.
 
 What landed:
 
-- `apps/web/src/wasmJsMain/kotlin/com/anydownlod/web/WebAppGraph.kt`: registers `TwitterIE(extensionHttp)` beside `YoutubeIE`; the registry serves preview and download over the extension request port.
+- `anydownload`: registers `TwitterIE(extensionHttp)` beside `YoutubeIE`; the registry serves preview and download over the extension request port.
 - `WebExtensionEngine`: `downloadViaBridge` is split into `bridgeDownload` (policy check plus one extension download) and completion, so the new `downloadSelectedMediaViaBridge` mirrors T-096: an empty selection fails `INVALID_URL_OPTIONS` before any media URL; a stale selected id fails `UNAVAILABLE_OR_PRIVATE`; each selected media resolves its own format and is handed to `bridge.download(..., saveViaBlob = true)`; each completed file is appended as an artifact on the status job and the job completes once all are saved. Web has no toolkit, so merge and audio extract fail typed.
 - Node bridge tests: `fetch-request carries the X syndication lookup without a cookie or authorization` (the lookup is fetched, a cookie header is refused, MV3 drops `user-agent`, and no authorization rides along) and `the page source never fetches an X or Twitter origin`.
 - Wasm tests: `WebExtensionEngineTest.aStatusSelectionSavesOneFilePerSelectedVideo` and `anEmptyStatusSelectionFailsBeforeAnyMediaUrl`.

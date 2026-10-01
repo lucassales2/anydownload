@@ -24,7 +24,7 @@ tags: [task, engine, kmp, extractors]
 - `UrlPolicy` stays on every candidate. The engine is the only caller; the fall-through to the desktop CLI / Android Chaquopy depends on the typed failures, not on an exception.
 - Upstream `generic.py` reference methods: `_extract_embeds` (embed/iframe/video.js), `_search_json_ld` (JSON-LD, including `@graph`), and the meta-refresh handling around the `http-equiv="refresh"` regex.
 
-Files: `GenericExtractor.kt` and `GenericIE.kt` in `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/`.
+Files: `GenericExtractor.kt` and `GenericIE.kt` in `anydownload`.
 
 ## Work
 

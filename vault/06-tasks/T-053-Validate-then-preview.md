@@ -20,7 +20,7 @@ Submitting the link field checks that the text is one compatible HTTP(S) URL. A 
 
 ## Context the next session needs
 
-Reuse `SourceUrlValidator` and `ClipboardLink.compatibleUrl`. Do not add a second URL type. [PreviewScreen.kt](../../shared/ui/src/commonMain/kotlin/com/anydownlod/ui/preview/PreviewScreen.kt) already loads title, thumbnail, and metadata; open that screen. Do not start a job from the field.
+Reuse `SourceUrlValidator` and `ClipboardLink.compatibleUrl`. Do not add a second URL type. [PreviewScreen.kt](../../shared/ui/src/commonMain/kotlin/com/anydownload/ui/preview/PreviewScreen.kt) already loads title, thumbnail, and metadata; open that screen. Do not start a job from the field.
 
 ## Work
 

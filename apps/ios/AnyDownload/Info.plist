@@ -28,7 +28,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.anydownlod.ios.share</string>
+			<string>com.anydownload.ios.share</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>anydownload</string>

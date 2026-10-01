@@ -1,0 +1,336 @@
+package com.anydownload.ui.queue
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.anydownload.ui.export.JobSourceUrls
+import com.anydownload.ui.generated.resources.Res
+import com.anydownload.ui.generated.resources.cancel
+import com.anydownload.ui.generated.resources.cancel_body
+import com.anydownload.ui.generated.resources.cancel_download
+import com.anydownload.ui.generated.resources.cancel_many_title
+import com.anydownload.ui.generated.resources.cancel_one_title
+import com.anydownload.ui.generated.resources.cancel_selected
+import com.anydownload.ui.generated.resources.copy_batch
+import com.anydownload.ui.generated.resources.copy_urls
+import com.anydownload.ui.generated.resources.empty_queue_body
+import com.anydownload.ui.generated.resources.empty_queue_title
+import com.anydownload.ui.generated.resources.eta
+import com.anydownload.ui.generated.resources.keep_downloading
+import com.anydownload.ui.generated.resources.kpi_not_started
+import com.anydownload.ui.generated.resources.kpi_working
+import com.anydownload.ui.generated.resources.open_source
+import com.anydownload.ui.generated.resources.phase
+import com.anydownload.ui.generated.resources.queue_subtitle
+import com.anydownload.ui.generated.resources.queue_title
+import com.anydownload.ui.generated.resources.start
+import com.anydownload.ui.generated.resources.start_selected
+import com.anydownload.ui.generated.resources.waiting_until
+import com.anydownload.ui.i18n.resolve
+import com.anydownload.ui.shell.EmptyStatePanel
+import com.anydownload.ui.shell.formatBytes
+import com.anydownload.ui.shell.formatDueTime
+import com.anydownload.ui.shell.formatEta
+import com.anydownload.ui.shell.formatSpeed
+import com.anydownload.ui.theme.ActionRow
+import com.anydownload.ui.theme.DestructiveOutlinedButton
+import com.anydownload.ui.theme.DestructiveTextButton
+import com.anydownload.ui.theme.KpiTile
+import com.anydownload.ui.theme.MessageStrip
+import com.anydownload.ui.theme.ObjectCard
+import com.anydownload.ui.theme.PageHeading
+import com.anydownload.ui.theme.PageInset
+import com.anydownload.ui.theme.ProgressMeter
+import com.anydownload.ui.theme.SelectionBar
+import com.anydownload.ui.theme.StatusBadge
+import com.anydownload.ui.theme.StatusTone
+import com.anydownload.ui.theme.colors
+import com.anydownload.ui.theme.statusTone
+import dev.zacsweers.metrox.viewmodel.metroViewModel
+import org.jetbrains.compose.resources.stringResource
+
+/**
+ * Downloading list bound to [QueueViewModel]: pending, waiting, queued,
+ * resolving, downloading, and post-processing rows. The screen only lays out,
+ * resolves strings, writes the clipboard, and shows the confirm dialog; the
+ * ViewModel owns selection, the cancel decision, and the copy rules.
+ */
+@Composable
+fun QueueScreen(
+    onCopyUrls: ((String) -> Unit)? = null,
+    onOpenSource: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    viewModel: QueueViewModel = metroViewModel(),
+) {
+    val state by viewModel.state.collectAsState()
+    val rows = state.rows
+    val openSource = onOpenSource ?: viewModel::openSource
+    val clipboard = LocalClipboardManager.current
+    val copyUrls: (String) -> Unit = onCopyUrls ?: { text -> clipboard.setText(AnnotatedString(text)) }
+
+    fun copy(urls: List<String>) {
+        if (urls.isEmpty()) return
+        copyUrls(JobSourceUrls.text(urls))
+        viewModel.noteCopied(urls.size)
+    }
+
+    Box(modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = PageInset),
+        ) {
+            PageHeading(
+                title = stringResource(Res.string.queue_title),
+                subtitle = stringResource(Res.string.queue_subtitle),
+            )
+            if (rows.isEmpty()) {
+                EmptyStatePanel(
+                    title = stringResource(Res.string.empty_queue_title),
+                    body = stringResource(Res.string.empty_queue_body),
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    KpiTile(
+                        value = state.working.toString(),
+                        label = stringResource(Res.string.kpi_working),
+                        tone = StatusTone.Information,
+                    )
+                    KpiTile(
+                        value = state.notStarted.toString(),
+                        label = stringResource(Res.string.kpi_not_started),
+                        tone = StatusTone.Critical,
+                    )
+                }
+                state.statusMessage?.let { message ->
+                    MessageStrip(
+                        text = message.resolve(),
+                        tone = StatusTone.Information,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                SelectionBar(
+                    selection = selectionState(state.selectedIds.size, rows.size),
+                    onToggleAll = { viewModel.toggleAll() },
+                    selectAllTag = "queue-select-all",
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = { viewModel.startSelected() },
+                        enabled = state.selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("queue-start-selected"),
+                    ) {
+                        Text(stringResource(Res.string.start_selected))
+                    }
+                    DestructiveOutlinedButton(
+                        text = stringResource(Res.string.cancel_selected),
+                        onClick = { viewModel.requestCancelSelected() },
+                        enabled = state.selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("queue-cancel-selected"),
+                    )
+                    TextButton(
+                        onClick = { copy(viewModel.copySelected()) },
+                        enabled = state.selectedIds.isNotEmpty(),
+                        modifier = Modifier.testTag("queue-copy-selected"),
+                    ) {
+                        Text(stringResource(Res.string.copy_urls))
+                    }
+                    TextButton(
+                        onClick = { copy(viewModel.copyBatch()) },
+                        enabled = state.batchCopyEnabled,
+                        modifier = Modifier.testTag("queue-copy-batch"),
+                    ) {
+                        Text(stringResource(Res.string.copy_batch))
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth().testTag("queue-list"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                ) {
+                    items(rows, key = { it.id }) { row ->
+                        QueueRowItem(
+                            row = row,
+                            selected = row.id in state.selectedIds,
+                            onSelectedChange = { viewModel.toggle(row.id) },
+                            onStart = { viewModel.startSelected(setOf(row.id)) },
+                            onCancel = { viewModel.requestCancelSelected(setOf(row.id)) },
+                            onOpenSource = { openSource(row.sourceUrl) },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (state.pendingCancelIds.isNotEmpty()) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissCancel() },
+                title = {
+                    Text(
+                        if (state.pendingCancelIds.size == 1) {
+                            stringResource(Res.string.cancel_one_title)
+                        } else {
+                            stringResource(Res.string.cancel_many_title)
+                        }
+                    )
+                },
+                text = { Text(stringResource(Res.string.cancel_body)) },
+                confirmButton = {
+                    DestructiveTextButton(
+                        text = stringResource(Res.string.cancel_download),
+                        onClick = { viewModel.confirmCancel() },
+                        modifier = Modifier.testTag("queue-confirm-cancel"),
+                    )
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissCancel() }) {
+                        Text(stringResource(Res.string.keep_downloading))
+                    }
+                },
+            )
+        }
+    }
+}
+
+private fun selectionState(selected: Int, total: Int): ToggleableState = when {
+    selected == 0 -> ToggleableState.Off
+    selected == total -> ToggleableState.On
+    else -> ToggleableState.Indeterminate
+}
+
+@Composable
+private fun QueueRowItem(
+    row: QueueRow,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onOpenSource: () -> Unit,
+) {
+    val tone = row.state.statusTone()
+    ObjectCard(accent = tone.colors().foreground) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Checkbox(
+                checked = selected,
+                onCheckedChange = onSelectedChange,
+                modifier = Modifier.testTag("queue-select-${row.id}"),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = row.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatusBadge(label = row.stateLabel.resolve(), tone = tone, live = true)
+                }
+                row.sourceHost?.let { host ->
+                    Text(
+                        text = host,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                row.phase?.let { phase ->
+                    Text(
+                        text = stringResource(Res.string.phase, phase),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                ProgressMeter(
+                    progress = if (row.indeterminate) {
+                        null
+                    } else {
+                        ((row.percent ?: 0.0) / 100.0).toFloat()
+                    },
+                    modifier = Modifier.testTag("queue-progress-${row.id}"),
+                )
+                val etaLabel = row.etaSeconds?.let { stringResource(Res.string.eta, formatEta(it)) }
+                val details = buildList {
+                    row.downloadedBytes?.let { downloaded ->
+                        add(
+                            if (row.totalBytes != null) {
+                                "${formatBytes(downloaded)} / ${formatBytes(row.totalBytes)}"
+                            } else {
+                                formatBytes(downloaded)
+                            },
+                        )
+                    }
+                    row.speedBytesPerSecond?.let { add(formatSpeed(it)) }
+                    etaLabel?.let { add(it) }
+                    if (!row.indeterminate) add("${(row.percent ?: 0.0).toInt()}%")
+                }
+                if (details.isNotEmpty()) {
+                    Text(
+                        text = details.joinToString(" \u00b7 "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                row.scheduledAtEpochMillis?.let { due ->
+                    Text(
+                        text = stringResource(Res.string.waiting_until, formatDueTime(due)),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                ActionRow {
+                    if (row.canStart) {
+                        FilledTonalButton(
+                            onClick = onStart,
+                            modifier = Modifier.testTag("queue-start-${row.id}"),
+                        ) {
+                            Text(stringResource(Res.string.start))
+                        }
+                    }
+                    DestructiveOutlinedButton(
+                        text = stringResource(Res.string.cancel),
+                        onClick = onCancel,
+                        modifier = Modifier.testTag("queue-cancel-${row.id}"),
+                    )
+                    TextButton(
+                        onClick = onOpenSource,
+                        modifier = Modifier.testTag("queue-open-${row.id}"),
+                    ) {
+                        Text(stringResource(Res.string.open_source))
+                    }
+                }
+            }
+        }
+    }
+}

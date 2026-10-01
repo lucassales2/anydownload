@@ -24,7 +24,7 @@ tags: [task, engine, kmp, downloads]
 - `HttpDownloadEngine.streamManifestToTemp` is the caller: `onChunk` writes straight into one temp, cancellation is checked between fragments, and a `Failed` outcome discards the temp in the engine's `finally`.
 - Upstream `downloader/fragment.py` exposes `concurrent_fragment_downloads` (default 1) and `skip_unavailable_fragments` (default true for VOD, false for live).
 
-Files: `shared/core/src/commonMain/kotlin/com/anydownlod/core/download/FragmentDownloader.kt`. Tests: `FragmentDownloaderTest`, `Aes128CbcTest`, `M3u8Test`, `MpdTest`, and `ManifestEngineDownloadTest`.
+Files: `anydownload`. Tests: `FragmentDownloaderTest`, `Aes128CbcTest`, `M3u8Test`, `MpdTest`, and `ManifestEngineDownloadTest`.
 
 ## Work
 

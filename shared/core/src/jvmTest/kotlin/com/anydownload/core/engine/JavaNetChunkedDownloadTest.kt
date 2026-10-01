@@ -1,0 +1,558 @@
+package com.anydownload.core.engine
+
+import com.anydownload.core.domain.AppSettings
+import com.anydownload.core.domain.DownloadJob
+import com.anydownload.core.domain.DownloadOptions
+import com.anydownload.core.domain.DownloadRequest
+import com.anydownload.core.domain.JobErrorCode
+import com.anydownload.core.domain.JobState
+import com.anydownload.core.domain.StartPolicy
+import com.anydownload.core.extract.DownloaderOptions
+import com.anydownload.core.extract.ExtractorHttp
+import com.anydownload.core.extract.ExtractorRegistry
+import com.anydownload.core.extract.InfoDict
+import com.anydownload.core.extract.InfoExtractor
+import com.anydownload.core.extract.MediaFormat
+import com.anydownload.core.fake.InMemorySettingsRepository
+import com.anydownload.core.platform.JavaNetFileStore
+import com.anydownload.core.platform.JavaNetHttpTransfer
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+
+/**
+ * T-061 ranged-chunk download against a local `HttpServer`: a format with
+ * `http_chunk_size` is fetched as sequential `Range` requests into one file.
+ * T-134 adds same-attempt resume: a chunk or body that drops mid-transfer is
+ * continued from the temp size, a range-ignoring server fails typed, and no
+ * byte survives a failed attempt.
+ */
+class JavaNetChunkedDownloadTest {
+
+    private val payload = ByteArray(9_000) { (it % 251).toByte() }
+
+    private fun testServer(): HttpServer =
+        HttpServer.create(InetSocketAddress(0), 0).also { it.start() }
+
+    private fun baseUrl(server: HttpServer) = "http://127.0.0.1:${server.address.port}"
+
+    private fun fixtureCheck(base: String): (String) -> UrlCheck = { url ->
+        if (url.startsWith(base)) UrlCheck.Allowed(url) else UrlPolicy.check(url)
+    }
+
+    private class ChunkedExtractor(private val url: String, private val size: Long, private val chunk: Long) :
+        InfoExtractor(
+            ieKey = ExtractorRegistry.GENERIC_KEY,
+            http = ExtractorHttp(JavaNetHttpTransfer()),
+            validUrl = Regex("""https?://chunked\.example/.+"""),
+        ) {
+        override suspend fun extract(unused: String): InfoDict = InfoDict(
+            id = "chunked",
+            title = "Chunked Fixture",
+            formats = listOf(
+                MediaFormat(
+                    formatId = "1",
+                    url = url,
+                    ext = "mp4",
+                    vcodec = "avc1",
+                    acodec = "mp4a",
+                    filesize = size,
+                    downloaderOptions = DownloaderOptions(httpChunkSize = chunk),
+                ),
+            ),
+        )
+    }
+
+    private fun engine(
+        server: HttpServer,
+        root: Path,
+        extractor: InfoExtractor,
+    ): HttpDownloadEngine {
+        val base = baseUrl(server)
+        return HttpDownloadEngine(
+            transfer = JavaNetHttpTransfer(),
+            fileStore = JavaNetFileStore(root),
+            settings = InMemorySettingsRepository(AppSettings(downloadRoot = root.toString())),
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+            urlCheck = fixtureCheck(base),
+            registry = ExtractorRegistry(listOf(extractor)),
+        )
+    }
+
+    private suspend fun waitForTerminal(engine: HttpDownloadEngine, jobId: String): DownloadJob =
+        withTimeout(30_000) {
+            engine.jobs.first { jobs -> jobs.any { it.id == jobId && it.state.isTerminal } }
+                .first { it.id == jobId }
+        }
+
+    /** Waits for the failure `finally` to discard the temp before listing the root. */
+    private suspend fun waitForEmptyRoot(root: Path) {
+        withTimeout(10_000) {
+            while (Files.list(root).use { it.count() } != 0L) delay(10)
+        }
+    }
+
+    private fun rangeHandler(
+        ranges: MutableList<String>,
+        statusFor: (index: Int) -> Int = { 206 },
+        gate: CountDownLatch? = null,
+    ): (com.sun.net.httpserver.HttpExchange) -> Unit = { exchange ->
+        val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+        val requestIndex = synchronized(ranges) { ranges += range; ranges.size - 1 }
+        val status = statusFor(requestIndex)
+        if (status != 206) {
+            exchange.sendResponseHeaders(status, -1)
+            exchange.close()
+        } else {
+            val match = Regex("bytes=(\\d+)-(\\d+)").find(range)
+            val start = match?.groupValues?.get(1)?.toInt() ?: 0
+            val end = match?.groupValues?.get(2)?.toInt()?.coerceAtMost(payload.size - 1) ?: payload.size - 1
+            if (requestIndex > 0) gate?.await(15, TimeUnit.SECONDS)
+            exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+            exchange.responseHeaders.set("Accept-Ranges", "bytes")
+            exchange.responseHeaders.set("Content-Range", "bytes $start-$end/${payload.size}")
+            exchange.sendResponseHeaders(206, (end - start + 1).toLong())
+            exchange.responseBody.use { it.write(payload, start, end - start + 1) }
+        }
+    }
+
+    @Test
+    fun rangedChunksAssembleByteExact() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/chunked.bin", rangeHandler(ranges))
+        val root = Files.createTempDirectory("anydownlod-chunked")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/chunked.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "chunked-key",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals(payload.size.toLong(), finished.progress?.downloadedBytes)
+            assertEquals(payload.size.toLong(), finished.progress?.totalBytes)
+            assertEquals("Chunked Fixture.mp4", finished.artifacts.single().relativePath)
+            assertTrue(Files.readAllBytes(root.resolve("Chunked Fixture.mp4")).contentEquals(payload))
+            // 9000 bytes / 2048 per chunk => 5 requests.
+            assertTrue(ranges.size >= 4, "expected several ranged requests, got ${ranges.size}")
+            assertEquals("bytes=0-2047", ranges.first())
+            assertTrue(ranges.last().startsWith("bytes=8192-"), ranges.last())
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun a403OnALaterChunkIsUnavailableOrPrivate() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/blocked.bin", rangeHandler(ranges, statusFor = { index -> if (index == 0) 206 else 403 }))
+        val root = Files.createTempDirectory("anydownlod-chunked-403")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/blocked.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "chunked-403",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(JobErrorCode.UNAVAILABLE_OR_PRIVATE, finished.error?.code)
+            assertTrue(finished.artifacts.isEmpty())
+            waitForEmptyRoot(root)
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancelBetweenChunksLeavesNoFile() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        val gate = CountDownLatch(1)
+        server.createContext("/files/gated.bin", rangeHandler(ranges, gate = gate))
+        val root = Files.createTempDirectory("anydownlod-chunked-cancel")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/gated.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "chunked-cancel",
+                ),
+            )
+            // Wait until the first chunk reached the file and the next request
+            // is parked on the gate.
+            withTimeout(10_000) {
+                while (engine.jobs.value.first { it.id == job.id }.progress?.downloadedBytes == null) {
+                    delay(10)
+                }
+            }
+            engine.cancel(job.id)
+            gate.countDown()
+            val finished = waitForTerminal(engine, job.id)
+            assertEquals(JobState.CANCELLED, finished.state)
+            assertTrue(finished.artifacts.isEmpty())
+            withTimeout(10_000) {
+                while (Files.list(root).use { it.count() } != 0L) delay(10)
+            }
+            waitForEmptyRoot(root)
+            assertNotNull(engine.jobs.value.first { it.id == job.id })
+            Unit
+        } finally {
+            gate.countDown()
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    /** Parses `bytes=<start>-<end>`; an open-ended or absent end means the last byte. */
+    private fun requestedRange(range: String): Pair<Int, Int> {
+        val match = Regex("bytes=(\\d+)-(\\d*)").find(range) ?: return 0 to (payload.size - 1)
+        val start = match.groupValues[1].toInt()
+        val end = match.groupValues[2].toIntOrNull() ?: (payload.size - 1)
+        return start to end.coerceAtMost(payload.size - 1)
+    }
+
+    /**
+     * Answers 206 with an announced range but sends only [count] bytes and
+     * closes the body cleanly, so the engine sees a premature end rather than
+     * a transport exception.
+     */
+    private fun partialChunk(
+        exchange: com.sun.net.httpserver.HttpExchange,
+        start: Int,
+        end: Int,
+        count: Int,
+    ) {
+        exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+        exchange.responseHeaders.set("Accept-Ranges", "bytes")
+        exchange.responseHeaders.set("Content-Range", "bytes $start-$end/${payload.size}")
+        exchange.sendResponseHeaders(206, 0)
+        exchange.responseBody.use { it.write(payload, start, count.coerceAtMost(payload.size - start)) }
+    }
+
+    @Test
+    fun midBodyDropResumesFromTheTempSize() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/drop.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+            val requestIndex = synchronized(ranges) { ranges += range; ranges.size - 1 }
+            val (start, end) = requestedRange(range)
+            if (requestIndex == 0) {
+                // The first chunk announces 0-2047 but stops after 1000 bytes.
+                partialChunk(exchange, start, end, count = 1000)
+            } else {
+                exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+                exchange.responseHeaders.set("Accept-Ranges", "bytes")
+                exchange.responseHeaders.set("Content-Range", "bytes $start-$end/${payload.size}")
+                exchange.sendResponseHeaders(206, (end - start + 1).toLong())
+                exchange.responseBody.use { it.write(payload, start, end - start + 1) }
+            }
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-drop")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/drop.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "resume-drop",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("bytes=0-2047", ranges.first())
+            // The retry continues exactly at the temp size (1000 bytes).
+            assertEquals("bytes=1000-3047", ranges[1])
+            assertEquals(payload.size.toLong(), finished.progress?.downloadedBytes)
+            assertTrue(Files.readAllBytes(root.resolve("Chunked Fixture.mp4")).contentEquals(payload))
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aRangeIgnoringServerFailsTypedRatherThanAppending() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/ignored.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+            val requestIndex = synchronized(ranges) { ranges += range; ranges.size - 1 }
+            if (requestIndex == 0) {
+                val (start, end) = requestedRange(range)
+                partialChunk(exchange, start, end, count = 1000)
+            } else {
+                // Ignores the Range and answers 200 with the whole body.
+                exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+                exchange.sendResponseHeaders(200, payload.size.toLong())
+                exchange.responseBody.use { it.write(payload) }
+            }
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-ignored")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/ignored.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "resume-ignored",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(JobErrorCode.NETWORK_FAILURE, finished.error?.code)
+            assertEquals(true, finished.error?.retryable)
+            assertTrue(finished.artifacts.isEmpty())
+            waitForEmptyRoot(root)
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aMismatchedContentRangeOnTheResumeNeverAppends() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/mismatch.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+            val requestIndex = synchronized(ranges) { ranges += range; ranges.size - 1 }
+            if (requestIndex == 0) {
+                val (start, end) = requestedRange(range)
+                partialChunk(exchange, start, end, count = 1000)
+            } else {
+                // 206, but the announced start is not the temp size.
+                exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+                exchange.responseHeaders.set("Content-Range", "bytes 0-${payload.size - 1}/${payload.size}")
+                exchange.sendResponseHeaders(206, payload.size.toLong())
+                exchange.responseBody.use { it.write(payload) }
+            }
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-mismatch")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/mismatch.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "resume-mismatch",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(JobErrorCode.NETWORK_FAILURE, finished.error?.code)
+            assertTrue(finished.artifacts.isEmpty())
+            waitForEmptyRoot(root)
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun resumeExhaustionFailsTypedAndDiscardsTheTemp() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/stuck.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+            val (start, end) = requestedRange(range)
+            ranges += range
+            partialChunk(exchange, start, end, count = 100)
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-stuck")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/stuck.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "resume-stuck",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.FAILED, finished.state)
+            assertEquals(JobErrorCode.NETWORK_FAILURE, finished.error?.code)
+            // The initial chunk plus the bounded continuation budget.
+            assertEquals(HttpDownloadEngine.MAX_RESUME_ATTEMPTS + 1, ranges.size)
+            assertTrue(finished.artifacts.isEmpty())
+            waitForEmptyRoot(root)
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun singleBodyDropResumesWithARangedRetry() = runBlocking {
+        val server = testServer()
+        val requests = Collections.synchronizedList(mutableListOf<String>())
+        server.createContext("/files/direct.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range")
+            requests += range ?: "none"
+            exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+            exchange.responseHeaders.set("Accept-Ranges", "bytes")
+            if (range == null) {
+                // A plain body with Content-Length 9000 that stops after 3000 bytes.
+                exchange.sendResponseHeaders(200, payload.size.toLong())
+                exchange.responseBody.use { it.write(payload, 0, 3000) }
+            } else {
+                val (start, end) = requestedRange(range)
+                exchange.responseHeaders.set("Content-Range", "bytes $start-$end/${payload.size}")
+                exchange.sendResponseHeaders(206, (end - start + 1).toLong())
+                exchange.responseBody.use { it.write(payload, start, end - start + 1) }
+            }
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-direct")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/unrelated.bin", payload.size.toLong(), chunk = 0),
+            )
+            val job = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "$base/files/direct.bin",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "resume-direct",
+                ),
+            )
+            val finished = waitForTerminal(engine, job.id)
+
+            assertEquals(JobState.COMPLETED, finished.state, finished.error?.message)
+            assertEquals("none", requests[0])
+            // The whole-tail ranged retry starts at the temp size (3000 bytes).
+            assertEquals("bytes=3000-8999", requests[1])
+            assertEquals(payload.size.toLong(), finished.progress?.downloadedBytes)
+            assertTrue(Files.readAllBytes(root.resolve("direct.bin")).contentEquals(payload))
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aFailedAttemptLeavesNoPartAndTheNextAttemptStartsAtZero() = runBlocking {
+        val server = testServer()
+        val ranges = Collections.synchronizedList(mutableListOf<String>())
+        val serveNaturally = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.createContext("/files/flaky.bin") { exchange ->
+            val range = exchange.requestHeaders.getFirst("Range") ?: "bytes=0-${payload.size - 1}"
+            val (start, end) = requestedRange(range)
+            ranges += range
+            exchange.responseHeaders.set("Content-Type", "application/octet-stream")
+            exchange.responseHeaders.set("Accept-Ranges", "bytes")
+            exchange.responseHeaders.set("Content-Range", "bytes $start-$end/${payload.size}")
+            if (serveNaturally.get()) {
+                exchange.sendResponseHeaders(206, (end - start + 1).toLong())
+                exchange.responseBody.use { it.write(payload, start, end - start + 1) }
+            } else {
+                exchange.sendResponseHeaders(206, 0)
+                exchange.responseBody.use { it.write(payload, start, 100) }
+            }
+        }
+        val root = Files.createTempDirectory("anydownlod-resume-fresh")
+        try {
+            val base = baseUrl(server)
+            val engine = engine(
+                server,
+                root,
+                ChunkedExtractor("$base/files/flaky.bin", payload.size.toLong(), chunk = 2048),
+            )
+            val first = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "flaky-first",
+                ),
+            )
+            val firstFinished = waitForTerminal(engine, first.id)
+            assertEquals(JobState.FAILED, firstFinished.state)
+            // No `.part` and no temp survive the failed attempt.
+            waitForEmptyRoot(root)
+
+            serveNaturally.set(true)
+            val secondAttemptStart = ranges.size
+            val second = engine.submit(
+                DownloadRequest(
+                    sourceUrl = "https://chunked.example/watch",
+                    options = DownloadOptions(startPolicy = StartPolicy.AUTOMATIC),
+                    idempotencyKey = "flaky-second",
+                ),
+            )
+            val secondFinished = waitForTerminal(engine, second.id)
+
+            assertEquals(JobState.COMPLETED, secondFinished.state, secondFinished.error?.message)
+            // The next attempt starts from zero: no byte from the failed one is reused.
+            assertEquals("bytes=0-2047", ranges[secondAttemptStart])
+            assertTrue(Files.readAllBytes(root.resolve("Chunked Fixture.mp4")).contentEquals(payload))
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+}

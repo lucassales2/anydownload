@@ -20,7 +20,7 @@ A status preview's selection becomes a real download. `DownloadRequest.selectedM
 
 ## Context the next session needs
 
-`HttpDownloadEngine.extractAndDownload` resolves one format and publishes one artifact. `DownloadJob.artifacts` is already a list, so one status job can own several files. `WebExtensionEngine` has its own extraction path; leave it to T-099. The desktop registry in `apps/desktop/src/jvmMain/kotlin/com/anydownlod/desktop/Main.kt` and `DesktopPreviewSource.kt` currently lists only `YoutubeIE`; add `TwitterIE` here so the desktop route becomes KOTLIN before any probe or process.
+`HttpDownloadEngine.extractAndDownload` resolves one format and publishes one artifact. `DownloadJob.artifacts` is already a list, so one status job can own several files. `WebExtensionEngine` has its own extraction path; leave it to T-099. The desktop registry in `anydownload` and `DesktopPreviewSource.kt` currently lists only `YoutubeIE`; add `TwitterIE` here so the desktop route becomes KOTLIN before any probe or process.
 
 ## Work
 

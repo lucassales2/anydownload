@@ -42,8 +42,8 @@ Done on 2026-09-25.
 
 Added:
 
-- `apps/desktop/src/jvmMain/kotlin/com/anydownlod/desktop/engine/DesktopFfmpegToolkit.kt` — `MediaToolkit` over `ffmpeg`/`ffprobe` resolved from `PATH` (nothing bundled). `capabilities()` is `canMerge = true` with `{M4A, OPUS}` only when both binaries resolve; a missing tool fails `ToolUnavailable` before `runner.start`. Merge and extract use argument lists and `-c copy`; `ffprobe -print_format json` checks one video + one audio stream after a merge and the expected container after an extract. A nonzero exit or a bad probe is `IncompatibleStreams` and deletes the destination; a timeout or start failure is retryable `Io`. Cancel destroys the process tree and deletes the destination; tool output is drained into daemon threads and discarded, never logged or put in a message.
-- `apps/desktop/src/jvmTest/kotlin/com/anydownlod/desktop/engine/DesktopFfmpegToolkitTest.kt` — 6 tests, local lavfi fixtures, no network.
+- `anydownload` — `MediaToolkit` over `ffmpeg`/`ffprobe` resolved from `PATH` (nothing bundled). `capabilities()` is `canMerge = true` with `{M4A, OPUS}` only when both binaries resolve; a missing tool fails `ToolUnavailable` before `runner.start`. Merge and extract use argument lists and `-c copy`; `ffprobe -print_format json` checks one video + one audio stream after a merge and the expected container after an extract. A nonzero exit or a bad probe is `IncompatibleStreams` and deletes the destination; a timeout or start failure is retryable `Io`. Cancel destroys the process tree and deletes the destination; tool output is drained into daemon threads and discarded, never logged or put in a message.
+- `anydownload` — 6 tests, local lavfi fixtures, no network.
 
 Commands run (ffmpeg 9.0.1 and ffprobe 9.0.1 on PATH):
 

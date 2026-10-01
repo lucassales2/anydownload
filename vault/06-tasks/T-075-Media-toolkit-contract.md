@@ -42,8 +42,8 @@ Done on 2026-09-25.
 
 Added under `com.anydownlod.core.postprocess`:
 
-- `shared/core/src/commonMain/kotlin/com/anydownlod/core/postprocess/MediaToolkit.kt` — `MediaFilePath` (opaque host token; common code has no platform `Path`), `ToolkitCapabilities` (default `canMerge = false`, empty container set, `Unavailable`), sealed `ToolkitError` (`ToolUnavailable`, `IncompatibleStreams`, retryable `Io`), `MediaToolkit` (`capabilities()`, suspend `merge`, suspend `extractAudio`), and `UnavailableToolkit`.
-- `shared/core/src/commonTest/kotlin/com/anydownlod/core/postprocess/MediaToolkitContractTest.kt` — 6 tests.
+- `anydownload` — `MediaFilePath` (opaque host token; common code has no platform `Path`), `ToolkitCapabilities` (default `canMerge = false`, empty container set, `Unavailable`), sealed `ToolkitError` (`ToolUnavailable`, `IncompatibleStreams`, retryable `Io`), `MediaToolkit` (`capabilities()`, suspend `merge`, suspend `extractAudio`), and `UnavailableToolkit`.
+- `anydownload` — 6 tests.
 
 Commands run:
 

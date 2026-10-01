@@ -37,8 +37,8 @@ Done 2026-09-25.
 
 What landed:
 
-- `shared/ui/src/iosMain/kotlin/com/anydownlod/ui/IosExtractors.kt`: the iOS registry builder (YouTube then `TwitterIE`). `IosAppGraph` now builds its registry through it, so the simulator test proves the same wiring the app uses.
-- `shared/ui/src/iosTest/kotlin/com/anydownlod/ui/IosXStatusTest.kt`: asserts the registry contains `TwitterIE`, previews the fixture status (two stable media ids), downloads both selected videos through the shared `HttpDownloadEngine` and the real sandbox `IosFileStore`, and asserts two files with the fixture bytes, the status URL as the job source, and two guest lookups (preview + download).
+- `anydownload`: the iOS registry builder (YouTube then `TwitterIE`). `IosAppGraph` now builds its registry through it, so the simulator test proves the same wiring the app uses.
+- `anydownload`: asserts the registry contains `TwitterIE`, previews the fixture status (two stable media ids), downloads both selected videos through the shared `HttpDownloadEngine` and the real sandbox `IosFileStore`, and asserts two files with the fixture bytes, the status URL as the job source, and two guest lookups (preview + download).
 - The fixture is synthesized JSON with `*.example` media hosts; no live X/Twitter call, cookie, or token. Work is foreground-only, as documented on `IosAppGraph`.
 
 Verification run 2026-09-25:

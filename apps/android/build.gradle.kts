@@ -24,7 +24,7 @@ plugins {
 }
 
 android {
-    namespace = "com.anydownlod.android"
+    namespace = "com.anydownload.android"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {

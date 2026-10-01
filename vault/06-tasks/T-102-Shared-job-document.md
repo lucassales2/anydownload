@@ -45,7 +45,7 @@ Job persistence rules live in `shared/core`, not only in `DesktopStore`. A host 
 
 2026-09-29.
 
-New shared code in `shared/core/src/commonMain/kotlin/com/anydownlod/core/persist/`:
+New shared code in `anydownload`:
 
 - `JobDocumentCodec.kt` reads and writes the job list as a JSON string in the same shape as the previous desktop `jobs.json` (pretty printed, defaults encoded, unknown fields ignored). The private DTOs carry the domain fields the old desktop DTO dropped too: `formatsNeedingJs`, `selectedMediaIds`, and `MediaTags.lyrics`. There is no cookie value/contents field and no free-form yt-dlp JSON field. An unknown state wire name becomes `JobState.UNKNOWN`.
 - `JobDocumentStore.kt` owns the restart rules: active states (`RESOLVING`, `QUEUED`, `DOWNLOADING`, `POSTPROCESSING`) become `FAILED` with `ENGINE_UNAVAILABLE`, retryable, with the open attempt closed; `PENDING`/`SCHEDULED`/terminal rows stay; an escaping destination folder is cleared; rows past `clearAfterSeconds` are dropped on restore and save; a stale revision never replaces a newer row. It keeps the same-instance revision baseline and synchronizes with `engineCriticalSection`.

@@ -30,7 +30,7 @@ Upstream `YoutubeDL.build_format_selector` at the pin. The reference semantics:
 
 Today `FormatSelector.select` returns one `Selection`: `firstNonEmpty` stops at the first child, `merge` takes the first `Single` on each side, and `FormatSpec` has no `all`/`mergeall` atom. The D4 one-download note sits at the top of `FormatSelector.kt`.
 
-Files: `shared/core/src/commonMain/kotlin/com/anydownlod/core/format/FormatSpec.kt` and `FormatSelector.kt`. Tests: `shared/core/src/commonTest/kotlin/com/anydownlod/core/format/`.
+Files: `anydownload` and `FormatSelector.kt`. Tests: `anydownload`.
 
 ## Work
 

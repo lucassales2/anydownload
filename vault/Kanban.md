@@ -6,8 +6,6 @@ tags: [project, board]
 ## Backlog
 
 
-- [ ] [T-127 — Medium extractors, first half](06-tasks/T-127-Medium-extractors-a.md) #D18 #P1
-- [ ] [T-128 — Medium extractors, second half](06-tasks/T-128-Medium-extractors-b.md) #D19 #P1
 - [ ] [T-129 — Small extractors, first half](06-tasks/T-129-Small-extractors-a.md) #D20 #P1
 - [ ] [T-130 — Small extractors, second half](06-tasks/T-130-Small-extractors-b.md) #D21 #P1
 - [ ] [T-131 — Remove the yt-dlp and Chaquopy fallbacks](06-tasks/T-131-Remove-ytdlp-fallback.md) #D22 #P0
@@ -20,7 +18,7 @@ tags: [project, board]
 
 ## In progress
 
-- [ ] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
+- [ ] [T-128 — Medium extractors, second half](06-tasks/T-128-Medium-extractors-b.md) #D19 #P1
 
 ## Blocked
 
@@ -34,6 +32,8 @@ tags: [project, board]
 
 ## Done
 
+- [x] [T-127 — Medium extractors, first half](06-tasks/T-127-Medium-extractors-a.md) #D18 #P1
+- [x] [T-126 — Remaining large sites](06-tasks/T-126-Remaining-large-sites.md) #D17 #P1
 - [x] [T-125 — Priority sites](06-tasks/T-125-Priority-sites.md) #D16 #P0
 - [x] [T-020 — Platform sharing and adaptive UX](06-tasks/T-020-Sharing-and-UX.md) #D15 #P1
 - [x] [T-019 — Channel and playlist subscriptions](06-tasks/T-019-Subscriptions.md) #D15 #P1

@@ -41,9 +41,9 @@ Done on 2026-09-25. Simulator fixtures only; no network, no committed media, no 
 
 Added:
 
-- `shared/ui/src/iosMain/kotlin/com/anydownlod/ui/media/IosMediaToolkit.kt` — `AVMutableComposition` from one video track and one audio track exported with `AVAssetExportPresetPassthrough`; audio copy the same way. Capabilities are `canMerge = true` with `{M4A, OPUS}`. Failures are `ToolkitError.IncompatibleStreams`/`Io` and delete the partial destination; cancellation cancels the export and deletes the file. Opus has no Ogg writer in AVFoundation, so it copies into a Core Audio Format file; the `.opus` container is not produced (recorded limit).
-- `shared/ui/src/iosTest/kotlin/com/anydownlod/ui/media/IosMediaFixtures.kt` — on-simulator fixtures: a video-only H.264 MP4 written with `AVAssetWriter` and an audio-only AAC M4A with `AVAudioFile`.
-- `shared/ui/src/iosTest/kotlin/com/anydownlod/ui/media/IosMediaToolkitTest.kt` — 4 tests.
+- `anydownload` — `AVMutableComposition` from one video track and one audio track exported with `AVAssetExportPresetPassthrough`; audio copy the same way. Capabilities are `canMerge = true` with `{M4A, OPUS}`. Failures are `ToolkitError.IncompatibleStreams`/`Io` and delete the partial destination; cancellation cancels the export and deletes the file. Opus has no Ogg writer in AVFoundation, so it copies into a Core Audio Format file; the `.opus` container is not produced (recorded limit).
+- `anydownload` — on-simulator fixtures: a video-only H.264 MP4 written with `AVAssetWriter` and an audio-only AAC M4A with `AVAudioFile`.
+- `anydownload` — 4 tests.
 - `IosAppGraph` wires the toolkit into `HttpDownloadEngine` and exposes `capabilities()`.
 - `shared/ui/build.gradle.kts` — `iosTest` gets `kotlin("test")` and coroutines.
 

@@ -49,7 +49,7 @@ A file is finished when all of the following are true:
 - Fixtures use `*.example` hosts and fake values. No cookie, bearer token, guest token, signed media URL, or private URL is stored in the repo, the logs, or the vault.
 - The new test class passes, and `:tools:port-manifest:check` passes.
 
-Kotlin files live under `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract/<site>/`, with the test beside the other extractor tests. Follow the D16 shape: one site package, registry entry, manifest rows, synthetic harness. Shared bases that later files in the same band will subclass land with the earliest file that needs them.
+Kotlin files live under `anydownload`, with the test beside the other extractor tests. Follow the D16 shape: one site package, registry entry, manifest rows, synthetic harness. Shared bases that later files in the same band will subclass land with the earliest file that needs them.
 
 If the file needs a helper that D10 did not translate, add the smallest helper that file calls, in the same wake, and name it in Evidence. That is the 80-day rework buffer. Do not add a helper that requires a secret, `jsinterp`, HTTP impersonation, a plugin, or an exec hook. Mark that URL form Partial with the reason instead.
 

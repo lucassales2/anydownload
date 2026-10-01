@@ -41,7 +41,7 @@ On desktop, one fixture URL finishes as a file, one bad URL becomes a failed row
 
 2026-09-29, macOS 26.5.2 (Darwin 25.5.0), on-device JVM desktop host.
 
-New test: `apps/desktop/src/jvmTest/kotlin/com/anydownlod/desktop/DesktopHttpRestartGateTest.kt` (`fixtureCompletesFailureIsRedactedAndRelaunchRestoresBothRows`). It builds the desktop HTTP stack from the shared pieces (`HttpDownloadEngine` + `DesktopFileStore` + `DesktopStore` with the shared `JobDocumentStore`), not the yt-dlp process adapter, and uses a fake chunked transfer (no live site).
+New test: `anydownload` (`fixtureCompletesFailureIsRedactedAndRelaunchRestoresBothRows`). It builds the desktop HTTP stack from the shared pieces (`HttpDownloadEngine` + `DesktopFileStore` + `DesktopStore` with the shared `JobDocumentStore`), not the yt-dlp process adapter, and uses a fake chunked transfer (no live site).
 
 What the test asserts:
 

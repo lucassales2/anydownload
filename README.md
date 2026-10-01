@@ -93,7 +93,7 @@ These are **planned capabilities, not implemented features**. The [feature-parit
   - Mobile and web do not embed tags or lyrics yet (no toolkit writer or no list/token store), so the audio is kept and the job records `tagsEmbedded=false`/`lyricsEmbedded=false`. The four-host gaps are in the table above.
   - The archive is written when songs are queued, not after every download completes. OPUS/native-container jobs keep the engine's own name because the extension is only known after extraction; the templated path applies to MP3 and M4A.
   - Fallback providers are opt-in (`AppSettings.spotifyFallbackProviders`, empty by default); slider.kz's live service is shut down, so it normally misses.
-- **Commands:** the T-083 list above plus `node --test apps/web-extension/test/bridge.test.mjs`; the Spotify tests live in `shared/core/src/commonTest/kotlin/com/anydownlod/core/music` and the desktop gate in `apps/desktop/src/jvmTest/kotlin/com/anydownlod/desktop/engine/DesktopSpotifyDownloadGateTest.kt`.
+- **Commands:** the T-083 list above plus `node --test apps/web-extension/test/bridge.test.mjs`; the Spotify tests live in `anydownload` and the desktop gate in `anydownload`.
 
 ### Phase D7: X/Twitter status video
 
@@ -118,7 +118,7 @@ These are **planned capabilities, not implemented features**. The [feature-parit
 ### Phase D3: one generic-extractor subset
 
 - **Home screen:** the idle screen is the paste-link field alone — no clipboard permission dialog, no automatic clipboard read, no options chrome. A compatible HTTP(S) link opens the metadata preview with **Download** plus a collapsible **Edit download** (video or audio, quality, format; captions, clips, cookies, and the disabled custom yt-dlp JSON stay out). Invalid and multi-line input stays on the field with a typed message.
-- **Extractor:** `com.anydownlod.core.extract.GenericExtractor` (package `shared/core/src/commonMain/kotlin/com/anydownlod/core/extract`) is a translated subset of yt-dlp's `generic.py` at tag `2026.08.19` (the Android pin `yt-dlp==2026.8.19`), with the Unlicense notice and `shared/core/NOTICE.md`. `<video src>`, `<audio src>`, and nested `<source src>` candidates resolve against the page URL, pass `UrlPolicy`, and exactly one survivor wins; zero or several fail typed and redacted. `generic.py` is not vendored; no process and no Python in common code.
+- **Extractor:** `com.anydownlod.core.extract.GenericExtractor` (package `anydownload`) is a translated subset of yt-dlp's `generic.py` at tag `2026.08.19` (the Android pin `yt-dlp==2026.8.19`), with the Unlicense notice and `shared/core/NOTICE.md`. `<video src>`, `<audio src>`, and nested `<source src>` candidates resolve against the page URL, pass `UrlPolicy`, and exactly one survivor wins; zero or several fail typed and redacted. `generic.py` is not vendored; no process and no Python in common code.
 - **Engine:** `HttpDownloadEngine` reads a bounded 512 KiB page body, runs the extractor, then streams the chosen media URL with the same direct-file path (policy on every hop, redirects, cancel discards the temp file). The media hop never re-extracts; HTML again fails typed.
 - **Honest limits (recorded, not fixed here):**
   - iOS downloads are foreground-only; suspending the app suspends the transfer and no completed file is claimed on relaunch. No background `URLSession` is added in this phase.
